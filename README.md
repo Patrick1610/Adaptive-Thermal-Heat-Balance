@@ -30,6 +30,10 @@ See [installation](docs/installation.md) and [configuration](docs/configuration.
 completion is repository-validated; no live Home Assistant installation or physical-device test
 is claimed.
 
+For HACS testing, add this public repository as a custom **Integration** repository and install
+the latest published release. Restart Home Assistant, then add **Adaptive Thermal Heat Balance**
+through Settings → Devices & services. No live installation is part of the repository test suite.
+
 ## Documentation
 
 - [Scientific model](docs/scientific-model.md)

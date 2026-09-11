@@ -14,7 +14,19 @@ through Settings → Devices & services. Configure a zone and inspect its numeri
 deliberately enabling Adaptive control.
 
 The repository can also build a HACS-compatible ZIP whose root contains `custom_components/athb`.
-Building or testing that archive is not a publication or a live installation.
+Published releases attach this deterministic archive and its SHA-256 checksum.
+
+## HACS custom-repository testing
+
+1. In HACS, open **Custom repositories**.
+2. Add `https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance` with category
+   **Integration**.
+3. Install the latest published release and restart Home Assistant.
+4. Add **Adaptive Thermal Heat Balance** through Settings → Devices & services.
+
+HACS normally installs the integration from the tagged repository release. The attached ZIP and
+checksum are also available for deterministic manual verification. Repository qualification does
+not claim that a live Home Assistant installation or physical climate device was tested.
 
 ## Safety boundary
 

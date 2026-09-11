@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Verify tag matches integration version
+        shell: bash
+        run: |
+          integration_version="$(python -c 'import json; print(json.load(open("custom_components/athb/manifest.json"))["version"])')"
+          test "v${integration_version}" = "${GITHUB_REF_NAME}"
+      - name: Build deterministic release asset
+        run: |
+          python tools/build_release.py
+          sha256sum "dist/athb-${GITHUB_REF_NAME#v}.zip" > "dist/athb-${GITHUB_REF_NAME#v}.zip.sha256"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          "dist/athb-${GITHUB_REF_NAME#v}.zip"
+          "dist/athb-${GITHUB_REF_NAME#v}.zip.sha256"
+          --verify-tag
+          --title "ATHB ${GITHUB_REF_NAME}"
+          --generate-notes
