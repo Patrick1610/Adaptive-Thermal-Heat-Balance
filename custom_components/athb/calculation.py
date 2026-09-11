@@ -677,6 +677,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         "thermal_neutral": root_value("thermal_neutral"),
         "cooling_control_target": root_value("cooling_control"),
         "comfort_status": comfort_status,
+        "input_status": result.hold_condition or "ready",
         "control_status": "suppressed" if result.suppression_reason else "ready",
         "outdoor_running_mean": result.running_mean_c,
         "effective_targets": effective,

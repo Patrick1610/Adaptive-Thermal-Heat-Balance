@@ -13,6 +13,7 @@ def test_required_product_documentation_exists_and_names_safety_boundaries() -> 
         "README.md",
         "docs/scientific-model.md",
         "docs/configuration.md",
+        "docs/configuration-reference.md",
         "docs/operations.md",
         "docs/installation.md",
         "docs/validation.md",

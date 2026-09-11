@@ -14,6 +14,11 @@ parameters behind **Configure advanced settings**. A final review page summarize
 creation. Run **Reconfigure** from the integration entry to repeat the measurement and target
 selection later while retaining the same zone identity and device.
 
+Setup and Reconfigure expose the same complete set of sources, targets, model choices and expert
+parameters. Conditional pages show only values required by the selected humidity, radiant,
+clothing, air-speed and fallback modes. See the full [technical configuration
+reference](configuration-reference.md) for formulas, supported ranges and policy effects.
+
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
 normalization. Heating rounds inward upward; cooling rounds inward downward. Ranged targets remain
 atomic, ordered and separated by at least the configured gap. An infeasible range is suppressed.

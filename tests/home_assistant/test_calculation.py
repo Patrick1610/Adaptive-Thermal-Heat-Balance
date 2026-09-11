@@ -151,6 +151,7 @@ def test_invalid_primary_never_produces_an_executable_target(raw: str) -> None:
     assert result.targets[0].result is None
     assert result.targets[0].suppression_reason == "primary_temperature_invalid"
     assert result.hold_condition == "primary_temperature_invalid"
+    assert result_values(result)["input_status"] == "primary_temperature_invalid"
 
 
 def test_modelled_surface_needs_no_helper_and_publishes_surface_risk_diagnostics() -> None:

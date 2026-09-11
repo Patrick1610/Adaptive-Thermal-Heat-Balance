@@ -10,6 +10,8 @@ from unittest.mock import MagicMock
 import pytest
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.core import Context
+from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.athb import async_migrate_entry, async_remove_entry
 from custom_components.athb.adapters.broker import ContextToken
@@ -24,6 +26,7 @@ from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPE
 from custom_components.athb.runtime import ZoneRuntime
 from custom_components.athb.select import ProfileSelect, StrategySelect
 from custom_components.athb.sensor import DESCRIPTIONS, AthbSensor, TargetSensor
+from custom_components.athb.sensor import async_setup_entry as async_setup_sensor_entry
 from custom_components.athb.switch import AdaptiveControlSwitch
 
 
@@ -128,16 +131,16 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
     assert all(entity.device_info["manufacturer"] == "ATHB" for entity in entities)
 
 
-def test_optional_surface_entities_are_disabled_and_inapplicable_targets_unavailable() -> None:
+def test_surface_values_and_inapplicable_target_endpoints_remain_truthful() -> None:
     runtime = _runtime()
     surface_temperature = next(item for item in DESCRIPTIONS if item.key == "surface_temperature")
     surface_humidity = next(
         item for item in DESCRIPTIONS if item.key == "surface_relative_humidity"
     )
 
-    assert AthbSensor(runtime, surface_temperature).entity_registry_enabled_default is False
-    assert AthbSensor(runtime, surface_humidity).entity_registry_enabled_default is False
-    assert SurfaceSaturationBinarySensor(runtime).entity_registry_enabled_default is False
+    assert not AthbSensor(runtime, surface_temperature).available
+    assert not AthbSensor(runtime, surface_humidity).available
+    assert SurfaceSaturationBinarySensor(runtime).is_on is None
 
     target = {
         "target_uuid": "target-1",
@@ -148,6 +151,58 @@ def test_optional_surface_entities_are_disabled_and_inapplicable_targets_unavail
     assert TargetSensor(runtime, target, "temperature").available
     assert not TargetSensor(runtime, target, "target_low").available
     assert not TargetSensor(runtime, target, "target_high").available
+
+
+async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolete_entities(
+    hass: Any,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    entry_id = "entry-capabilities"
+    target = {
+        "target_uuid": "target-1",
+        "entity_id": "climate.scalar",
+        "registry_identity": "registry-1",
+    }
+    entry = MockConfigEntry(
+        domain="athb",
+        entry_id=entry_id,
+        data={"targets": [target]},
+        options={"radiant_model": "uniform"},
+    )
+    entry.add_to_hass(hass)
+    entry.runtime_data = runtime
+    hass.states.async_set(
+        "climate.scalar",
+        "heat",
+        {"supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE)},
+    )
+    registry = er.async_get(hass)
+    obsolete_range = registry.async_get_or_create(
+        "sensor",
+        "athb",
+        "zone-1_target-1_target_low",
+        config_entry=entry,
+        suggested_object_id="obsolete_range",
+    )
+    obsolete_surface = registry.async_get_or_create(
+        "sensor",
+        "athb",
+        "zone-1_surface_temperature",
+        config_entry=entry,
+        suggested_object_id="obsolete_surface",
+    )
+    added: list[Any] = []
+    await async_setup_sensor_entry(hass, cast(Any, entry), added.extend)
+
+    unique_ids = {entity.unique_id for entity in added}
+    assert "zone-1_target-1_temperature" in unique_ids
+    assert "zone-1_target-1_target_low" not in unique_ids
+    assert "zone-1_target-1_target_high" not in unique_ids
+    assert "zone-1_surface_temperature" not in unique_ids
+    assert registry.async_get(obsolete_range.entity_id) is None
+    assert registry.async_get(obsolete_surface.entity_id) is None
+    assert "zone-1_input_status" in unique_ids
 
 
 def test_strategy_select_persists_authoritative_option_without_reload() -> None:

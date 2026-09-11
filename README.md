@@ -26,7 +26,8 @@ environment is used only to generate and audit independent development goldens.
 
 ## Installation and configuration
 
-See [installation](docs/installation.md) and [configuration](docs/configuration.md). Software
+See [installation](docs/installation.md), [configuration](docs/configuration.md), and the
+[technical configuration reference](docs/configuration-reference.md). Software
 completion is repository-validated; no live Home Assistant installation or physical-device test
 is claimed.
 
@@ -41,6 +42,7 @@ explicit progressive-disclosure choices.
 
 - [Scientific model](docs/scientific-model.md)
 - [Configuration](docs/configuration.md)
+- [Technical configuration reference](docs/configuration-reference.md)
 - [Operations and troubleshooting](docs/operations.md)
 - [Validation](docs/validation.md)
 - [Normative architecture](ATHB_ARCHITECTURE_PLAN.md)

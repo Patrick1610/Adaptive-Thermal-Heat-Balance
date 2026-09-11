@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from homeassistant.components.climate.const import ClimateEntityFeature
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .entity import AthbEntity
@@ -29,16 +31,18 @@ DESCRIPTIONS = (
     Description("thermal_neutral", "Thermal neutral", True),
     Description("cooling_control_target", "Cooling control target", True),
     Description("comfort_status", "Comfort status"),
+    Description("input_status", "Input status"),
     Description("control_status", "Control status"),
     Description("outdoor_running_mean", "Outdoor running mean", True),
-    Description("surface_temperature", "Surface temperature", True, enabled_default=False),
+    Description("surface_temperature", "Surface temperature", True),
     Description(
         "surface_relative_humidity",
         "Surface relative humidity",
         humidity=True,
-        enabled_default=False,
     ),
 )
+
+TARGET_ENDPOINTS = ("temperature", "target_low", "target_high")
 
 
 class AthbSensor(AthbEntity, SensorEntity):
@@ -100,15 +104,51 @@ async def async_setup_entry(
     entry: AthbConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    del hass
     runtime = entry.runtime_data
-    entities: list[SensorEntity] = [AthbSensor(runtime, item) for item in DESCRIPTIONS]
+    surface_enabled = entry.options.get("radiant_model", "uniform") == "surface"
+    descriptions = [
+        item for item in DESCRIPTIONS if surface_enabled or not item.key.startswith("surface_")
+    ]
+    entities: list[SensorEntity] = [AthbSensor(runtime, item) for item in descriptions]
+    desired_unique_ids = {entity.unique_id for entity in entities}
     for target in entry.data.get("targets", ()):
-        entities.extend(
-            (
-                TargetSensor(runtime, target, "temperature"),
-                TargetSensor(runtime, target, "target_low"),
-                TargetSensor(runtime, target, "target_high"),
-            )
-        )
+        for endpoint in _target_endpoints(hass, target["entity_id"]):
+            entity = TargetSensor(runtime, target, endpoint)
+            entities.append(entity)
+            desired_unique_ids.add(entity.unique_id)
+    _remove_stale_sensor_entities(hass, entry, desired_unique_ids)
     async_add_entities(entities)
+
+
+def _target_endpoints(hass: HomeAssistant, entity_id: str) -> tuple[str, ...]:
+    state = hass.states.get(entity_id)
+    if state is None:
+        return ("temperature",)
+    try:
+        features = ClimateEntityFeature(int(state.attributes.get("supported_features", 0)))
+    except TypeError, ValueError:
+        return ("temperature",)
+    endpoints: list[str] = []
+    if features & ClimateEntityFeature.TARGET_TEMPERATURE:
+        endpoints.append("temperature")
+    if features & ClimateEntityFeature.TARGET_TEMPERATURE_RANGE:
+        endpoints.extend(("target_low", "target_high"))
+    return tuple(endpoints) or ("temperature",)
+
+
+def _remove_stale_sensor_entities(
+    hass: HomeAssistant,
+    entry: AthbConfigEntry,
+    desired_unique_ids: set[str | None],
+) -> None:
+    registry = er.async_get(hass)
+    zone_prefix = f"{entry.runtime_data.zone_uuid}_"
+    managed_suffixes = tuple(f"_{endpoint}" for endpoint in TARGET_ENDPOINTS)
+    core_ids = {f"{entry.runtime_data.zone_uuid}_{item.key}" for item in DESCRIPTIONS}
+    for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        unique_id = registry_entry.unique_id
+        managed = unique_id in core_ids or (
+            unique_id.startswith(zone_prefix) and unique_id.endswith(managed_suffixes)
+        )
+        if registry_entry.domain == "sensor" and managed and unique_id not in desired_unique_ids:
+            registry.async_remove(registry_entry.entity_id)

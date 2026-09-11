@@ -42,10 +42,13 @@ async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult
         result["flow_id"], {"targets": ["climate.target"]}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"comfort_strategy": "balanced"}
-    )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"advanced_settings": False}
+        result["flow_id"],
+        {
+            "comfort_strategy": "balanced",
+            "profile": "comfort",
+            "radiant_model": "uniform",
+            "advanced_settings": False,
+        },
     )
     assert result["step_id"] == "review"
     return await hass.config_entries.flow.async_configure(result["flow_id"], {})
@@ -98,23 +101,35 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
         result["flow_id"], {"targets": ["climate.target"]}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"comfort_strategy": "balanced"}
+        result["flow_id"],
+        {
+            "comfort_strategy": "balanced",
+            "profile": "comfort",
+            "radiant_model": "uniform",
+            "advanced_settings": True,
+        },
     )
+    assert result["step_id"] == "advanced_model"
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"advanced_settings": True}
+        result["flow_id"],
+        {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
     )
-    assert result["step_id"] == "advanced_control"
+    assert result["step_id"] == "air_speed"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"air_speed_m_s": 0.1}
+    )
+    assert result["step_id"] == "comfort_parameters"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "profile_parameters"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["step_id"] == "control_limits"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
-            "met": 1.1,
-            "air_speed_m_s": 0.1,
             "minimum_control_temperature": 26.0,
             "maximum_control_temperature": 18.0,
-            "fallback_mode": "fixed",
-            "fallback_heating_c": 18.0,
-            "fallback_cooling_c": 26.0,
             "manual_override_minutes": 120.0,
+            "auto_mapping": "unmapped",
         },
     )
     assert result["type"] is FlowResultType.FORM
@@ -161,7 +176,12 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"comfort_strategy": "comfort", "profile": "eco", "radiant_model": "uniform"},
+        {
+            "comfort_strategy": "comfort",
+            "profile": "eco",
+            "radiant_model": "uniform",
+            "advanced_settings": False,
+        },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["radiant_model"] == "uniform"
@@ -170,19 +190,29 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"comfort_strategy": "balanced", "profile": "comfort", "radiant_model": "surface"},
+        {
+            "comfort_strategy": "balanced",
+            "profile": "comfort",
+            "radiant_model": "surface",
+            "advanced_settings": False,
+        },
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "radiant"
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"surface_modelled": False}
+        result["flow_id"], {"surface_source": "measured"}
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "surface_details"
     assert "surface_temperature_entity" in _schema_keys(result)
     assert "surface_f_rsi" not in _schema_keys(result)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"surface_temperature_entity": "sensor.surface"}
+        result["flow_id"],
+        {
+            "surface_temperature_entity": "sensor.surface",
+            "surface_view_factor": 0.25,
+            "surface_rh_threshold_pct": 80.0,
+        },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["surface_temperature_entity"] == "sensor.surface"
@@ -223,6 +253,11 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
     assert result["type"] is FlowResultType.FORM
+    assert _schema_keys(result) == {"name"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Living room updated"}
+    )
+    assert result["step_id"] == "environment"
     assert _schema_keys(result) == {
         "primary_temperature",
         "rh_mode",
@@ -236,20 +271,37 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
             "rh_mode": "declared",
         },
     )
-    assert result["step_id"] == "reconfigure_humidity"
+    assert result["step_id"] == "humidity"
     assert _schema_keys(result) == {"rh_declared"}
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"rh_declared": 45.0}
     )
-    assert result["step_id"] == "reconfigure_targets"
+    assert result["step_id"] == "targets"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"targets": [target.entity_id]}
     )
+    assert result["step_id"] == "preferences"
+    assert {"comfort_strategy", "profile", "radiant_model", "advanced_settings"} <= _schema_keys(
+        result
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "comfort_strategy": "comfort",
+            "profile": "eco",
+            "radiant_model": "uniform",
+            "advanced_settings": False,
+        },
+    )
+    assert result["step_id"] == "review"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.ABORT
+    assert entry.title == "Living room updated"
     assert entry.data["targets"][0]["target_uuid"] == "stable-target-uuid"
     assert entry.data["primary_temperature"] == "sensor.new"
     assert entry.data["rh_declared"] == 45.0
     assert "rh_entity" not in entry.data
+    assert entry.options["profile"] == "eco"
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
         await hass.config_entries.async_unload(entry.entry_id)
@@ -287,7 +339,7 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
     assert result["step_id"] == "radiant"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"surface_modelled": True},
+        {"surface_source": "modelled"},
     )
     assert result["step_id"] == "surface_details"
     assert "surface_f_rsi" in _schema_keys(result)
@@ -296,28 +348,75 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
         result["flow_id"],
         {"surface_f_rsi": 0.65, "surface_view_factor": 0.25, "surface_rh_threshold_pct": 80.0},
     )
-    assert result["step_id"] == "advanced"
+    assert result["step_id"] == "advanced_model"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
+    )
+    assert result["step_id"] == "air_speed"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"air_speed_m_s": 0.1}
+    )
+    assert result["step_id"] == "comfort_parameters"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
             "lower_comfort_vote": -0.5,
             "upper_comfort_vote": 0.5,
             "running_mean_alpha": 0.8,
+            "reject_extrapolation": False,
+        },
+    )
+    assert result["step_id"] == "profile_parameters"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
             "eco_heating_setback_c": 2.0,
             "eco_cooling_setback_c": 2.0,
             "boost_delta_c": 1.0,
             "boost_duration_minutes": 60.0,
+        },
+    )
+    assert result["step_id"] == "control_limits"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "minimum_control_temperature": 18.0,
+            "maximum_control_temperature": 26.0,
             "manual_override_minutes": 120.0,
+            "auto_mapping": "unmapped",
+        },
+    )
+    assert result["step_id"] == "command_behavior"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
             "minimum_range_gap": 1.0,
             "minimum_meaningful_change": 0.1,
             "feedback_resolution": 0.01,
-            "reject_extrapolation": False,
-            "auto_mapping": "unmapped",
-            "critical_locations_json": (
-                '[{"location_id":"seat","entity_id":"sensor.seat","mode":"heating"}]'
-            ),
-            "calibration_target-stable": 0.5,
+            "fallback_mode": "fixed",
         },
+    )
+    assert result["step_id"] == "fallback_temperatures"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"fallback_heating_c": 18.0, "fallback_cooling_c": 26.0}
+    )
+    assert result["step_id"] == "critical_locations"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"critical_location_count": 1}
+    )
+    assert result["step_id"] == "critical_location"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "location_id": "seat",
+            "location_mode": "heating",
+            "location_entity": "sensor.seat",
+        },
+    )
+    assert result["step_id"] == "target_calibration"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"calibration_offset_c": 0.5}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["surface_modelled"] is True
@@ -427,7 +526,12 @@ async def test_radiant_options_cover_direct_globe_and_surface_validation(
         result = await hass.config_entries.options.async_init(entry.entry_id)
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            {"comfort_strategy": "balanced", "profile": "comfort", "radiant_model": model},
+            {
+                "comfort_strategy": "balanced",
+                "profile": "comfort",
+                "radiant_model": model,
+                "advanced_settings": False,
+            },
         )
         result = await hass.config_entries.options.async_configure(result["flow_id"], fields)
         assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -437,10 +541,15 @@ async def test_radiant_options_cover_direct_globe_and_surface_validation(
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"comfort_strategy": "balanced", "profile": "comfort", "radiant_model": "surface"},
+        {
+            "comfort_strategy": "balanced",
+            "profile": "comfort",
+            "radiant_model": "surface",
+            "advanced_settings": False,
+        },
     )
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"surface_modelled": False}
+        result["flow_id"], {"surface_source": "measured"}
     )
     assert result["step_id"] == "surface_details"
     assert "surface_temperature_entity" in _schema_keys(result)
@@ -449,10 +558,15 @@ async def test_radiant_options_cover_direct_globe_and_surface_validation(
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"comfort_strategy": "balanced", "profile": "comfort", "radiant_model": "surface"},
+        {
+            "comfort_strategy": "balanced",
+            "profile": "comfort",
+            "radiant_model": "surface",
+            "advanced_settings": False,
+        },
     )
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"surface_modelled": True}
+        result["flow_id"], {"surface_source": "modelled"}
     )
     assert result["step_id"] == "surface_details"
     assert "surface_f_rsi" in _schema_keys(result)
@@ -462,7 +576,7 @@ async def test_radiant_options_cover_direct_globe_and_surface_validation(
         await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_advanced_options_reject_bad_json_and_out_of_range_value(
+async def test_advanced_options_only_show_fields_required_by_selected_modes(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
@@ -482,12 +596,16 @@ async def test_advanced_options_reject_bad_json_and_out_of_range_value(
             "advanced_settings": True,
         },
     )
-    assert result["step_id"] == "advanced"
+    assert result["step_id"] == "advanced_model"
+    assert _schema_keys(result) == {"met", "clothing_mode", "air_speed_mode"}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"critical_locations_json": "{"}
+        result["flow_id"],
+        {"met": 1.1, "clothing_mode": "fixed", "air_speed_mode": "measured"},
     )
-    assert result["errors"] == {"critical_locations_json": "invalid_option"}
+    assert result["step_id"] == "clothing"
+    assert _schema_keys(result) == {"fixed_clothing_clo"}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"critical_locations_json": "[]", "met": 10.0}
+        result["flow_id"], {"fixed_clothing_clo": 0.8}
     )
-    assert result["errors"]["met"] == "invalid_option"
+    assert result["step_id"] == "air_speed"
+    assert _schema_keys(result) == {"air_speed_entity"}
