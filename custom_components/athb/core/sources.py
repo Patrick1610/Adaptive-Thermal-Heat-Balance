@@ -167,6 +167,7 @@ def validate_measured_source(
     observed_at: datetime | None,
     received_at: datetime,
     available: bool = True,
+    freshness: timedelta | None = None,
 ) -> SourceUpdate:
     """Validate one entity observation and advance its quarantine/recovery state."""
 
@@ -195,8 +196,11 @@ def validate_measured_source(
             value=value,
         )
         return SourceUpdate(observation, SourceState(state.last_accepted, recovering=True))
+    maximum_age = freshness if freshness is not None else policy.freshness
+    if maximum_age <= timedelta(0):
+        raise ValueError("freshness must be positive")
     age = now - observed
-    if age < timedelta(0) or age > policy.freshness:
+    if age < timedelta(0) or age > maximum_age:
         observation = Observation(
             identity.lineage_identity,
             value,

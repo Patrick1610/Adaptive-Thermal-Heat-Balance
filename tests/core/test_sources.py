@@ -30,6 +30,7 @@ def _update(
     received_at: datetime = NOW,
     available: bool = True,
     kind: SourceKind = SourceKind.PRIMARY_AIR,
+    freshness: timedelta | None = None,
 ):
     return validate_measured_source(
         state=state if state is not None else SourceState(),
@@ -40,6 +41,7 @@ def _update(
         observed_at=observed_at,
         received_at=received_at,
         available=available,
+        freshness=freshness,
     )
 
 
@@ -95,6 +97,21 @@ def test_source_limits_freshness_availability_and_timestamp_order_are_explicit()
     first = _update()
     duplicate = _update(first.state, received_at=NOW + timedelta(seconds=1))
     assert duplicate.observation.reasons == ("non_increasing_timestamp",)
+
+
+def test_configured_freshness_can_extend_but_not_disable_stale_screening() -> None:
+    accepted = _update(
+        observed_at=NOW - timedelta(minutes=90),
+        freshness=timedelta(hours=2),
+    )
+    assert accepted.observation.validity is ObservationValidity.VALID
+    stale = _update(
+        observed_at=NOW - timedelta(minutes=121),
+        freshness=timedelta(hours=2),
+    )
+    assert stale.observation.validity is ObservationValidity.STALE
+    with pytest.raises(ValueError, match="freshness must be positive"):
+        _update(freshness=timedelta(0))
 
 
 def test_jump_quarantine_requires_three_consistent_reports_spanning_a_minute() -> None:

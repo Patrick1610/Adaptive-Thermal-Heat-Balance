@@ -11,6 +11,7 @@ import pytest
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.core import Context
 from homeassistant.helpers import entity_registry as er
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.athb import async_migrate_entry, async_remove_entry
@@ -131,6 +132,53 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
     assert all(entity.device_info["identifiers"] == {("athb", "zone-1")} for entity in entities)
     assert all(entity.device_info["name"] == "Living room" for entity in entities)
     assert all(entity.device_info["manufacturer"] == "ATHB" for entity in entities)
+
+
+async def test_full_entry_setup_registers_eco_intensity_select(
+    hass: Any, enable_custom_integrations: None
+) -> None:
+    """Exercise HA platform forwarding and registry creation, not just the entity class."""
+
+    del enable_custom_integrations
+
+    hass.states.async_set("sensor.room", "20", {"unit_of_measurement": "°C"})
+    hass.states.async_set("sensor.outdoor", "10", {"unit_of_measurement": "°C"})
+    entry = MockConfigEntry(
+        domain="athb",
+        title="Bedroom",
+        data={
+            "zone_uuid": "zone-select-platform",
+            "primary_temperature": "sensor.room",
+            "outdoor_source": "sensor.outdoor",
+            "rh_mode": "declared",
+            "rh_declared": 50.0,
+            "targets": [],
+        },
+        options={
+            "comfort_strategy": "balanced",
+            "profile": "comfort",
+            "eco_intensity": "workday",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_setup_component(hass, "athb", {})
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    registered = {
+        item.unique_id: item.entity_id
+        for item in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if item.domain == "select"
+    }
+    assert set(registered) == {
+        "zone-select-platform_comfort_strategy",
+        "zone-select-platform_profile",
+        "zone-select-platform_eco_intensity",
+    }
+    eco_state = hass.states.get(registered["zone-select-platform_eco_intensity"])
+    assert eco_state is not None
+    assert eco_state.state == "workday"
 
 
 def test_surface_values_and_inapplicable_target_endpoints_remain_truthful() -> None:

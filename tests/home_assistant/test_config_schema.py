@@ -125,6 +125,8 @@ def test_target_container_and_all_self_references_fail(targets: object) -> None:
         ({"clothing_mode": "invented"}, "clothing_mode"),
         ({"clothing_mode": "fixed", "fixed_clothing_clo": 3.0}, "fixed_clothing_clo"),
         ({"eco_intensity": "extreme"}, "eco_intensity"),
+        ({"primary_temperature_freshness_minutes": 4.0}, "primary_temperature_freshness_minutes"),
+        ({"radiant_freshness_minutes": 361.0}, "radiant_freshness_minutes"),
         (
             {
                 "inactive_heating_temperature": 22.0,

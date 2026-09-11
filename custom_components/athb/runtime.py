@@ -41,7 +41,7 @@ from .adapters.outdoor_history import (
     unavailable_history,
 )
 from .adapters.recorder import HomeAssistantRecorderHistoryReader
-from .adapters.sources import StateValue, snapshot_state
+from .adapters.sources import StateValue, configured_freshness, snapshot_state
 from .adapters.storage import HomeAssistantControlStorageBackend, ZoneCommandPersistence
 from .calculation import (
     CapturedCriticalLocation,
@@ -91,7 +91,7 @@ from .core.policy import (
     check_cross_actuator_coordination,
     resolve_profile,
 )
-from .core.sources import SOURCE_POLICIES, SourceKind, SourceState, convert_source_value
+from .core.sources import SourceKind, SourceState, convert_source_value
 from .core.trace import DecisionTraceRing
 from .repairs import RepairManager, TransitionLogger
 
@@ -831,7 +831,7 @@ class ZoneRuntime:
             )
             if observed is None:
                 continue
-            deadline = observed + SOURCE_POLICIES[kind].freshness
+            deadline = observed + configured_freshness(self.entry.options, kind)
             if deadline <= now:
                 continue
 

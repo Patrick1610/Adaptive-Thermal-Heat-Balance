@@ -57,6 +57,12 @@ eligible days are complete; a qualifying three-or-more-day window is partial; in
 uses the explicitly labelled fixed fallback (or no-write policy). Current outdoor temperature is
 never substituted for the adaptation running mean.
 
+The running-mean sensor therefore normally changes at local-day rollover, after a completed day is
+admitted to the previous-seven-day window; it is not intended to drift with every current outdoor
+reading. Advanced options separately allow 5–360 minute freshness windows for selected indoor and
+radiant measurement sources. The default remains 30 minutes, and extending it declares how long a
+slow-reporting value may be held—it does not fabricate a fresh observation.
+
 Outdoor relative humidity is intentionally not requested. ATHB comfort uses indoor RH; outdoor
 adaptation uses only the persisted running mean of outdoor temperature. Surface-risk diagnostics
 combine indoor vapor pressure with the selected measured or modelled surface temperature.

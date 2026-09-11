@@ -10,6 +10,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.athb.config_flow import AthbOptionsFlow
 from custom_components.athb.const import DOMAIN, PLATFORMS
 
 
@@ -429,6 +430,18 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
             "location_entity": "sensor.seat",
         },
     )
+    assert result["step_id"] == "source_freshness"
+    assert _schema_keys(result) == {
+        "primary_temperature_freshness_minutes",
+        "local_temperature_freshness_minutes",
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "primary_temperature_freshness_minutes": 120.0,
+            "local_temperature_freshness_minutes": 60.0,
+        },
+    )
     assert result["step_id"] == "target_calibration"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"calibration_offset_c": 0.5}
@@ -437,6 +450,8 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
     assert result["data"]["surface_modelled"] is True
     assert result["data"]["surface_f_rsi"] == 0.65
     assert result["data"]["critical_locations"][0]["location_id"] == "seat"
+    assert result["data"]["primary_temperature_freshness_minutes"] == 120.0
+    assert result["data"]["local_temperature_freshness_minutes"] == 60.0
     assert result["data"]["calibration_target-stable"] == 0.5
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
@@ -624,6 +639,29 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
     )
     assert result["step_id"] == "air_speed"
     assert _schema_keys(result) == {"air_speed_entity"}
+
+
+def test_freshness_page_only_shows_selected_measured_source_types() -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "zone-freshness", "rh_mode": "measured", "targets": []},
+        options={
+            "radiant_model": "direct_mrt",
+            "mrt_entity": "sensor.mrt",
+            "air_speed_mode": "measured",
+            "air_speed_entity": "sensor.air_speed",
+        },
+    )
+
+    flow = AthbOptionsFlow(entry)
+    keys = {str(marker.schema) for marker in flow._source_freshness_schema().schema}
+
+    assert keys == {
+        "primary_temperature_freshness_minutes",
+        "relative_humidity_freshness_minutes",
+        "radiant_freshness_minutes",
+        "air_speed_freshness_minutes",
+    }
 
 
 async def test_deep_eco_discloses_only_inactive_targets_in_advanced_profile_page(

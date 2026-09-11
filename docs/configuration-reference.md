@@ -97,6 +97,21 @@ Air speed is either `air_speed_m_s` (0–2 m/s, declared) or a measured entity. 
 convective and evaporative heat loss and, for globe mode, the MRT conversion. Missing or stale
 measured air speed blocks the calculation.
 
+## Measurement freshness
+
+ATHB uses Home Assistant's latest report timestamp (`last_reported` where available) rather than
+assuming that an unchanged value is a new physical observation. The advanced wizard exposes a
+freshness window from 5 to 360 minutes for each measured source type that is actually selected:
+primary room temperature, measured indoor humidity, critical local-air points, measured radiant
+or surface temperature, and measured air speed. The safe default is 30 minutes.
+
+A longer window is appropriate for a trustworthy battery sensor that reports only slowly or when
+its value changes. It is an observation-hold assumption, not proof that a new measurement occurred.
+Once the configured window expires, the source becomes stale and dependent ATHB values become
+unavailable; ATHB never substitutes a plausible temperature or humidity. The outdoor-history
+collector retains its separate two-hour maximum hold and builds adaptation only from completed
+local calendar days.
+
 ## Comfort and adaptation bounds
 
 `lower_comfort_vote` (-1.0 to -0.05) and `upper_comfort_vote` (+0.05 to +1.0) define the comfort

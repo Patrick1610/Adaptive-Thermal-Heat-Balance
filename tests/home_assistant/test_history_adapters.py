@@ -82,7 +82,11 @@ async def test_collector_bootstraps_persists_integrates_and_manager_reference_co
         HistoryQuality.COMPLETE,
         HistoryQuality.PARTIAL,
     }
+    running_mean_before_current_day_update = collector.result(now=NOW).value_c
     collector.add_sample(OutdoorSample(NOW + timedelta(hours=1), 7.0), now=NOW + timedelta(hours=1))
+    assert collector.result(now=NOW + timedelta(hours=1)).value_c == (
+        running_mean_before_current_day_update
+    )
     observations = collector.integrator.current_summary.observations
     collector.add_sample(OutdoorSample(NOW + timedelta(hours=1), 7.0), now=NOW + timedelta(hours=1))
     assert collector.integrator.current_summary.observations == observations

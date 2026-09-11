@@ -6,7 +6,12 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
-from .adapters.sources import StateValue, valid_value, validate_state_value
+from .adapters.sources import (
+    StateValue,
+    configured_freshness,
+    valid_value,
+    validate_state_value,
+)
 from .core.athb_engine import relative_air_speed
 from .core.climate import (
     AutoMapping,
@@ -210,7 +215,12 @@ def _radiant_model(
             ),
             None,
         )
-    observation, _ = validate_state_value(source, kind=kind, now=snapshot.now)
+    observation, _ = validate_state_value(
+        source,
+        kind=kind,
+        now=snapshot.now,
+        freshness=configured_freshness(snapshot.options, kind),
+    )
     value = valid_value(observation)
     if value is None:
         return (
@@ -266,6 +276,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         kind=SourceKind.PRIMARY_AIR,
         now=snapshot.now,
         prior=prior_states.get("primary"),
+        freshness=configured_freshness(snapshot.options, SourceKind.PRIMARY_AIR),
     )
     outdoor, updated_states["outdoor"] = validate_state_value(
         snapshot.outdoor,
@@ -281,6 +292,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             kind=SourceKind.AIR_SPEED,
             now=snapshot.now,
             prior=prior_states.get("air_speed"),
+            freshness=configured_freshness(snapshot.options, SourceKind.AIR_SPEED),
         )
         ambient_speed = valid_value(speed_observation)
         speed_reason = _measured_failure_reason(
@@ -303,6 +315,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             kind=SourceKind.RELATIVE_HUMIDITY,
             now=snapshot.now,
             prior=prior_states.get("rh"),
+            freshness=configured_freshness(snapshot.options, SourceKind.RELATIVE_HUMIDITY),
         )
         rh_value = valid_value(rh)
         rh_provenance = "measured"
@@ -450,6 +463,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 kind=SourceKind.LOCAL_AIR,
                 now=snapshot.now,
                 prior=prior_states.get(state_key),
+                freshness=configured_freshness(snapshot.options, SourceKind.LOCAL_AIR),
             )
             local_c = valid_value(local)
             if local_c is None or updated_states[state_key].recovering:

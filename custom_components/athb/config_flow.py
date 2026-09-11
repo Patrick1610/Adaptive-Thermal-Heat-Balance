@@ -84,6 +84,11 @@ OPTION_DEFAULTS: dict[str, object] = {
     "minimum_range_gap": 1.0,
     "minimum_meaningful_change": 0.1,
     "feedback_resolution": 0.01,
+    "primary_temperature_freshness_minutes": 30.0,
+    "relative_humidity_freshness_minutes": 30.0,
+    "local_temperature_freshness_minutes": 30.0,
+    "radiant_freshness_minutes": 30.0,
+    "air_speed_freshness_minutes": 30.0,
     "reject_extrapolation": False,
     "auto_mapping": "unmapped",
     "fallback_mode": "fixed",
@@ -110,14 +115,17 @@ class _OptionsWizardMixin:
     _critical_count: int
     _critical_index: int
     _calibration_index: int
+    _wizard_environment: dict[str, Any]
 
     def _initialize_options_wizard(
         self,
         *,
         existing_options: Mapping[str, Any],
         targets: list[dict[str, str]],
+        environment_data: Mapping[str, Any],
     ) -> None:
         self._wizard_targets = targets
+        self._wizard_environment = dict(environment_data)
         compatible_existing = dict(existing_options)
         if compatible_existing and CONF_ECO_INTENSITY not in compatible_existing:
             compatible_existing[CONF_ECO_INTENSITY] = "custom"
@@ -563,7 +571,7 @@ class _OptionsWizardMixin:
             if self._critical_count:
                 return await self.async_step_critical_location()
             self._pending_options["critical_locations"] = []
-            return await self._begin_target_calibrations()
+            return await self.async_step_source_freshness()
         return self.async_show_form(
             step_id="critical_locations",
             data_schema=vol.Schema(
@@ -598,7 +606,7 @@ class _OptionsWizardMixin:
             if self._critical_index < self._critical_count:
                 return await self.async_step_critical_location()
             self._pending_options["critical_locations"] = self._critical_locations
-            return await self._begin_target_calibrations()
+            return await self.async_step_source_freshness()
         return self.async_show_form(
             step_id="critical_location",
             data_schema=self._critical_location_schema(),
@@ -622,6 +630,69 @@ class _OptionsWizardMixin:
 
     def _critical_placeholders(self) -> dict[str, str]:
         return {"number": str(self._critical_index + 1), "total": str(self._critical_count)}
+
+    async def async_step_source_freshness(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure only freshness windows used by selected measured sources."""
+
+        if user_input is not None:
+            pending = {**self._pending_options, **user_input}
+            errors = validate_options(pending)
+            relevant = {key: value for key, value in errors.items() if key in user_input}
+            if not relevant:
+                self._pending_options = pending
+                return await self._begin_target_calibrations()
+            return self.async_show_form(
+                step_id="source_freshness",
+                data_schema=self._source_freshness_schema(),
+                errors=relevant,
+            )
+        return self.async_show_form(
+            step_id="source_freshness", data_schema=self._source_freshness_schema()
+        )
+
+    def _source_freshness_schema(self) -> vol.Schema:
+        defaults = self._pending_options
+        fields: dict[vol.Marker, object] = {
+            vol.Required(
+                "primary_temperature_freshness_minutes",
+                default=defaults.get("primary_temperature_freshness_minutes", 30.0),
+            ): _number(5.0, 360.0, 5.0, "min")
+        }
+        if self._wizard_environment.get(CONF_RH_MODE) == "measured":
+            fields[
+                vol.Required(
+                    "relative_humidity_freshness_minutes",
+                    default=defaults.get("relative_humidity_freshness_minutes", 30.0),
+                )
+            ] = _number(5.0, 360.0, 5.0, "min")
+        if self._critical_count:
+            fields[
+                vol.Required(
+                    "local_temperature_freshness_minutes",
+                    default=defaults.get("local_temperature_freshness_minutes", 30.0),
+                )
+            ] = _number(5.0, 360.0, 5.0, "min")
+        radiant_model = str(defaults.get("radiant_model", "uniform"))
+        measured_radiant = radiant_model in {"direct_mrt", "globe"} or (
+            radiant_model == "surface" and not defaults.get("surface_modelled", False)
+        )
+        if measured_radiant:
+            fields[
+                vol.Required(
+                    "radiant_freshness_minutes",
+                    default=defaults.get("radiant_freshness_minutes", 30.0),
+                )
+            ] = _number(5.0, 360.0, 5.0, "min")
+        if defaults.get("air_speed_mode", "fixed") == "measured":
+            fields[
+                vol.Required(
+                    "air_speed_freshness_minutes",
+                    default=defaults.get("air_speed_freshness_minutes", 30.0),
+                )
+            ] = _number(5.0, 360.0, 5.0, "min")
+        return vol.Schema(fields)
 
     async def _begin_target_calibrations(self) -> ConfigFlowResult:
         self._calibration_index = 0
@@ -680,6 +751,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         self._critical_count = 0
         self._critical_index = 0
         self._calibration_index = 0
+        self._wizard_environment = {}
 
     @override
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -757,7 +829,11 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             if not errors:
                 self._data[CONF_TARGETS] = targets
                 existing = self._get_reconfigure_entry().options if self._is_reconfigure else {}
-                self._initialize_options_wizard(existing_options=existing, targets=targets)
+                self._initialize_options_wizard(
+                    existing_options=existing,
+                    targets=targets,
+                    environment_data=self._data,
+                )
                 return await self.async_step_preferences()
         defaults = [target["entity_id"] for target in self._data.get(CONF_TARGETS, ())]
         marker = (
@@ -894,8 +970,11 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         self._critical_count = 0
         self._critical_index = 0
         self._calibration_index = 0
+        self._wizard_environment = {}
         self._initialize_options_wizard(
-            existing_options=config_entry.options, targets=self._wizard_targets
+            existing_options=config_entry.options,
+            targets=self._wizard_targets,
+            environment_data=config_entry.data,
         )
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

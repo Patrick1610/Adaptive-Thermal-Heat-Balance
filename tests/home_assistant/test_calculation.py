@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -98,6 +98,43 @@ def test_snapshot_adapter_preserves_declared_rh_and_adaptive_root_path() -> None
     assert dict(result.provenance)["air_speed"] == "declared"
     assert dict(result.provenance)["rh"] == "declared"
     assert result_values(result)["effective_targets"] == {"target-1": {"temperature": 19.5}}
+
+
+def test_primary_freshness_option_supports_slow_reporting_sensor() -> None:
+    slow_state = StateValue(
+        "sensor.room",
+        "20",
+        "°C",
+        NOW - timedelta(minutes=90),
+        True,
+        {},
+        None,
+        None,
+    )
+    snapshot = CapturedZoneSnapshot(
+        NOW,
+        slow_state,
+        None,
+        50.0,
+        _state("sensor.outdoor", "5", "°C"),
+        None,
+        5.0,
+        "complete_history",
+        "balanced",
+        "comfort",
+        {
+            "minimum_control_temperature": 18.0,
+            "maximum_control_temperature": 26.0,
+            "primary_temperature_freshness_minutes": 120.0,
+        },
+        (_target(),),
+    )
+
+    result = calculate_runtime_snapshot(snapshot)
+
+    assert result.primary_value_c == 20.0
+    assert result.suppression_reason is None
+    assert result.targets[0].result is not None
 
 
 def test_humid_cooling_uses_valid_directional_root_despite_unrelated_failures() -> None:

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -35,6 +36,33 @@ class StateValue:
     parent_context_id: str | None
     registry_identity: str | None = None
     source_generation: int = 1
+
+
+FRESHNESS_OPTION_KEYS = {
+    SourceKind.PRIMARY_AIR: "primary_temperature_freshness_minutes",
+    SourceKind.LOCAL_AIR: "local_temperature_freshness_minutes",
+    SourceKind.RELATIVE_HUMIDITY: "relative_humidity_freshness_minutes",
+    SourceKind.DIRECT_MRT: "radiant_freshness_minutes",
+    SourceKind.SURFACE: "radiant_freshness_minutes",
+    SourceKind.GLOBE: "radiant_freshness_minutes",
+    SourceKind.AIR_SPEED: "air_speed_freshness_minutes",
+}
+
+
+def configured_freshness(options: Mapping[str, object], kind: SourceKind) -> timedelta:
+    """Resolve a validated per-source freshness window, retaining safe defaults."""
+
+    default = SOURCE_POLICIES[kind].freshness
+    key = FRESHNESS_OPTION_KEYS.get(kind)
+    if key is None:
+        return default
+    raw = options.get(key)
+    if isinstance(raw, bool) or not isinstance(raw, int | float):
+        return default
+    minutes = float(raw)
+    if not math.isfinite(minutes) or not 5.0 <= minutes <= 360.0:
+        return default
+    return timedelta(minutes=minutes)
 
 
 def snapshot_state(
@@ -70,6 +98,7 @@ def validate_state_value(
     now: datetime,
     prior: SourceState | None = None,
     generation: int = 1,
+    freshness: timedelta | None = None,
 ) -> tuple[Observation, SourceState]:
     """Validate a captured HA value through the production source validator."""
 
@@ -103,7 +132,8 @@ def validate_state_value(
         and prior.last_accepted is not None
         and prior.last_accepted.observed_at == value.observed_at
         and value.observed_at is not None
-        and now - value.observed_at <= SOURCE_POLICIES[kind].freshness
+        and now - value.observed_at
+        <= (freshness if freshness is not None else SOURCE_POLICIES[kind].freshness)
         and (converted := convert_source_value(kind, value.raw_state, value.unit)) is not None
         and prior.last_accepted.value == converted[0]
     ):
@@ -117,6 +147,7 @@ def validate_state_value(
         observed_at=value.observed_at,
         received_at=now,
         available=value.available,
+        freshness=freshness,
     )
     return update.observation, update.state
 
