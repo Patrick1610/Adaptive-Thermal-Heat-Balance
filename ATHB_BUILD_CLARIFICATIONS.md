@@ -1,0 +1,185 @@
+# ATHB Build Clarifications
+
+These clarifications are normative and supersede conflicting wording in `ATHB_ARCHITECTURE_PLAN.md`.
+
+They do not otherwise reopen the architecture.
+
+## Source-of-truth order
+
+For implementation, use this order:
+
+1. `ATHB_BUILD_CLARIFICATIONS.md`
+2. `ATHB_ARCHITECTURE_PLAN.md`
+3. `ATHB_WHITEPAPER.md`
+4. `docs/reference/adaptive_climate_control_v3_patrick-3.yaml` as reference material only
+
+Current authoritative Home Assistant source/documentation and the pinned scientific/numerical references remain verification sources. If an implementation detail demonstrably conflicts with a current API, the pinned ATHB numerical contract, a primary scientific source, or a safety invariant, document the conflict and implement the smallest correct change with regression tests.
+
+---
+
+## 1. HVAC mode changes are not automatically manual overrides
+
+ATHB owns temperature targets only.
+
+An externally initiated HVAC-mode change must therefore **not automatically create `MANUAL_OVERRIDE`**.
+
+Required behavior:
+
+- `heat -> off`: retain ATHB ownership intent, change target readiness to `SUSPENDED_MODE`, invalidate queued commands and stop writes.
+- `off -> heat`: reassess target capabilities and reconcile before issuing a fresh ATHB target.
+- `heat -> cool` or `cool -> heat`: reassess direction/capabilities, invalidate stale calculations/intents and reconcile.
+- unsupported mode: suspend writes with the documented reason.
+
+An external **temperature-target** change remains a manual ownership intervention and enters `MANUAL_OVERRIDE`.
+
+Preset changes must be classified by their actual effect. A preset that externally changes or assumes ownership of the temperature target must inhibit ATHB appropriately. A harmless state-only preset change must not create an unnecessary long-lived manual override.
+
+ATHB must never fight an external controller.
+
+Update the ownership transition table, event handling, tests, diagnostics, Virtual Installation expectations and safety invariants wherever the architecture plan still treats every external HVAC-mode change as a manual override.
+
+---
+
+## 2. Root eligibility is directional
+
+ATHB should attempt all five semantic roots whenever possible for observability:
+
+1. lower comfort boundary;
+2. heating control target;
+3. thermal neutral;
+4. cooling control target;
+5. upper comfort boundary.
+
+However, failure of an **irrelevant** root must not invalidate an otherwise valid directional control decision.
+
+### Heating-only
+
+Adaptive heating requires:
+
+- a valid current ATHB evaluation;
+- a valid heating-control root;
+- all other mandatory environmental, policy, ownership and target inputs.
+
+Failure of the lower comfort, thermal-neutral, cooling-control or upper-comfort root may make those diagnostic outputs unavailable, but must not by itself block heating.
+
+### Cooling-only
+
+Adaptive cooling requires:
+
+- a valid current ATHB evaluation;
+- a valid cooling-control root;
+- all other mandatory environmental, policy, ownership and target inputs.
+
+Failure of unrelated heating-side, neutral or outer roots must not by itself block cooling.
+
+### Ranged heat/cool
+
+Adaptive ranged control requires:
+
+- a valid heating-control root;
+- a valid cooling-control root;
+- correct ordering;
+- the required minimum range separation after all relevant transformations/normalization.
+
+Outer comfort and neutral roots remain diagnostic where available.
+
+### Diagnostics
+
+Every attempted root retains its own success or typed failure. Never fabricate a missing root.
+
+This specifically changes hot/humid scenarios where constant-vapor-pressure solving can make colder heating/neutral roots moisture-limited while a valid cooling-control root still exists. A cooling-only actuator must be allowed to use that valid cooling root.
+
+Revise `VI-016` and any related tests/Definition-of-Done wording accordingly. Do not keep the old invariant that every actuator requires one complete five-root result.
+
+---
+
+## 3. Comfort-strategy changes are lightweight runtime changes
+
+`Efficient`, `Balanced` and `Comfort` are normal operating strategies.
+
+Changing the strategy through the ATHB strategy select must **not** require a full config-entry unload/reload.
+
+A runtime strategy change must:
+
+1. persist the authoritative strategy value;
+2. increment/invalidate the relevant configuration/calculation generation;
+3. cancel or invalidate obsolete calculations and queued intents;
+4. calculate the new strategy control roots;
+5. publish the new policy result;
+6. pass any changed actuator target through the normal command broker.
+
+The following remain active:
+
+- environmental listeners;
+- shared outdoor-history collectors;
+- target leases;
+- unrelated runtime state.
+
+Options-flow changes that genuinely require reload may still use normal Home Assistant reload semantics, but the standard strategy `select` is deliberately lightweight.
+
+The implementation must avoid maintaining two competing authoritative strategy stores. The strategy select and options/configuration representation must resolve to one authoritative persisted value.
+
+---
+
+## 4. Radiant and cold-surface configuration uses progressive disclosure
+
+MRT, cold-surface modelling and critical local-air locations are **optional quality improvements**, not prerequisites for ordinary ATHB use.
+
+### Default user path
+
+The normal default is:
+
+`Uniform radiant environment`
+
+Under this mode, MRT is explicitly estimated from room air temperature according to the architecture plan.
+
+A normal user should therefore be able to configure ATHB without understanding:
+
+- MRT;
+- view factors;
+- Mold Indicator;
+- critical points;
+- globe thermometers;
+- surface modelling.
+
+### Optional cold-surface path
+
+When a user chooses to improve the radiant model with cold-surface information, progressively disclose only the fields required for the chosen physical source type.
+
+Supported distinctions remain:
+
+- calibrated/modelled cold surface;
+- measured surface temperature;
+- direct/actual MRT;
+- globe-derived MRT;
+- critical local-air measurement.
+
+A calibrated/modelled surface is never treated as local air or direct MRT.
+
+### Home Assistant Mold Indicator-style calibration
+
+A user with an existing Home Assistant Mold Indicator calibration must be able to enter the corresponding calibration factor directly when configuring a calibrated cold-surface estimate.
+
+ATHB performs the equivalent internal surface calculation. No Mold Indicator entity, template sensor or helper is required at runtime solely for ATHB.
+
+Where the Home Assistant Mold Indicator calibration convention differs algebraically from ATHB's internal `f_Rsi` representation, accept the user-facing calibration form explicitly and convert internally with tested semantics.
+
+### View factors
+
+Do **not** invent arbitrary Low/Medium/High radiant-influence presets unless those values are scientifically justified and documented.
+
+For the initial implementation, it is acceptable for explicit surface-to-MRT contribution/view-factor configuration to remain an advanced option.
+
+Do not hide an arbitrary numerical assumption behind a friendly label.
+
+Keep the ordinary default path simple even though the underlying radiant engine is technically capable.
+
+---
+
+## 5. Scope remains repository-validated software
+
+These clarifications do not introduce any live Home Assistant or physical-device acceptance phase.
+
+Software completion remains proven through the repository-defined numerical, policy/state-machine, Virtual Installation Validation, Home Assistant API-contract, storage/race, packaging and quality suites.
+
+No build task depends on access to the repository owner's Home Assistant installation or heating equipment.
