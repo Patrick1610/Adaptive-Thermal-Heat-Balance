@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, override
 from uuid import uuid4
 
@@ -13,7 +14,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
-from .config_schema import validate_environment, validate_targets
+from .config_schema import validate_environment, validate_options, validate_targets
 from .const import (
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
@@ -101,6 +102,9 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             "registry_identity": registry_entry.id,
                         }
                     )
+                    if self._target_is_claimed(registry_entry.id):
+                        errors[CONF_TARGETS] = "target_already_controlled"
+                        break
                 if errors:
                     return self.async_show_form(
                         step_id="targets",
@@ -136,10 +140,7 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            if (
-                user_input["minimum_control_temperature"]
-                >= user_input["maximum_control_temperature"]
-            ):
+            if validate_options(user_input):
                 return self.async_show_form(
                     step_id="control",
                     data_schema=self._control_schema(),
@@ -159,11 +160,23 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return vol.Schema(
             {
                 vol.Optional("occupancy_entity"): ENTITY,
+                vol.Required("met", default=1.1): vol.All(
+                    vol.Coerce(float), vol.Range(min=0.8, max=2.0)
+                ),
+                vol.Required("air_speed_m_s", default=0.1): vol.All(
+                    vol.Coerce(float), vol.Range(min=0.0, max=2.0)
+                ),
                 vol.Required("minimum_control_temperature", default=18.0): vol.All(
                     vol.Coerce(float), vol.Range(min=5.0, max=35.0)
                 ),
                 vol.Required("maximum_control_temperature", default=26.0): vol.All(
                     vol.Coerce(float), vol.Range(min=5.0, max=35.0)
+                ),
+                vol.Required("fallback_mode", default="fixed"): vol.In(("fixed", "no_write")),
+                vol.Required("fallback_heating_c", default=18.0): vol.Coerce(float),
+                vol.Required("fallback_cooling_c", default=26.0): vol.Coerce(float),
+                vol.Required("manual_override_minutes", default=120.0): vol.All(
+                    vol.Coerce(float), vol.Range(min=15.0, max=1440.0)
                 ),
             }
         )
@@ -209,6 +222,9 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             "registry_identity": registry_entry.id,
                         }
                     )
+                    if self._target_is_claimed(registry_entry.id, excluding=entry.entry_id):
+                        errors[CONF_TARGETS] = "target_already_controlled"
+                        break
                 if not errors:
                     return self.async_update_reload_and_abort(
                         entry, data_updates={**environment, CONF_TARGETS: targets}
@@ -240,17 +256,36 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    def _target_is_claimed(self, registry_identity: str, *, excluding: str | None = None) -> bool:
+        """Reject a target already owned by another enabled ATHB config entry."""
+
+        for existing in self._async_current_entries():
+            if existing.entry_id == excluding or not existing.options.get(
+                CONF_CONTROL_ENABLED, False
+            ):
+                continue
+            if any(
+                target.get("registry_identity") == registry_identity
+                for target in existing.data.get(CONF_TARGETS, ())
+            ):
+                return True
+        return False
+
 
 class AthbOptionsFlow(config_entries.OptionsFlowWithReload):
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._entry = config_entry
         self._pending: dict[str, Any] = {}
+        self._advanced = False
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
+            self._advanced = bool(user_input.pop("advanced_settings", False))
             self._pending = {**self._entry.options, **user_input}
             if user_input["radiant_model"] == "uniform":
-                return self.async_create_entry(data=self._pending)
+                return (
+                    await self.async_step_advanced() if self._advanced else self._finish_options()
+                )
             return await self.async_step_radiant()
         return self.async_show_form(
             step_id="init",
@@ -267,6 +302,7 @@ class AthbOptionsFlow(config_entries.OptionsFlowWithReload):
                     vol.Required(
                         "radiant_model", default=self._entry.options.get("radiant_model", "uniform")
                     ): vol.In(("uniform", "direct_mrt", "globe", "surface")),
+                    vol.Optional("advanced_settings", default=False): bool,
                 }
             ),
         )
@@ -274,14 +310,118 @@ class AthbOptionsFlow(config_entries.OptionsFlowWithReload):
     async def async_step_radiant(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        model = str(self._pending["radiant_model"])
         if user_input is not None:
-            return self.async_create_entry(data={**self._pending, **user_input})
-        model = self._pending["radiant_model"]
-        field = {
-            "direct_mrt": "mrt_entity",
-            "globe": "globe_temperature_entity",
-            "surface": "surface_temperature_entity",
-        }[model]
-        return self.async_show_form(
-            step_id="radiant", data_schema=vol.Schema({vol.Required(field): ENTITY})
+            self._pending.update(user_input)
+            if model == "surface":
+                modelled = bool(self._pending.get("surface_modelled", False))
+                if not modelled and not self._pending.get("surface_temperature_entity"):
+                    return self.async_show_form(
+                        step_id="radiant",
+                        data_schema=self._radiant_schema(model),
+                        errors={"surface_temperature_entity": "required"},
+                    )
+            return await self.async_step_advanced() if self._advanced else self._finish_options()
+        return self.async_show_form(step_id="radiant", data_schema=self._radiant_schema(model))
+
+    def _radiant_schema(self, model: str) -> vol.Schema:
+        if model == "direct_mrt":
+            return vol.Schema({vol.Required("mrt_entity"): ENTITY})
+        if model == "globe":
+            return vol.Schema(
+                {
+                    vol.Required("globe_temperature_entity"): ENTITY,
+                    vol.Required("globe_diameter_m", default=0.15): vol.Coerce(float),
+                    vol.Required("globe_emissivity", default=0.95): vol.Coerce(float),
+                }
+            )
+        return vol.Schema(
+            {
+                vol.Required("surface_modelled", default=False): bool,
+                vol.Optional("surface_temperature_entity"): ENTITY,
+                vol.Required("surface_f_rsi", default=0.6): vol.Coerce(float),
+                vol.Required("surface_view_factor", default=0.25): vol.Coerce(float),
+                vol.Required("surface_rh_threshold_pct", default=80.0): vol.Coerce(float),
+            }
         )
+
+    async def async_step_advanced(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            pending = {**self._pending, **user_input}
+            try:
+                critical = json.loads(str(user_input.get("critical_locations_json", "[]")))
+            except json.JSONDecodeError:
+                errors["critical_locations_json"] = "invalid_option"
+            else:
+                pending["critical_locations"] = critical
+                pending.pop("critical_locations_json", None)
+                errors = validate_options(pending)
+                if not errors:
+                    self._pending = pending
+                    return self.async_create_entry(data=self._pending)
+        return self.async_show_form(
+            step_id="advanced",
+            data_schema=self._advanced_schema(),
+            errors=errors,
+        )
+
+    def _advanced_schema(self) -> vol.Schema:
+        fields: dict[vol.Marker, object] = {
+            vol.Required("met", default=self._entry.options.get("met", 1.1)): vol.Coerce(float),
+            vol.Required(
+                "clothing_mode",
+                default=self._entry.options.get("clothing_mode", "automatic"),
+            ): vol.In(("automatic", "fixed")),
+            vol.Required(
+                "fixed_clothing_clo",
+                default=self._entry.options.get("fixed_clothing_clo", 0.7),
+            ): vol.Coerce(float),
+            vol.Required(
+                "air_speed_mode",
+                default=self._entry.options.get("air_speed_mode", "fixed"),
+            ): vol.In(("fixed", "measured")),
+            vol.Required(
+                "air_speed_m_s",
+                default=self._entry.options.get("air_speed_m_s", 0.1),
+            ): vol.Coerce(float),
+            vol.Required("lower_comfort_vote", default=-0.5): vol.Coerce(float),
+            vol.Required("upper_comfort_vote", default=0.5): vol.Coerce(float),
+            vol.Required("running_mean_alpha", default=0.8): vol.Coerce(float),
+            vol.Required("eco_heating_setback_c", default=2.0): vol.Coerce(float),
+            vol.Required("eco_cooling_setback_c", default=2.0): vol.Coerce(float),
+            vol.Required("boost_delta_c", default=1.0): vol.Coerce(float),
+            vol.Required("boost_duration_minutes", default=60.0): vol.Coerce(float),
+            vol.Required("manual_override_minutes", default=120.0): vol.Coerce(float),
+            vol.Required("minimum_range_gap", default=1.0): vol.Coerce(float),
+            vol.Required("minimum_meaningful_change", default=0.1): vol.Coerce(float),
+            vol.Required("feedback_resolution", default=0.01): vol.Coerce(float),
+            vol.Required("reject_extrapolation", default=False): bool,
+            vol.Required("auto_mapping", default="unmapped"): vol.In(
+                ("unmapped", "heating", "cooling", "range", "bidirectional_scalar")
+            ),
+            vol.Optional(
+                "critical_locations_json",
+                default=json.dumps(self._entry.options.get("critical_locations", [])),
+            ): str,
+        }
+        for target in self._entry.data.get(CONF_TARGETS, ()):
+            key = f"calibration_{target['target_uuid']}"
+            fields[vol.Required(key, default=self._entry.options.get(key, 0.0))] = vol.Coerce(float)
+        if air_speed_entity := self._entry.options.get("air_speed_entity"):
+            fields[vol.Optional("air_speed_entity", default=air_speed_entity)] = ENTITY
+        else:
+            fields[vol.Optional("air_speed_entity")] = ENTITY
+        return vol.Schema(fields)
+
+    def _finish_options(self) -> ConfigFlowResult:
+        errors = validate_options(self._pending)
+        if errors:
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema({}),
+                errors={"base": "invalid_option"},
+            )
+        return self.async_create_entry(data=self._pending)

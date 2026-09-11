@@ -11,8 +11,10 @@ import pytest
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.core import Context
 
+from custom_components.athb import async_migrate_entry, async_remove_entry
 from custom_components.athb.adapters.broker import ContextToken
 from custom_components.athb.adapters.climate import HomeAssistantClimateService
+from custom_components.athb.adapters.storage import HomeAssistantControlStorageBackend
 from custom_components.athb.binary_sensor import ControlEligibleBinarySensor
 from custom_components.athb.button import ResumeButton
 from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE
@@ -39,6 +41,28 @@ def _runtime() -> ZoneRuntime:
 def test_feature_bits_match_pinned_home_assistant_baseline() -> None:
     assert int(ClimateEntityFeature.TARGET_TEMPERATURE) == TARGET_TEMPERATURE == 1
     assert int(ClimateEntityFeature.TARGET_TEMPERATURE_RANGE) == TARGET_TEMPERATURE_RANGE == 2
+
+
+def test_config_entry_schema_accepts_v1_and_rejects_unknown_future_version() -> None:
+    assert asyncio.run(async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=1))))
+    assert not asyncio.run(
+        async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=2)))
+    )
+
+
+async def test_config_entry_removal_deletes_only_its_control_journal(hass: Any) -> None:
+    backend = HomeAssistantControlStorageBackend(hass, "zone-remove")
+    await backend.async_save('{"zone":"remove"}')
+    retained = HomeAssistantControlStorageBackend(hass, "zone-retain")
+    await retained.async_save('{"zone":"retain"}')
+
+    await async_remove_entry(
+        hass,
+        cast(Any, SimpleNamespace(data={"zone_uuid": "zone-remove"})),
+    )
+
+    assert await backend.async_readback() is None
+    assert await retained.async_readback() == '{"zone":"retain"}'
 
 
 def test_climate_service_uses_exact_set_temperature_contract_and_context() -> None:
@@ -118,6 +142,7 @@ def test_native_entity_actions_and_values_delegate_to_one_runtime() -> None:
     assert sensation.native_value == 0.25
     assert sensation.available
     assert sensation.extra_state_attributes["comfort_strategy"] == "balanced"
+    assert sensation.extra_state_attributes["suppression_reason"] is None
     assert ControlEligibleBinarySensor(runtime).is_on
     asyncio.run(ProfileSelect(runtime).async_select_option("boost"))
     assert runtime.profile == "boost"

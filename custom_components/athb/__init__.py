@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
+from .adapters.storage import HomeAssistantControlStorageBackend
 from .const import DOMAIN, PLATFORMS
 from .runtime import AthbConfigEntry, runtime_from_entry
 
@@ -26,4 +27,16 @@ async def async_migrate_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> bo
     return entry.version == 1
 
 
-__all__ = ["DOMAIN", "async_migrate_entry", "async_setup_entry", "async_unload_entry"]
+async def async_remove_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> None:
+    """Remove only this zone's control-critical recovery journal."""
+
+    await HomeAssistantControlStorageBackend(hass, str(entry.data["zone_uuid"])).async_remove()
+
+
+__all__ = [
+    "DOMAIN",
+    "async_migrate_entry",
+    "async_remove_entry",
+    "async_setup_entry",
+    "async_unload_entry",
+]

@@ -21,10 +21,27 @@ class ControlEligibleBinarySensor(AthbEntity, BinarySensorEntity):
         return bool(self.runtime.values.get("control_eligible", False))
 
 
+class SurfaceSaturationBinarySensor(AthbEntity, BinarySensorEntity):
+    _attr_name = "Predicted surface saturation"
+
+    def __init__(self, runtime: ZoneRuntime) -> None:
+        super().__init__(runtime, "surface_saturation")
+
+    @property
+    def is_on(self) -> bool | None:
+        value = self.runtime.values.get("surface_saturation")
+        return value if isinstance(value, bool) else None
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AthbConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     del hass
-    async_add_entities([ControlEligibleBinarySensor(entry.runtime_data)])
+    async_add_entities(
+        [
+            ControlEligibleBinarySensor(entry.runtime_data),
+            SurfaceSaturationBinarySensor(entry.runtime_data),
+        ]
+    )

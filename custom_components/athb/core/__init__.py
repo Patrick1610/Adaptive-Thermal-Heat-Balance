@@ -35,6 +35,7 @@ from .contracts import (
     AthbSuccess,
     AutomaticClothing,
     ComfortStrategy,
+    ControlProfile,
     CriticalEligibilityMode,
     DeclaredRelativeHumidity,
     FixedClothing,
@@ -45,6 +46,7 @@ from .contracts import (
     ModelledSurfaceTemperature,
     NumericalFailure,
     NumericalFailureCode,
+    RootSuccess,
 )
 from .history import (
     BootstrapResult,
@@ -100,6 +102,7 @@ from .ownership import (
     initial_ownership,
     reduce_ownership,
 )
+from .pipeline import ZoneCalculationInput, ZoneCalculationResult, calculate_zone
 from .policy import (
     ActuatorBoundResult,
     CoordinationResult,
@@ -181,6 +184,7 @@ __all__ = [
     "ClimateCapabilitySnapshot",
     "ClimateFailure",
     "ComfortStrategy",
+    "ControlProfile",
     "CoordinationResult",
     "CriticalDeltaState",
     "CriticalDeltaUpdate",
@@ -232,6 +236,7 @@ __all__ = [
     "ProfileResolution",
     "RadiantFailure",
     "RadiantValue",
+    "RootSuccess",
     "RunningMeanResult",
     "SourceIdentity",
     "SourceKind",
@@ -251,6 +256,8 @@ __all__ = [
     "TargetReadiness",
     "TemperatureUnit",
     "UniformRadiantModel",
+    "ZoneCalculationInput",
+    "ZoneCalculationResult",
     "apply_calibration_and_user_bounds",
     "apply_critical_demands",
     "boost_expiry",
@@ -259,6 +266,7 @@ __all__ = [
     "build_adaptive_policy",
     "build_fixed_fallback",
     "build_grid",
+    "calculate_zone",
     "calibrate_surface_factor",
     "candidate_relative_humidity",
     "celsius_delta_to_unit",

@@ -103,6 +103,26 @@ def test_synthetic_recorder_start_state_is_not_counted_as_observation() -> None:
     assert integrator.last_valid_observation is not None
 
 
+def test_current_day_accumulator_restores_without_losing_integral() -> None:
+    day = date(2026, 9, 10)
+    start, _end = _bounds(day)
+    original = DailyHistoryIntegrator(timezone="Europe/Amsterdam", start_utc=start)
+    original.add_sample(OutdoorSample(start, 5.0))
+    cursor = start + timedelta(hours=1)
+    original.advance_to(cursor)
+
+    restored = DailyHistoryIntegrator.restore(
+        timezone="Europe/Amsterdam",
+        accumulator=original.current_summary,
+        last_valid_observation=original.last_valid_observation,
+        last_integrated_utc=cursor,
+    )
+    restored.advance_to(start + timedelta(hours=2))
+
+    assert restored.current_summary.covered_seconds == 2 * 3600
+    assert restored.current_summary.integral_c_seconds == 10 * 3600
+
+
 def test_coverage_threshold_is_exactly_ninety_percent() -> None:
     eligible = _summary(date(2026, 9, 10), 5.0, DAILY_COVERAGE_THRESHOLD)
     ineligible = _summary(date(2026, 9, 9), 5.0, DAILY_COVERAGE_THRESHOLD - 1e-6)

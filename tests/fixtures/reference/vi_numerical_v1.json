@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "source": "ATHB_ARCHITECTURE_PLAN.md section 17.4; pinned oracle provenance is in tests/fixtures/numerical/provenance.json",
+  "tolerance_vote": 0.000001,
+  "tolerance_root_c": 0.01,
+  "goldens": {
+    "G_BASE_B": {"current": -0.173088, "roots": [17.281547, 19.362709, 21.429145, 23.481038, 25.518575]},
+    "G_BASE_E": {"current": -0.173088, "roots": [17.281547, 18.532022, 21.429145, 24.297765, 25.518575]},
+    "G_BASE_C": {"current": -0.173088, "roots": [17.281547, 20.191040, 21.429145, 22.662014, 25.518575]},
+    "G_NEAR_B": {"current": -0.233445, "roots": [17.281547, 19.362709, 21.429145, 23.481038, 25.518575]},
+    "G_BELOW_B": {"current": -0.653070, "roots": [17.281547, 19.362709, 21.429145, 23.481038, 25.518575]},
+    "G_SURFACE16_B": {"current": -0.228480, "roots": [17.447275, 19.798354, 22.133705, 24.453465, 26.757772]},
+    "G_SURFACE14_B": {"current": -0.255340, "roots": [17.701332, 20.050001, 22.382966, 24.700363, 27.002331]},
+    "G_WINTER_B": {"current": 0.206715, "roots": [13.702541, 15.944270, 18.170614, 20.381760, 22.577898]},
+    "G_HUMID_B": {"current": 0.563948, "roots": [null, null, null, 25.660781, 27.525210]}
+  }
+}

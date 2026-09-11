@@ -190,6 +190,53 @@ class DailyHistoryIntegrator:
         self._hold_until: datetime | None = None
         self._summaries: list[DailySummary] = []
 
+    @classmethod
+    def restore(
+        cls,
+        *,
+        timezone: str,
+        accumulator: DailySummary,
+        last_valid_observation: OutdoorSample | None,
+        last_integrated_utc: datetime,
+        maximum_hold: timedelta = DEFAULT_MAX_HOLD,
+    ) -> DailyHistoryIntegrator:
+        """Restore the current-day accumulator without replaying climate work."""
+
+        restored = cls(
+            timezone=timezone,
+            start_utc=accumulator.day_start_utc,
+            maximum_hold=maximum_hold,
+        )
+        cursor = _aware_utc(last_integrated_utc, "last_integrated_utc")
+        if (
+            cursor < accumulator.day_start_utc
+            or cursor > accumulator.day_end_utc
+            or accumulator.local_date != cursor.astimezone(restored.timezone).date()
+        ):
+            raise ValueError("persisted accumulator and cursor are inconsistent")
+        restored.cursor = cursor
+        restored._accumulator = _Accumulator(
+            accumulator.local_date,
+            accumulator.day_start_utc,
+            accumulator.day_end_utc,
+            accumulator.integral_c_seconds,
+            accumulator.covered_seconds,
+            accumulator.observations,
+            accumulator.largest_uncovered_gap_seconds,
+            accumulator.provenance,
+        )
+        if last_valid_observation is not None and last_valid_observation.value_c is not None:
+            hold_until = last_valid_observation.observed_at.astimezone(UTC) + maximum_hold
+            if hold_until >= cursor:
+                restored._last_value = last_valid_observation.value_c
+                restored._hold_until = hold_until
+            else:
+                restored._accumulator.current_gap = max(
+                    restored._accumulator.largest_gap,
+                    (cursor - hold_until).total_seconds(),
+                )
+        return restored
+
     @property
     def summaries(self) -> tuple[DailySummary, ...]:
         return tuple(self._summaries)

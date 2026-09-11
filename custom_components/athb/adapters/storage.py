@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
+from hashlib import sha256
 from typing import Protocol
+
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
+
+from .broker import PendingCommand, service_payload
 
 CONTROL_STORAGE_VERSION = 1
 
@@ -50,6 +57,10 @@ class ControlStoreState:
     strategy: str
     actuators: tuple[StoredActuator, ...]
     schema_version: int = CONTROL_STORAGE_VERSION
+    control_enabled_intent: bool = False
+    selected_profile: str = "comfort"
+    previous_non_boost_profile: str = "comfort"
+    boost_expiry_utc: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +87,27 @@ class ControlStorageBackend(Protocol):
     async def async_save(self, serialized: str) -> None: ...
 
     async def async_readback(self) -> str | None: ...
+
+
+class HomeAssistantControlStorageBackend:
+    """HA Store boundary; Store performs disk work outside the event loop."""
+
+    def __init__(self, hass: HomeAssistant, zone_uuid: str) -> None:
+        self._store: Store[str] = Store(
+            hass,
+            CONTROL_STORAGE_VERSION,
+            f"athb.control.{zone_uuid}",
+            atomic_writes=True,
+        )
+
+    async def async_save(self, serialized: str) -> None:
+        await self._store.async_save(serialized)
+
+    async def async_readback(self) -> str | None:
+        return await self._store.async_load()
+
+    async def async_remove(self) -> None:
+        await self._store.async_remove()
 
 
 def _command_from_dict(value: object) -> StoredCommand | None:
@@ -155,8 +187,15 @@ def serialize_control_state(state: ControlStoreState) -> str:
         or not isinstance(state.storage_generation, int)
         or state.storage_generation < 0
         or not isinstance(state.clean_shutdown, bool)
+        or not isinstance(state.control_enabled_intent, bool)
+        or not state.selected_profile
+        or not state.previous_non_boost_profile
     ):
         raise ValueError("invalid control state version or generation")
+    if state.boost_expiry_utc is not None:
+        boost_expiry = datetime.fromisoformat(state.boost_expiry_utc)
+        if boost_expiry.tzinfo is None or boost_expiry.utcoffset() is None:
+            raise ValueError("invalid boost expiry")
     if not state.run_id or not state.configuration_fingerprint or not state.strategy:
         raise ValueError("control state identity fields are required")
     identities = [actuator.target_identity for actuator in state.actuators]
@@ -187,6 +226,10 @@ def load_control_state(serialized: str | None) -> ControlLoadResult:
             strategy=raw["strategy"],
             actuators=tuple(_actuator_from_dict(item) for item in actuators_raw),
             schema_version=raw["schema_version"],
+            control_enabled_intent=raw.get("control_enabled_intent", False),
+            selected_profile=raw.get("selected_profile", "comfort"),
+            previous_non_boost_profile=raw.get("previous_non_boost_profile", "comfort"),
+            boost_expiry_utc=raw.get("boost_expiry_utc"),
         )
         serialize_control_state(state)
     except KeyError, TypeError, ValueError, json.JSONDecodeError:
@@ -219,6 +262,209 @@ class VerifiedControlStore:
         if actual_serialized != expected:
             return ControlWriteResult(False, "storage_payload_mismatch")
         return ControlWriteResult(True, "storage_verified")
+
+
+class ZoneCommandPersistence:
+    """Versioned per-zone command journal used by the production broker."""
+
+    def __init__(
+        self,
+        backend: ControlStorageBackend,
+        *,
+        run_id: str,
+        configuration_fingerprint: str,
+        strategy: str,
+        target_identities: tuple[str, ...],
+        control_enabled: bool = False,
+        selected_profile: str = "comfort",
+    ) -> None:
+        self._backend = backend
+        self._verified = VerifiedControlStore(backend)
+        self._run_id = run_id
+        self._configuration_fingerprint = configuration_fingerprint
+        self._strategy = strategy
+        self._target_identities = target_identities
+        self._control_enabled = control_enabled
+        self._selected_profile = selected_profile
+        self._lock = asyncio.Lock()
+        self.state: ControlStoreState | None = None
+        self.requires_resume = False
+        self.startup_reason = "not_started"
+
+    async def async_start(self) -> bool:
+        async with self._lock:
+            raw = await self._backend.async_readback()
+            recovery = prepare_startup_recovery(
+                load_control_state(raw),
+                run_id=self._run_id,
+                configuration_fingerprint=self._configuration_fingerprint,
+                strategy=self._strategy,
+            )
+            known = {item.target_identity: item for item in recovery.state.actuators}
+            actuators = tuple(
+                known.get(
+                    identity,
+                    StoredActuator(
+                        identity,
+                        "reconciling",
+                        0,
+                        0,
+                        None,
+                        None,
+                        recovery.requires_resume,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
+                )
+                for identity in self._target_identities
+            )
+            self.state = replace(
+                recovery.state,
+                actuators=actuators,
+                control_enabled_intent=self._control_enabled,
+                selected_profile=self._selected_profile,
+            )
+            self.requires_resume = recovery.requires_resume
+            self.startup_reason = recovery.reason
+            return (await self._verified.async_write_critical(self.state)).verified
+
+    def _replace_actuator(self, identity: str, actuator: StoredActuator) -> None:
+        if self.state is None:
+            raise RuntimeError("control persistence has not started")
+        self.state = replace(
+            self.state,
+            storage_generation=self.state.storage_generation + 1,
+            actuators=tuple(
+                actuator if item.target_identity == identity else item
+                for item in self.state.actuators
+            ),
+        )
+
+    @staticmethod
+    def _stored_command(command: PendingCommand, *, dispatched: bool) -> StoredCommand:
+        payload = json.dumps(service_payload(command.intent), sort_keys=True, separators=(",", ":"))
+        return StoredCommand(
+            command.command_id,
+            command.intent.target_registry_identity,
+            sha256(payload.encode()).hexdigest(),
+            command.context.context_id,
+            command.intent.entry_generation,
+            command.intent.input_generation,
+            command.intent.capability_generation,
+            command.intent.ownership_revision,
+            command.registered_at.isoformat(),
+            command.intent.expires_at.isoformat(),
+            dispatched,
+        )
+
+    async def async_persist_pending(self, command: PendingCommand) -> bool:
+        return await self._write_command(command, dispatched=False, reason=None)
+
+    async def async_mark_dispatched(self, command: PendingCommand) -> bool:
+        return await self._write_command(command, dispatched=True, reason=None)
+
+    async def async_resolve(self, command: PendingCommand, reason: str) -> bool:
+        return await self._write_command(command, dispatched=True, reason=reason)
+
+    async def _write_command(
+        self, command: PendingCommand, *, dispatched: bool, reason: str | None
+    ) -> bool:
+        async with self._lock:
+            if self.state is None:
+                return False
+            current = next(
+                (
+                    item
+                    for item in self.state.actuators
+                    if item.target_identity == command.intent.target_registry_identity
+                ),
+                None,
+            )
+            if current is None:
+                return False
+            payload = self._stored_command(command, dispatched=dispatched)
+            updated = replace(
+                current,
+                last_command_id=command.command_id,
+                last_command_payload_fingerprint=payload.payload_fingerprint,
+                last_command_context_id=command.context.context_id,
+                pending_command=None if reason is not None else payload,
+            )
+            self._replace_actuator(current.target_identity, updated)
+            assert self.state is not None
+            return (await self._verified.async_write_critical(self.state)).verified
+
+    async def async_update_runtime(
+        self,
+        *,
+        control_enabled: bool,
+        selected_profile: str,
+        previous_non_boost_profile: str,
+        boost_expiry_utc: str | None,
+    ) -> bool:
+        """Persist authoritative non-command runtime intent."""
+
+        async with self._lock:
+            if self.state is None:
+                return False
+            self.state = replace(
+                self.state,
+                storage_generation=self.state.storage_generation + 1,
+                control_enabled_intent=control_enabled,
+                selected_profile=selected_profile,
+                previous_non_boost_profile=previous_non_boost_profile,
+                boost_expiry_utc=boost_expiry_utc,
+            )
+            return (await self._verified.async_write_critical(self.state)).verified
+
+    async def async_update_actuator(
+        self,
+        identity: str,
+        *,
+        ownership: str,
+        ownership_revision: int,
+        external_revision: int,
+        override_reason: str | None,
+        override_expiry: str | None,
+        resume_required: bool,
+    ) -> bool:
+        """Persist ownership/override state without altering command correlation."""
+
+        async with self._lock:
+            if self.state is None:
+                return False
+            current = next(
+                (item for item in self.state.actuators if item.target_identity == identity), None
+            )
+            if current is None:
+                return False
+            self._replace_actuator(
+                identity,
+                replace(
+                    current,
+                    ownership=ownership,
+                    ownership_revision=ownership_revision,
+                    external_revision=external_revision,
+                    override_reason=override_reason,
+                    override_expiry=override_expiry,
+                    resume_required=resume_required,
+                ),
+            )
+            assert self.state is not None
+            return (await self._verified.async_write_critical(self.state)).verified
+
+    async def async_mark_clean(self, *, now: datetime) -> bool:
+        async with self._lock:
+            if self.state is None:
+                return False
+            try:
+                self.state = mark_clean_shutdown(self.state, now=now)
+            except ValueError:
+                return False
+            return (await self._verified.async_write_critical(self.state)).verified
 
 
 def prepare_startup_recovery(
@@ -269,6 +515,10 @@ def prepare_startup_recovery(
         configuration_fingerprint,
         strategy,
         actuators,
+        control_enabled_intent=prior.control_enabled_intent,
+        selected_profile=prior.selected_profile,
+        previous_non_boost_profile=prior.previous_non_boost_profile,
+        boost_expiry_utc=prior.boost_expiry_utc,
     )
     return StartupRecovery(state, requires_resume, reason)
 

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://athb.local/schema/virtual-installation-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scenario_id", "name", "purpose", "baseline", "variant", "clock", "timezone", "seed", "case", "zone_configuration", "environmental_state", "target_capabilities", "runtime_control", "event_timeline", "expected_numerical", "expected_policy", "expected_broker", "expected_execution"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "scenario_id": {"type": "string", "pattern": "^VI-[0-9]{3}$"},
+    "name": {"type": "string", "minLength": 3},
+    "purpose": {"type": "string", "minLength": 3},
+    "baseline": {"type": ["string", "null"]},
+    "variant": {"type": "string"},
+    "clock": {"type": "string", "format": "date-time"},
+    "timezone": {"const": "Europe/Amsterdam"},
+    "seed": {"const": 0},
+    "case": {"type": "string"},
+    "zone_configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["zone_id", "primary_entity", "rh_mode", "rh_entity", "rh_declared", "outdoor_entity", "met", "air_speed_m_s", "radiant_model", "critical_locations", "lower_vote", "upper_vote", "strategy", "profile", "user_min_c", "user_max_c", "fallback_mode", "fallback_heating_c", "fallback_cooling_c", "reject_extrapolation", "minimum_range_gap_c"],
+      "properties": {
+        "zone_id": {"type": "string"}, "primary_entity": {"type": "string"}, "rh_mode": {"enum": ["measured", "declared"]}, "rh_entity": {"type": ["string", "null"]}, "rh_declared": {"type": ["number", "null"]}, "outdoor_entity": {"type": "string"}, "met": {"type": "number"}, "air_speed_m_s": {"type": "number"}, "radiant_model": {"enum": ["uniform", "direct_mrt", "globe", "surface"]}, "critical_locations": {"type": "array"}, "lower_vote": {"type": "number"}, "upper_vote": {"type": "number"}, "strategy": {"enum": ["efficient", "balanced", "comfort"]}, "profile": {"enum": ["auto", "comfort", "eco", "boost"]}, "user_min_c": {"type": "number"}, "user_max_c": {"type": "number"}, "fallback_mode": {"enum": ["fixed", "no_write"]}, "fallback_heating_c": {"type": "number"}, "fallback_cooling_c": {"type": "number"}, "reject_extrapolation": {"type": "boolean"}, "minimum_range_gap_c": {"type": "number"}, "surface_view_factor": {"type": "number"}, "surface_modelled": {"type": "boolean"}, "surface_f_rsi": {"type": "number"}, "auto_mapping": {"enum": ["unmapped", "heating", "cooling", "range", "bidirectional_scalar"]}
+      }
+    },
+    "environmental_state": {
+      "type": "object", "additionalProperties": false,
+      "required": ["primary_raw", "primary_unit", "rh_raw", "rh_unit", "outdoor_raw", "outdoor_unit", "history_days", "history_value_c", "radiant_raw", "radiant_unit", "observed_at", "provenance"],
+      "properties": {"primary_raw": {}, "primary_unit": {"type": "string"}, "rh_raw": {}, "rh_unit": {"type": "string"}, "outdoor_raw": {}, "outdoor_unit": {"type": "string"}, "history_days": {"type": "integer", "minimum": 0, "maximum": 7}, "history_value_c": {"type": "number"}, "radiant_raw": {}, "radiant_unit": {"type": "string"}, "observed_at": {"type": "string", "format": "date-time"}, "provenance": {"type": "object"}}
+    },
+    "target_capabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entity_id", "registry_identity", "target_uuid", "hvac_mode", "advertised_modes", "supported_features", "shape", "min_temp", "max_temp", "step", "unit", "current_temperature", "current_low", "current_high", "available", "restored", "auto_mapping", "feedback_resolution", "calibration_offset_c"],
+      "properties": {"entity_id": {"type": "string"}, "registry_identity": {"type": "string"}, "target_uuid": {"type": "string"}, "hvac_mode": {"type": "string"}, "advertised_modes": {"type": "array", "items": {"type": "string"}}, "supported_features": {"type": "integer"}, "shape": {"enum": ["scalar", "range"]}, "min_temp": {"type": "number"}, "max_temp": {"type": "number"}, "step": {"type": ["number", "null"]}, "unit": {"enum": ["°C", "°F"]}, "current_temperature": {"type": ["number", "null"]}, "current_low": {"type": ["number", "null"]}, "current_high": {"type": ["number", "null"]}, "available": {"type": "boolean"}, "restored": {"type": "boolean"}, "auto_mapping": {"type": "string"}, "feedback_resolution": {"type": "number"}, "calibration_offset_c": {"type": "number"}}
+    },
+    "runtime_control": {"type": "object", "additionalProperties": false, "required": ["enabled", "ownership", "data_readiness", "target_readiness", "ownership_revision", "external_revision", "clean_shutdown", "pending", "queued", "override_reason"], "properties": {"enabled": {"type": "boolean"}, "ownership": {"type": "string"}, "data_readiness": {"type": "string"}, "target_readiness": {"type": "string"}, "ownership_revision": {"type": "integer"}, "external_revision": {"type": "integer"}, "clean_shutdown": {"type": "boolean"}, "pending": {"type": "boolean"}, "queued": {"type": "boolean"}, "override_reason": {"type": ["string", "null"]}}},
+    "event_timeline": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["virtual_time", "sequence", "event"], "properties": {"virtual_time": {"type": "number"}, "sequence": {"type": "integer"}, "event": {"type": "string"}}}},
+    "expected_numerical": {"type": "object", "additionalProperties": false, "required": ["golden_key", "status", "current_sensation", "root_status", "tolerance_c"], "properties": {"golden_key": {"type": ["string", "null"]}, "status": {"type": "string"}, "current_sensation": {"type": ["number", "null"]}, "root_status": {"type": "object"}, "tolerance_c": {"type": "number"}}},
+    "expected_policy": {"type": "object", "additionalProperties": false, "required": ["strategy", "profile", "fallback", "governing_heating", "governing_cooling", "limitations"], "properties": {"strategy": {"type": "string"}, "profile": {"type": "string"}, "fallback": {"type": "boolean"}, "governing_heating": {"type": ["string", "null"]}, "governing_cooling": {"type": ["string", "null"]}, "limitations": {"type": "array", "items": {"type": "string"}}}},
+    "expected_broker": {"type": "object", "additionalProperties": false, "required": ["emitted", "service_payloads", "suppression_reason", "acknowledgement", "ending_ownership"], "properties": {"emitted": {"type": "boolean"}, "service_payloads": {"type": "array", "items": {"type": "object"}}, "suppression_reason": {"type": ["string", "null"]}, "acknowledgement": {"type": "string"}, "ending_ownership": {"type": "string"}}},
+    "expected_execution": {"type": "object", "additionalProperties": false, "required": ["collector_count", "bootstrap_count", "max_running_jobs", "max_pending_calculations", "max_pending_commands", "max_queued_commands", "evaluation_budget", "settled"], "properties": {"collector_count": {"type": "integer"}, "bootstrap_count": {"type": "integer"}, "max_running_jobs": {"type": "integer"}, "max_pending_calculations": {"type": "integer"}, "max_pending_commands": {"type": "integer"}, "max_queued_commands": {"type": "integer"}, "evaluation_budget": {"type": "integer"}, "settled": {"type": "boolean"}}}
+  }
+}

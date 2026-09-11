@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
 
@@ -14,6 +15,7 @@ from custom_components.athb.adapters.storage import (
     StoredActuator,
     StoredCommand,
     VerifiedControlStore,
+    ZoneCommandPersistence,
     load_control_state,
     mark_clean_shutdown,
     prepare_startup_recovery,
@@ -115,6 +117,36 @@ def test_loaded_control_types_and_command_identity_are_validated_strictly() -> N
         assert load_control_state(malformed).reason == "corrupt_control_storage"
 
 
+@pytest.mark.parametrize(
+    "state",
+    [
+        replace(_state(), schema_version=2),
+        replace(_state(), storage_generation=-1),
+        replace(_state(), clean_shutdown=cast(bool, 0)),
+        replace(_state(), control_enabled_intent=cast(bool, 1)),
+        replace(_state(), selected_profile=""),
+        replace(_state(), previous_non_boost_profile=""),
+        replace(_state(), run_id=""),
+        replace(_state(), boost_expiry_utc="2026-09-11T13:00:00"),
+        replace(_state(), actuators=(_actuator(), _actuator())),
+    ],
+)
+def test_serialization_rejects_invalid_state_invariants(state: ControlStoreState) -> None:
+    with pytest.raises(ValueError, match=r"invalid|identity|duplicate"):
+        serialize_control_state(state)
+
+
+def test_loading_rejects_non_object_actuators_and_naive_override() -> None:
+    raw = serialize_control_state(_state())
+    malformed = (
+        raw.replace('"actuators":[{', '"actuators":["bad",{', 1),
+        raw.replace('"override_expiry":null', '"override_expiry":"2026-09-11T13:00:00"'),
+        raw.replace('"pending_command":null', '"pending_command":false'),
+    )
+    for payload in malformed:
+        assert load_control_state(payload).reason == "corrupt_control_storage"
+
+
 def test_verified_critical_write_reads_back_exact_payload() -> None:
     backend = MemoryBackend()
     result = asyncio.run(VerifiedControlStore(backend).async_write_critical(_state()))
@@ -212,3 +244,71 @@ def test_clean_shutdown_rejects_pending_commands_and_naive_clock() -> None:
             configuration_fingerprint="config-a",
             strategy="balanced",
         )
+
+
+async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> None:
+    backend = MemoryBackend()
+    persistence = ZoneCommandPersistence(
+        backend,
+        run_id="run-current",
+        configuration_fingerprint="config-current",
+        strategy="balanced",
+        target_identities=("registry-1",),
+        control_enabled=True,
+        selected_profile="comfort",
+    )
+    assert await persistence.async_start()
+    assert await persistence.async_update_runtime(
+        control_enabled=True,
+        selected_profile="boost",
+        previous_non_boost_profile="eco",
+        boost_expiry_utc="2026-09-11T13:00:00+00:00",
+    )
+    assert await persistence.async_update_actuator(
+        "registry-1",
+        ownership="manual_override",
+        ownership_revision=3,
+        external_revision=2,
+        override_reason="external_temperature_target",
+        override_expiry="2026-09-11T14:00:00+00:00",
+        resume_required=False,
+    )
+    loaded = load_control_state(backend.value)
+    assert loaded.state is not None
+    assert loaded.state.control_enabled_intent is True
+    assert loaded.state.selected_profile == "boost"
+    assert loaded.state.previous_non_boost_profile == "eco"
+    assert loaded.state.boost_expiry_utc == "2026-09-11T13:00:00+00:00"
+    assert loaded.state.actuators[0].ownership == "manual_override"
+    assert loaded.state.actuators[0].external_revision == 2
+
+
+async def test_unstarted_or_unknown_persistence_operations_fail_closed() -> None:
+    persistence = ZoneCommandPersistence(
+        MemoryBackend(),
+        run_id="run-current",
+        configuration_fingerprint="config-current",
+        strategy="balanced",
+        target_identities=("registry-1",),
+    )
+    with pytest.raises(RuntimeError, match="not started"):
+        persistence._replace_actuator("registry-1", _actuator())
+    assert not await persistence.async_persist_pending(cast(Any, None))
+    assert not await persistence.async_mark_dispatched(cast(Any, None))
+    assert not await persistence.async_resolve(cast(Any, None), "resolved")
+    assert not await persistence.async_update_runtime(
+        control_enabled=False,
+        selected_profile="comfort",
+        previous_non_boost_profile="comfort",
+        boost_expiry_utc=None,
+    )
+    assert not await persistence.async_update_actuator(
+        "registry-1",
+        ownership="owned",
+        ownership_revision=1,
+        external_revision=0,
+        override_reason=None,
+        override_expiry=None,
+        resume_required=False,
+    )
+    assert not await persistence.async_mark_clean(now=datetime.now(UTC))

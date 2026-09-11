@@ -26,10 +26,10 @@ This compact checklist preserves the normative implementation order and dependen
 | ATHB-020 | Implement zone orchestration, executor limits, coherent snapshots, timers, and unload cleanup. | 011–019 | Phase 8: native Home Assistant | Complete |
 | ATHB-021 | Implement config, reconfigure, and options flows with progressive disclosure and validation. | 020 | Phase 8: native Home Assistant | Complete |
 | ATHB-022 | Implement entity platforms, lightweight strategy persistence, and stable identities. | 020–021 | Phase 8: native Home Assistant | Complete |
-| ATHB-023 | Implement decision traces, redacted diagnostics, transition logging, and repairs. | 020–022 | Phase 9: observability and documentation | Pending |
-| ATHB-024 | Complete translations and scientific, configuration, operation, installation, and validation documentation. | 002, 021–023 | Phase 9: observability and documentation | Pending |
-| ATHB-025 | Implement versioned virtual-installation fixtures, runner, scenarios, and reports. | 003–004, 014, 018, 020–024 | Phase 9: observability and documentation | Pending |
-| ATHB-026 | Complete integrated Virtual Installation Validation and all safety/load qualification. | 025 | Phase 10: integrated qualification | Pending |
-| ATHB-027 | Run the full numerical, policy, HA-contract, race, privacy, static, and packaging suite. | 026 | Phase 10: integrated qualification | Pending |
+| ATHB-023 | Implement decision traces, redacted diagnostics, transition logging, and repairs. | 020–022 | Phase 9: observability and documentation | Complete |
+| ATHB-024 | Complete translations and scientific, configuration, operation, installation, and validation documentation. | 002, 021–023 | Phase 9: observability and documentation | Complete |
+| ATHB-025 | Implement versioned virtual-installation fixtures, runner, scenarios, and reports. | 003–004, 014, 018, 020–024 | Phase 9: observability and documentation | Complete |
+| ATHB-026 | Complete integrated Virtual Installation Validation and all safety/load qualification. | 025 | Phase 10: integrated qualification | Complete |
+| ATHB-027 | Run the full numerical, policy, HA-contract, race, privacy, static, and packaging suite. | 026 | Phase 10: integrated qualification | Complete |
 | ATHB-028 | Perform independent final architecture, numerical, and safety review of one immutable candidate. | 027 | Phase 10: integrated qualification | Pending |
 | ATHB-029 | Produce the validated local distribution and closure evidence; publication remains separate. | 028 | Phase 10: integrated qualification | Pending |

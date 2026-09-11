@@ -1,0 +1,3124 @@
+[
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Dutch living room / Balanced",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-001"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.0
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Same room / Efficient",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_E",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 24.297205249711876
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 18.532199748411774
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 18.532199748411774,
+        "calibrated_c": 18.532199748411774,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.0,
+        "normalized_ha": 19.0,
+        "normalized_room_c": 19.0,
+        "requested_room_c": 18.532199748411774
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 18.532199748411774,
+      "strategy": "efficient"
+    },
+    "scenario_id": "VI-002"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 20.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Same room / Comfort",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_C",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 22.661849102303385
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 20.190060796931384
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 20.190060796931384,
+        "calibrated_c": 20.190060796931384,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 20.5,
+        "normalized_ha": 20.5,
+        "normalized_room_c": 20.5,
+        "requested_room_c": 20.190060796931384
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 20.190060796931384,
+      "strategy": "comfort"
+    },
+    "scenario_id": "VI-003"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "owned",
+      "reason": "target_unchanged"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 19.5,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 51.5759274364,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Room around Balanced target",
+    "numerical": {
+      "current_sensation": -0.23344521023117604,
+      "evaluation_count": 79,
+      "golden_key": "G_NEAR_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479335407027047
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.360890697506253
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.28291404078994
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427614773049022
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519803459831518
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.360890697506253,
+        "calibrated_c": 19.360890697506253,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.360890697506253
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.360890697506253,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-004"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 16.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 64.3079856685,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Room below comfort band",
+    "numerical": {
+      "current_sensation": -0.65306988911957,
+      "evaluation_count": 79,
+      "golden_key": "G_BELOW_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.47968305239827
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361325007565316
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283392077840865
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.428005592904988
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.52010816750676
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361325007565316,
+        "calibrated_c": 19.361325007565316,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361325007565316
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361325007565316,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-005"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 21.0
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Cold critical-air location",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 157,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "cold_seat",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 20.861120950075797,
+        "calibrated_c": 20.861120950075797,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 21.0,
+        "normalized_ha": 21.0,
+        "normalized_room_c": 21.0,
+        "requested_room_c": 20.861120950075797
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 20.861120950075797,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-006"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 21.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Pathological location and influence cap",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 157,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "cold_seat",
+      "limitations": [
+        "critical_demand_limited"
+      ],
+      "normalized": {
+        "bounded_c": 21.361130272671577,
+        "calibrated_c": 21.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 21.5,
+        "normalized_ha": 21.5,
+        "normalized_room_c": 21.5,
+        "requested_room_c": 21.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 21.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-007"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 20.0
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "measured",
+        "rh": "measured"
+      },
+      "radiant_model": "surface",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Cold measured surface",
+    "numerical": {
+      "current_sensation": -0.22847971463520508,
+      "evaluation_count": 79,
+      "golden_key": "G_SURFACE16_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 24.454739557489756
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.799975844338537
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.448213678225873
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 22.132983926191923
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 26.75774110452831
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.799975844338537,
+        "calibrated_c": 19.799975844338537,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 20.0,
+        "normalized_ha": 20.0,
+        "normalized_room_c": 20.0,
+        "requested_room_c": 19.799975844338537
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.799975844338537,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-008"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 20.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "surface",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Internally modelled surface",
+    "numerical": {
+      "current_sensation": -0.25533981643687614,
+      "evaluation_count": 79,
+      "golden_key": "G_SURFACE14_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 24.698542652860286
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 20.05128057341277
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.699518407300115
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 22.384288655266168
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 27.00154419989884
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 20.05128057341277,
+        "calibrated_c": 20.05128057341277,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 20.5,
+        "normalized_ha": 20.5,
+        "normalized_room_c": 20.5,
+        "requested_room_c": 20.05128057341277
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 20.05128057341277,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-009"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "declared"
+      },
+      "radiant_model": "uniform",
+      "rh": null,
+      "rh_provenance": "declared",
+      "running_mean_c": 5.0
+    },
+    "name": "Direct fixed RH declaration",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-010"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "direct_mrt",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Missing optional MRT",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-011"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "owned",
+      "reason": "primary_temperature_invalid"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "missing",
+        "unavailable",
+        "nonfinite",
+        "boolean",
+        "malformed",
+        "stale"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": "NaN",
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Invalid mandatory air",
+    "numerical": {
+      "current_sensation": null,
+      "evaluation_count": 0,
+      "golden_key": null,
+      "roots": {
+        "cooling_control": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "heating_control": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "lower_comfort": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "thermal_neutral": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "upper_comfort": {
+          "status": "unavailable",
+          "value_c": null
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": null,
+      "governing_heating": null,
+      "limitations": [],
+      "normalized": null,
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": null,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-012"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "owned",
+      "reason": "primary_rh_invalid"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "missing",
+        "unavailable",
+        "nonfinite",
+        "boolean",
+        "malformed",
+        "stale"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": "unknown",
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Invalid or missing RH",
+    "numerical": {
+      "current_sensation": null,
+      "evaluation_count": 0,
+      "golden_key": null,
+      "roots": {
+        "cooling_control": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "heating_control": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "lower_comfort": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "thermal_neutral": {
+          "status": "unavailable",
+          "value_c": null
+        },
+        "upper_comfort": {
+          "status": "unavailable",
+          "value_c": null
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": null,
+      "governing_heating": null,
+      "limitations": [],
+      "normalized": null,
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": null,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-013"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "three_day_adaptive",
+        "two_day_fixed_fallback"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "partial_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Partial and insufficient history",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-014"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 18.0
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "adaptive_extrapolation_allowed",
+        "rejected_immediate_hold_no_write",
+        "rejected_after_15m_fixed_fallback_heat_18"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": -10.0
+    },
+    "name": "Cold-winter extrapolation",
+    "numerical": {
+      "current_sensation": 0.20671480116953517,
+      "evaluation_count": 79,
+      "golden_key": "G_WINTER_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 20.381352456375957
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 15.94413612063229
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 13.701147643223404
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 18.17212133063376
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 22.579331131562594
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 18.0,
+        "calibrated_c": 15.94413612063229,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "user_bound_applied"
+        ],
+        "normalized_actuator_c": 18.0,
+        "normalized_ha": 18.0,
+        "normalized_room_c": 18.0,
+        "requested_room_c": 15.94413612063229
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 15.94413612063229,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-015"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 25.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "cooling_directional_root",
+        "ranged_missing_heating_endpoint"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 28.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 80.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 24.999999999999996
+    },
+    "name": "Humid warm room and saturation",
+    "numerical": {
+      "current_sensation": 0.5639479489801329,
+      "evaluation_count": 50,
+      "golden_key": "G_HUMID_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 25.6606139216423
+        },
+        "heating_control": {
+          "status": "moisture_limited_no_solution",
+          "value_c": null
+        },
+        "lower_comfort": {
+          "status": "moisture_limited_no_solution",
+          "value_c": null
+        },
+        "thermal_neutral": {
+          "status": "moisture_limited_no_solution",
+          "value_c": null
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 27.52452230405808
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 25.6606139216423,
+        "calibrated_c": 25.6606139216423,
+        "direction": "cooling_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 30.0,
+          "upper_index": 28
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 25.5,
+        "normalized_ha": 25.5,
+        "normalized_room_c": 25.5,
+        "requested_room_c": 25.6606139216423
+      },
+      "profile": "comfort",
+      "requested_cooling_c": 25.6606139216423,
+      "requested_heating_c": null,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-016"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 23.0
+        },
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 24.0
+        },
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 22.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Cooling-only strategy targets",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 23.479527176007633,
+        "calibrated_c": 23.479527176007633,
+        "direction": "cooling_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 23.0,
+        "normalized_ha": 23.0,
+        "normalized_room_c": 23.0,
+        "requested_room_c": 23.479527176007633
+      },
+      "profile": "comfort",
+      "requested_cooling_c": 23.479527176007633,
+      "requested_heating_c": null,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-017"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "target_temp_high": 23.0,
+          "target_temp_low": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Ranged heat cool",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "cooling": {
+          "bounded_c": 23.479527176007633,
+          "calibrated_c": 23.479527176007633,
+          "direction": "cooling_only",
+          "grid": {
+            "assumed_step": false,
+            "lower_bound_ha": 18.0,
+            "lower_index": 4,
+            "origin_ha": 16.0,
+            "step_ha": 0.5,
+            "upper_bound_ha": 26.0,
+            "upper_index": 20
+          },
+          "limitations": [
+            "grid_inward_adjustment"
+          ],
+          "normalized_actuator_c": 23.0,
+          "normalized_ha": 23.0,
+          "normalized_room_c": 23.0,
+          "requested_room_c": 23.479527176007633
+        },
+        "heating": {
+          "bounded_c": 19.361130272671577,
+          "calibrated_c": 19.361130272671577,
+          "direction": "heating_only",
+          "grid": {
+            "assumed_step": false,
+            "lower_bound_ha": 18.0,
+            "lower_index": 4,
+            "origin_ha": 16.0,
+            "step_ha": 0.5,
+            "upper_bound_ha": 26.0,
+            "upper_index": 20
+          },
+          "limitations": [
+            "grid_inward_adjustment"
+          ],
+          "normalized_actuator_c": 19.5,
+          "normalized_ha": 19.5,
+          "normalized_room_c": 19.5,
+          "requested_room_c": 19.361130272671577
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "requested_cooling_room_c": 23.479527176007633,
+        "requested_heating_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": 23.479527176007633,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-018"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "target_temp_high": 23.0,
+          "target_temp_low": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Explicit mapped auto range",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "cooling": {
+          "bounded_c": 23.479527176007633,
+          "calibrated_c": 23.479527176007633,
+          "direction": "cooling_only",
+          "grid": {
+            "assumed_step": false,
+            "lower_bound_ha": 18.0,
+            "lower_index": 4,
+            "origin_ha": 16.0,
+            "step_ha": 0.5,
+            "upper_bound_ha": 26.0,
+            "upper_index": 20
+          },
+          "limitations": [
+            "grid_inward_adjustment"
+          ],
+          "normalized_actuator_c": 23.0,
+          "normalized_ha": 23.0,
+          "normalized_room_c": 23.0,
+          "requested_room_c": 23.479527176007633
+        },
+        "heating": {
+          "bounded_c": 19.361130272671577,
+          "calibrated_c": 19.361130272671577,
+          "direction": "heating_only",
+          "grid": {
+            "assumed_step": false,
+            "lower_bound_ha": 18.0,
+            "lower_index": 4,
+            "origin_ha": 16.0,
+            "step_ha": 0.5,
+            "upper_bound_ha": 26.0,
+            "upper_index": 20
+          },
+          "limitations": [
+            "grid_inward_adjustment"
+          ],
+          "normalized_actuator_c": 19.5,
+          "normalized_ha": 19.5,
+          "normalized_room_c": 19.5,
+          "requested_room_c": 19.361130272671577
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "requested_cooling_room_c": 23.479527176007633,
+        "requested_heating_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": 23.479527176007633,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-019"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "owned",
+      "reason": "unsupported_auto_mapping"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Unsupported auto semantics",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-020"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "owned",
+      "reason": "hvac_off"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Climate off",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-021"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 67.0
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Fahrenheit and one conversion",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 64.4,
+          "lower_index": 5,
+          "origin_ha": 60.0,
+          "step_ha": 1.0,
+          "upper_bound_ha": 78.8,
+          "upper_index": 18
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.444444444444443,
+        "normalized_ha": 67.0,
+        "normalized_room_c": 19.444444444444443,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-022"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 20.0
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "heat_step_2",
+        "cool_step_2",
+        "range_step_2",
+        "range_step_4_infeasible"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Coarse-grid inward normalization",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 1,
+          "origin_ha": 16.0,
+          "step_ha": 2.0,
+          "upper_bound_ha": 26.0,
+          "upper_index": 5
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 20.0,
+        "normalized_ha": 20.0,
+        "normalized_room_c": 20.0,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-023"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "manual_override",
+      "reason": "manual_override"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Manual external setpoint change",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-024"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "own_context_before_return",
+        "contextless_exact_pending"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "ATHB-originated acknowledgement",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-025"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "manual_override",
+      "reason": "manual_override"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": []
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Obsolete delayed acknowledgement",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-026"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "reconciling",
+      "reason": "reconciliation_required"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "clean_recompute",
+        "unclean_reconcile",
+        "explicit_resume_new_identity"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Restart recovery simulation",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-027"
+  },
+  {
+    "broker": {
+      "acknowledgement": "not_applicable",
+      "calls": [],
+      "ending_ownership": "owned",
+      "reason": "cross_actuator_conflict"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "normal_two_actuator",
+        "manual_opposing_conflict"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Multiple actuators and conflicts",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-028"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 19.5
+        },
+        {
+          "entity_id": "climate.second_zone",
+          "temperature": 19.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "two_zone_commands",
+        "forty_zone_eight_location_shared_source"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Zones sharing outdoor source",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_B",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 23.479527176007633
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 19.361130272671577
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 19.361130272671577,
+        "calibrated_c": 19.361130272671577,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 19.5,
+        "normalized_ha": 19.5,
+        "normalized_room_c": 19.5,
+        "requested_room_c": 19.361130272671577
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 19.361130272671577,
+      "strategy": "balanced"
+    },
+    "scenario_id": "VI-029"
+  },
+  {
+    "broker": {
+      "acknowledgement": "acknowledged",
+      "calls": [
+        {
+          "entity_id": "climate.living_room",
+          "temperature": 20.5
+        }
+      ],
+      "ending_ownership": "owned",
+      "reason": "own_context_match"
+    },
+    "execution": {
+      "bootstrap_count": 1,
+      "collector_count": 1,
+      "evaluation_budget": 3000,
+      "max_pending_calculations": 1,
+      "max_pending_commands": 1,
+      "max_queued_commands": 1,
+      "max_running_jobs": 1,
+      "settled": true,
+      "variants": [
+        "ten_thousand_events",
+        "latest_generation_only"
+      ]
+    },
+    "failed_assertions": [],
+    "input_summary": {
+      "history_quality": "complete_history",
+      "primary": 20.0,
+      "provenance": {
+        "air_speed": "declared",
+        "clothing": "estimated",
+        "met": "declared",
+        "outdoor": "measured",
+        "primary": "measured",
+        "radiant": "estimated",
+        "rh": "measured"
+      },
+      "radiant_model": "uniform",
+      "rh": 50.0,
+      "rh_provenance": "measured",
+      "running_mean_c": 5.0
+    },
+    "name": "Event storm and stale work",
+    "numerical": {
+      "current_sensation": -0.17308845704988404,
+      "evaluation_count": 79,
+      "golden_key": "G_BASE_C",
+      "roots": {
+        "cooling_control": {
+          "status": "success",
+          "value_c": 22.661849102303385
+        },
+        "heating_control": {
+          "status": "success",
+          "value_c": 20.190060796931384
+        },
+        "lower_comfort": {
+          "status": "success",
+          "value_c": 17.283177736744285
+        },
+        "thermal_neutral": {
+          "status": "success",
+          "value_c": 21.427830358043316
+        },
+        "upper_comfort": {
+          "status": "success",
+          "value_c": 25.519971543416386
+        }
+      }
+    },
+    "passed": true,
+    "policy": {
+      "fallback": false,
+      "governing_cooling": "primary",
+      "governing_heating": "primary",
+      "limitations": [],
+      "normalized": {
+        "bounded_c": 20.190060796931384,
+        "calibrated_c": 20.190060796931384,
+        "direction": "heating_only",
+        "grid": {
+          "assumed_step": false,
+          "lower_bound_ha": 18.0,
+          "lower_index": 4,
+          "origin_ha": 16.0,
+          "step_ha": 0.5,
+          "upper_bound_ha": 26.0,
+          "upper_index": 20
+        },
+        "limitations": [
+          "grid_inward_adjustment"
+        ],
+        "normalized_actuator_c": 20.5,
+        "normalized_ha": 20.5,
+        "normalized_room_c": 20.5,
+        "requested_room_c": 20.190060796931384
+      },
+      "profile": "comfort",
+      "requested_cooling_c": null,
+      "requested_heating_c": 20.190060796931384,
+      "strategy": "comfort"
+    },
+    "scenario_id": "VI-030"
+  }
+]

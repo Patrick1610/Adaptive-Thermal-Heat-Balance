@@ -19,6 +19,7 @@ class Description:
     key: str
     name: str
     temperature: bool = False
+    humidity: bool = False
 
 
 DESCRIPTIONS = (
@@ -29,6 +30,8 @@ DESCRIPTIONS = (
     Description("comfort_status", "Comfort status"),
     Description("control_status", "Control status"),
     Description("outdoor_running_mean", "Outdoor running mean", True),
+    Description("surface_temperature", "Surface temperature", True),
+    Description("surface_relative_humidity", "Surface relative humidity", humidity=True),
 )
 
 
@@ -40,6 +43,9 @@ class AthbSensor(AthbEntity, SensorEntity):
         if description.temperature:
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        elif description.humidity:
+            self._attr_device_class = SensorDeviceClass.HUMIDITY
+            self._attr_native_unit_of_measurement = "%"
 
     @property
     def native_value(self) -> Any:
@@ -55,6 +61,10 @@ class AthbSensor(AthbEntity, SensorEntity):
             "comfort_strategy": self.runtime.strategy,
             "profile": self.runtime.profile,
             "quality_reasons": self.runtime.values.get("quality_reasons", ()),
+            "suppression_reason": self.runtime.values.get("suppression_reason"),
+            "ownership": self.runtime.values.get("ownership", {}),
+            "data_readiness": self.runtime.values.get("data_readiness", {}),
+            "target_readiness": self.runtime.values.get("target_readiness", {}),
         }
 
 

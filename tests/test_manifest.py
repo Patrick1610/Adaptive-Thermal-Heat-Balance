@@ -61,6 +61,17 @@ def test_production_python_imports_are_standard_library_only() -> None:
     assert {package for _path, package in non_standard_imports} <= {"homeassistant", "voluptuous"}
 
 
+def test_only_command_broker_uses_climate_service_adapter() -> None:
+    call_sites = []
+    for path in sorted(PRODUCTION_ROOT.rglob("*.py")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if ".services.async_call(" in line:
+                call_sites.append((path.relative_to(PRODUCTION_ROOT).as_posix(), number))
+    assert call_sites == [("adapters/climate.py", 79)]
+    broker = (PRODUCTION_ROOT / "adapters/broker.py").read_text(encoding="utf-8")
+    assert "self._service.async_set_temperature(service_payload(intent), context)" in broker
+
+
 def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
     production_files = {
         path.relative_to(PRODUCTION_ROOT).as_posix()
@@ -73,9 +84,13 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "adapters/__init__.py",
         "adapters/broker.py",
         "adapters/climate.py",
+        "adapters/outdoor_history.py",
+        "adapters/recorder.py",
+        "adapters/sources.py",
         "adapters/storage.py",
         "binary_sensor.py",
         "button.py",
+        "calculation.py",
         "config_flow.py",
         "config_schema.py",
         "const.py",
@@ -88,15 +103,19 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "core/inverse.py",
         "core/locations.py",
         "core/ownership.py",
+        "core/pipeline.py",
         "core/pmv_core.py",
         "core/policy.py",
         "core/psychrometrics.py",
         "core/radiant.py",
         "core/surface.py",
         "core/sources.py",
+        "core/trace.py",
+        "diagnostics.py",
         "entity.py",
         "manifest.json",
         "runtime.py",
+        "repairs.py",
         "select.py",
         "sensor.py",
         "strings.json",
@@ -116,5 +135,5 @@ def test_implementation_checklist_has_every_task_once_in_order() -> None:
     assert re.findall(r"ATHB-\d{3}", checklist) == expected
     assert identifiers == expected
     rows = [line for line in checklist.splitlines() if line.startswith("| ATHB-")]
-    assert all("| Complete |" in row for row in rows[:22])
-    assert all("| Pending |" in row for row in rows[22:])
+    assert all("| Complete |" in row for row in rows[:24])
+    assert all("| Pending |" in row for row in rows[24:])

@@ -6,15 +6,25 @@
       "environment": {"title": "Environment", "data": {"primary_temperature": "Primary air temperature", "rh_mode": "Relative humidity source", "rh_entity": "Measured relative humidity", "rh_declared": "Declared relative humidity", "outdoor_source": "Outdoor temperature"}},
       "targets": {"title": "Climate targets", "data": {"targets": "Climate targets"}},
       "comfort": {"title": "Comfort", "data": {"comfort_strategy": "Comfort strategy"}},
-      "control": {"title": "Control", "data": {"occupancy_entity": "Occupancy", "minimum_control_temperature": "Minimum command temperature", "maximum_control_temperature": "Maximum command temperature"}}
+      "control": {"title": "Control", "data": {"occupancy_entity": "Occupancy", "met": "Activity (met)", "air_speed_m_s": "Declared air speed", "minimum_control_temperature": "Minimum command temperature", "maximum_control_temperature": "Maximum command temperature", "fallback_mode": "Fallback policy", "fallback_heating_c": "Fallback heating temperature", "fallback_cooling_c": "Fallback cooling temperature", "manual_override_minutes": "Manual override duration"}}
     },
-    "error": {"invalid_rh_source": "Select exactly one valid humidity source.", "invalid_targets": "Select one through eight distinct climate targets.", "target_not_registered": "Every climate target must have an entity-registry identity.", "invalid_control_bounds": "The minimum must be below the maximum."}
+    "error": {"invalid_rh_source": "Select exactly one valid humidity source.", "invalid_targets": "Select one through eight distinct climate targets.", "target_not_registered": "Every climate target must have an entity-registry identity.", "target_already_controlled": "Another enabled ATHB zone already controls this target.", "invalid_control_bounds": "The minimum must be below the maximum.", "invalid_option": "One or more options are outside their supported range.", "required": "This value is required."}
   },
-  "options": {"step": {"init": {"title": "ATHB options", "data": {"comfort_strategy": "Comfort strategy", "profile": "Profile"}}}},
+  "options": {"step": {"init": {"title": "ATHB options", "data": {"comfort_strategy": "Comfort strategy", "profile": "Profile", "radiant_model": "Radiant model", "advanced_settings": "Configure advanced settings"}}, "radiant": {"title": "Advanced radiant source", "data": {"mrt_entity": "Mean radiant temperature", "globe_temperature_entity": "Globe temperature", "globe_diameter_m": "Globe diameter", "globe_emissivity": "Globe emissivity", "surface_temperature_entity": "Measured surface temperature", "surface_modelled": "Model surface internally", "surface_f_rsi": "Surface calibration factor", "surface_view_factor": "Surface view factor", "surface_rh_threshold_pct": "Surface humidity warning threshold"}}, "advanced": {"title": "Advanced ATHB settings", "data": {"met": "Activity (met)", "clothing_mode": "Clothing mode", "fixed_clothing_clo": "Declared clothing (clo)", "air_speed_mode": "Air speed mode", "air_speed_m_s": "Declared air speed", "air_speed_entity": "Measured air speed", "lower_comfort_vote": "Lower comfort vote", "upper_comfort_vote": "Upper comfort vote", "running_mean_alpha": "Running-mean alpha", "eco_heating_setback_c": "Eco heating setback", "eco_cooling_setback_c": "Eco cooling setback", "boost_delta_c": "Boost delta", "boost_duration_minutes": "Boost duration", "manual_override_minutes": "Manual override duration", "minimum_range_gap": "Minimum range gap", "minimum_meaningful_change": "Minimum meaningful command change", "feedback_resolution": "Target feedback resolution", "reject_extrapolation": "Reject ATHB extrapolation", "auto_mapping": "Auto-mode mapping", "critical_locations_json": "Critical local-air locations (JSON)"}}}},
   "entity": {
+    "sensor": {"thermal_sensation": {"name": "Thermal sensation"}, "heating_control_target": {"name": "Heating control target"}, "thermal_neutral": {"name": "Thermal neutral"}, "cooling_control_target": {"name": "Cooling control target"}, "comfort_status": {"name": "Comfort status"}, "control_status": {"name": "Control status"}, "outdoor_running_mean": {"name": "Outdoor running mean"}, "surface_temperature": {"name": "Surface temperature"}, "surface_relative_humidity": {"name": "Surface relative humidity"}},
     "switch": {"adaptive_control": {"name": "Adaptive control"}},
     "select": {"comfort_strategy": {"name": "Comfort strategy"}, "profile": {"name": "Profile"}},
     "button": {"resume_control": {"name": "Resume control"}},
-    "binary_sensor": {"control_eligible": {"name": "Control eligible"}}
+    "binary_sensor": {"control_eligible": {"name": "Control eligible"}, "surface_saturation": {"name": "Predicted surface saturation"}}
+  },
+  "issues": {
+    "removed_source_or_target": {"title": "ATHB source or target was removed", "description": "Reconfigure the zone and select an available source or target."},
+    "duplicate_target_ownership": {"title": "Climate target is controlled by two ATHB zones", "description": "Disable one zone or select a different target."},
+    "corrupt_control_storage": {"title": "ATHB control recovery data is corrupt", "description": "Review the zone and press Resume before enabling commands."},
+    "persistent_target_rejection": {"title": "Climate target repeatedly rejected ATHB commands", "description": "Check the target capability, bounds and grid."},
+    "incompatible_auto_mapping": {"title": "Automatic HVAC mode has no supported ATHB mapping", "description": "Configure an explicit supported mapping or select a supported HVAC mode."},
+    "missing_history_24h": {"title": "ATHB outdoor history remains unavailable", "description": "Check the outdoor source and Recorder availability."},
+    "mandatory_input_unavailable_1h": {"title": "A mandatory ATHB input remains unavailable", "description": "Restore the selected temperature or humidity source."}
   }
 }
