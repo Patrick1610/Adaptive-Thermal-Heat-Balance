@@ -96,6 +96,7 @@ class _OptionsWizardMixin:
     """Shared option steps used by setup, reconfigure, and Options."""
 
     async_show_form: Callable[..., ConfigFlowResult]
+    add_suggested_values_to_schema: Callable[[vol.Schema, Mapping[str, Any] | None], vol.Schema]
     _pending_options: dict[str, Any]
     _wizard_targets: list[dict[str, str]]
     _advanced: bool
@@ -665,7 +666,10 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             )
             self._data.pop(stale_key, None)
             return await self.async_step_humidity()
-        return self.async_show_form(step_id="environment", data_schema=self._environment_schema())
+        schema = self._environment_schema()
+        if self._is_reconfigure:
+            schema = self.add_suggested_values_to_schema(schema, self._data)
+        return self.async_show_form(step_id="environment", data_schema=schema)
 
     def _environment_schema(self) -> vol.Schema:
         defaults = self._data
@@ -706,6 +710,8 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     ): _number(0.0, 100.0, 1.0, "%")
                 }
             )
+        if self._is_reconfigure:
+            schema = self.add_suggested_values_to_schema(schema, self._data)
         return self.async_show_form(step_id="humidity", data_schema=schema, errors=errors)
 
     async def async_step_targets(
@@ -723,9 +729,10 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         marker = (
             vol.Required(CONF_TARGETS, default=defaults) if defaults else vol.Required(CONF_TARGETS)
         )
-        return self.async_show_form(
-            step_id="targets", data_schema=vol.Schema({marker: CLIMATES}), errors=errors
-        )
+        schema = vol.Schema({marker: CLIMATES})
+        if self._is_reconfigure:
+            schema = self.add_suggested_values_to_schema(schema, {CONF_TARGETS: defaults})
+        return self.async_show_form(step_id="targets", data_schema=schema, errors=errors)
 
     def _resolve_targets(self, raw_targets: object) -> tuple[dict[str, str], list[dict[str, str]]]:
         try:
@@ -820,9 +827,10 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         if user_input is not None:
             self._data[CONF_NAME] = user_input[CONF_NAME]
             return await self.async_step_environment()
+        schema = vol.Schema({vol.Required(CONF_NAME, default=self._data[CONF_NAME]): str})
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=vol.Schema({vol.Required(CONF_NAME, default=self._data[CONF_NAME]): str}),
+            data_schema=self.add_suggested_values_to_schema(schema, self._data),
         )
 
     def _target_is_claimed(self, registry_identity: str, *, excluding: str | None = None) -> bool:

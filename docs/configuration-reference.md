@@ -54,6 +54,14 @@ cooling setback. `boost` temporarily shifts both sides toward comfort by `boost_
 by policy, and expires after `boost_duration_minutes`. `auto` resolves to Comfort or Eco from the
 optional occupancy source; unknown occupancy is held briefly and then resolves conservatively.
 
+The **Heating control target**, **Thermal neutral**, and **Cooling control target** sensors expose
+the inverse-solved ATHB roots before profile policy. They therefore change with comfort strategy,
+but not with Eco or Boost. A climate-specific **effective temperature** (or effective low/high)
+is the final request after profile, critical-location policy, calibration, bounds, and device-grid
+normalization. It is a preview even while control is disabled. The actual climate target changes
+only when adaptive control is enabled and ownership, capability, override, and broker gates allow
+a write.
+
 ## Radiant and surface models
 
 - **Uniform** (default): mean radiant temperature (MRT) equals local air temperature.

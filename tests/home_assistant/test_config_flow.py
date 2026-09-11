@@ -17,6 +17,11 @@ def _schema_keys(result: config_entries.ConfigFlowResult) -> set[str]:
     return {str(marker.schema) for marker in result["data_schema"].schema}
 
 
+def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
+    marker = next(item for item in result["data_schema"].schema if str(item.schema) == key)
+    return marker.description["suggested_value"]
+
+
 async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -263,6 +268,9 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
         "rh_mode",
         "outdoor_source",
     }
+    assert _suggested_value(result, "primary_temperature") == "sensor.old"
+    assert _suggested_value(result, "outdoor_source") == "sensor.outdoor"
+    assert _suggested_value(result, "rh_mode") == "measured"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
@@ -277,6 +285,7 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
         result["flow_id"], {"rh_declared": 45.0}
     )
     assert result["step_id"] == "targets"
+    assert _suggested_value(result, "targets") == [target.entity_id]
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"targets": [target.entity_id]}
     )
