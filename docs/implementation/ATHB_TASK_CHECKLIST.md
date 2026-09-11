@@ -31,5 +31,5 @@ This compact checklist preserves the normative implementation order and dependen
 | ATHB-025 | Implement versioned virtual-installation fixtures, runner, scenarios, and reports. | 003–004, 014, 018, 020–024 | Phase 9: observability and documentation | Complete |
 | ATHB-026 | Complete integrated Virtual Installation Validation and all safety/load qualification. | 025 | Phase 10: integrated qualification | Complete |
 | ATHB-027 | Run the full numerical, policy, HA-contract, race, privacy, static, and packaging suite. | 026 | Phase 10: integrated qualification | Complete |
-| ATHB-028 | Perform independent final architecture, numerical, and safety review of one immutable candidate. | 027 | Phase 10: integrated qualification | Pending |
-| ATHB-029 | Produce the validated local distribution and closure evidence; publication remains separate. | 028 | Phase 10: integrated qualification | Pending |
+| ATHB-028 | Perform independent final architecture, numerical, and safety review of one immutable candidate. | 027 | Phase 10: integrated qualification | Complete |
+| ATHB-029 | Produce the validated local distribution and closure evidence; publication remains separate. | 028 | Phase 10: integrated qualification | Complete |

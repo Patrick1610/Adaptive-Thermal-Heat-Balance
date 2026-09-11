@@ -33,6 +33,9 @@ is claimed.
 For HACS testing, add this public repository as a custom **Integration** repository and install
 the latest published release. Restart Home Assistant, then add **Adaptive Thermal Heat Balance**
 through Settings → Devices & services. No live installation is part of the repository test suite.
+Each configured thermal zone appears as one Home Assistant device. The normal flow shows only the
+inputs required by the selected source mode; advanced numerical and radiant settings remain behind
+explicit progressive-disclosure choices.
 
 ## Documentation
 

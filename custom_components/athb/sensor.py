@@ -20,6 +20,7 @@ class Description:
     name: str
     temperature: bool = False
     humidity: bool = False
+    enabled_default: bool = True
 
 
 DESCRIPTIONS = (
@@ -30,8 +31,13 @@ DESCRIPTIONS = (
     Description("comfort_status", "Comfort status"),
     Description("control_status", "Control status"),
     Description("outdoor_running_mean", "Outdoor running mean", True),
-    Description("surface_temperature", "Surface temperature", True),
-    Description("surface_relative_humidity", "Surface relative humidity", humidity=True),
+    Description("surface_temperature", "Surface temperature", True, enabled_default=False),
+    Description(
+        "surface_relative_humidity",
+        "Surface relative humidity",
+        humidity=True,
+        enabled_default=False,
+    ),
 )
 
 
@@ -40,6 +46,7 @@ class AthbSensor(AthbEntity, SensorEntity):
         super().__init__(runtime, description.key)
         self.description = description
         self._attr_name = description.name
+        self._attr_entity_registry_enabled_default = description.enabled_default
         if description.temperature:
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -82,6 +89,10 @@ class TargetSensor(AthbEntity, SensorEntity):
     def native_value(self) -> Any:
         targets = self.runtime.values.get("effective_targets", {})
         return targets.get(self.target["target_uuid"], {}).get(self.endpoint)
+
+    @property
+    def available(self) -> bool:
+        return self.native_value is not None
 
 
 async def async_setup_entry(

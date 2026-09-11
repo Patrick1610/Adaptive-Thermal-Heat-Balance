@@ -23,6 +23,7 @@ class ControlEligibleBinarySensor(AthbEntity, BinarySensorEntity):
 
 class SurfaceSaturationBinarySensor(AthbEntity, BinarySensorEntity):
     _attr_name = "Predicted surface saturation"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "surface_saturation")

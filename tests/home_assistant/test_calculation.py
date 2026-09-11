@@ -186,6 +186,30 @@ def test_modelled_surface_needs_no_helper_and_publishes_surface_risk_diagnostics
     assert values["surface_temperature"] == pytest.approx(12.0)
 
 
+def test_modelled_surface_without_calibration_never_invents_a_factor() -> None:
+    result = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            NOW,
+            _state("sensor.room", "20", "°C"),
+            None,
+            60.0,
+            _state("sensor.outdoor", "0", "°C"),
+            None,
+            5.0,
+            "complete_history",
+            "balanced",
+            "comfort",
+            {"radiant_model": "surface", "surface_modelled": True},
+            (_target(),),
+            explicit_transition=True,
+        )
+    )
+
+    assert result.surface_temperature_c is None
+    assert "radiant_fallback_invalid_surface_model" in result.quality_reasons
+    assert "modelled_surface" not in result.quality_reasons
+
+
 def test_snapshot_applies_configured_profile_values_and_environmental_slew() -> None:
     result = calculate_runtime_snapshot(
         CapturedZoneSnapshot(
@@ -371,6 +395,44 @@ def test_all_runtime_radiant_paths_are_explicit(
         assert expected_reason in result.quality_reasons
 
 
+def test_globe_mrt_uses_the_validated_measured_ambient_speed() -> None:
+    def calculate(*, measured: bool, speed: float):
+        return calculate_runtime_snapshot(
+            CapturedZoneSnapshot(
+                NOW,
+                _state("sensor.room", "20", "°C"),
+                None,
+                50.0,
+                _state("sensor.outdoor", "20", "°C"),
+                _state("sensor.globe", "24", "°C"),
+                20.0,
+                "complete_history",
+                "balanced",
+                "comfort",
+                {
+                    "radiant_model": "globe",
+                    "air_speed_mode": "measured" if measured else "fixed",
+                    "air_speed_m_s": speed,
+                },
+                (_target(),),
+                air_speed=_state("sensor.speed", str(speed), "m/s") if measured else None,
+                explicit_transition=True,
+            )
+        )
+
+    measured = calculate(measured=True, speed=0.8)
+    declared_same = calculate(measured=False, speed=0.8)
+    declared_default = calculate(measured=False, speed=0.1)
+    measured_result = measured.targets[0].result
+    declared_same_result = declared_same.targets[0].result
+    declared_default_result = declared_default.targets[0].result
+    assert measured_result is not None
+    assert declared_same_result is not None
+    assert declared_default_result is not None
+    assert measured_result.current == declared_same_result.current
+    assert measured_result.current != declared_default_result.current
+
+
 def test_result_projection_includes_ranged_target_and_cold_warm_statuses() -> None:
     ranged = calculate_runtime_snapshot(
         CapturedZoneSnapshot(
@@ -425,3 +487,42 @@ def test_result_projection_includes_ranged_target_and_cold_warm_statuses() -> No
     )
     assert result_values(cold)["comfort_status"] == "cold"
     assert result_values(warm)["comfort_status"] == "warm"
+
+
+def test_fahrenheit_effective_target_is_projected_in_native_celsius() -> None:
+    fahrenheit_target = CapturedTarget(
+        "target-1",
+        "registry-1",
+        "climate.living_room",
+        ClimateCapabilitySnapshot(
+            "heat",
+            ("off", "heat"),
+            1,
+            60.0,
+            86.0,
+            1.0,
+            TemperatureUnit.FAHRENHEIT,
+            scalar_target_ha=64.0,
+        ),
+    )
+    result = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            NOW,
+            _state("sensor.room", "20", "°C"),
+            None,
+            50.0,
+            _state("sensor.outdoor", "5", "°C"),
+            None,
+            5.0,
+            "complete_history",
+            "balanced",
+            "comfort",
+            {},
+            (fahrenheit_target,),
+            explicit_transition=True,
+        )
+    )
+
+    assert result_values(result)["effective_targets"]["target-1"]["temperature"] == pytest.approx(
+        (67.0 - 32.0) * 5.0 / 9.0
+    )

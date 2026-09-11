@@ -11,6 +11,7 @@ from typing import Protocol
 from .athb_engine import evaluate_athb
 from .contracts import (
     ActuationDirection,
+    ApplicabilityReason,
     AthbInputs,
     AthbResult,
     AthbSuccess,
@@ -137,6 +138,7 @@ class CandidatePoint:
     room_temperature_c: float
     local_temperature_c: float
     sensation_vote: float
+    applicability_reasons: tuple[ApplicabilityReason, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,7 +260,12 @@ def _candidate_evaluator(context: InverseLocationContext) -> CandidateEvaluator:
         )
         if isinstance(result, NumericalFailure):
             return _map_forward_failure(result)
-        return CandidatePoint(room_temperature_c, local_temperature, result.sensation_vote)
+        return CandidatePoint(
+            room_temperature_c,
+            local_temperature,
+            result.sensation_vote,
+            result.applicability_reasons,
+        )
 
     return evaluate
 
@@ -368,6 +375,7 @@ def _solve_one_root(
             residual,
             0.0,
             budget.used,
+            final.applicability_reasons,
         )
     if len(brackets) > 1:
         return _root_failure(
@@ -456,6 +464,7 @@ def _solve_one_root(
         residual,
         width,
         budget.used,
+        final.applicability_reasons,
     )
 
 

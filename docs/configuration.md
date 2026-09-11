@@ -2,10 +2,17 @@
 
 ## Normal setup
 
-Create one ATHB config entry per zone. Select a primary air-temperature entity, an outdoor
-temperature source, one RH mode and one to eight registered climate targets. Measured RH is
-recommended; fixed RH may instead be entered directly as a finite 0–100% declaration and needs no
-helper entity. Balanced is the default strategy. New entries save with adaptive control disabled.
+Create one ATHB config entry per zone. Every entry creates one Home Assistant device that groups
+the zone's ATHB entities. Select a primary air-temperature entity, an outdoor temperature source,
+one indoor-RH mode and one to eight registered climate targets. Measured RH is recommended; fixed
+RH may instead be entered directly as a finite 0–100% declaration and needs no helper entity.
+Only the field for the selected RH mode is shown. Balanced is the default strategy. New entries
+save with adaptive control disabled.
+
+The normal setup explains each input and keeps numerical bounds, fallback behaviour and model
+parameters behind **Configure advanced settings**. A final review page summarizes the zone before
+creation. Run **Reconfigure** from the integration entry to repeat the measurement and target
+selection later while retaining the same zone identity and device.
 
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
 normalization. Heating rounds inward upward; cooling rounds inward downward. Ranged targets remain
@@ -44,3 +51,7 @@ up to 35 daily summaries and derives adaptation from the previous seven local ca
 eligible days are complete; a qualifying three-or-more-day window is partial; insufficient history
 uses the explicitly labelled fixed fallback (or no-write policy). Current outdoor temperature is
 never substituted for the adaptation running mean.
+
+Outdoor relative humidity is intentionally not requested. ATHB comfort uses indoor RH; outdoor
+adaptation uses only the persisted running mean of outdoor temperature. Surface-risk diagnostics
+combine indoor vapor pressure with the selected measured or modelled surface temperature.

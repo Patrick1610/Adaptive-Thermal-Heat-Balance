@@ -264,6 +264,7 @@ class RootSuccess:
     residual: float
     bracket_width_c: float
     evaluation_count: int
+    applicability_reasons: tuple[ApplicabilityReason, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

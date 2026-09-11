@@ -15,12 +15,15 @@ from custom_components.athb import async_migrate_entry, async_remove_entry
 from custom_components.athb.adapters.broker import ContextToken
 from custom_components.athb.adapters.climate import HomeAssistantClimateService
 from custom_components.athb.adapters.storage import HomeAssistantControlStorageBackend
-from custom_components.athb.binary_sensor import ControlEligibleBinarySensor
+from custom_components.athb.binary_sensor import (
+    ControlEligibleBinarySensor,
+    SurfaceSaturationBinarySensor,
+)
 from custom_components.athb.button import ResumeButton
 from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE
 from custom_components.athb.runtime import ZoneRuntime
 from custom_components.athb.select import ProfileSelect, StrategySelect
-from custom_components.athb.sensor import DESCRIPTIONS, AthbSensor
+from custom_components.athb.sensor import DESCRIPTIONS, AthbSensor, TargetSensor
 from custom_components.athb.switch import AdaptiveControlSwitch
 
 
@@ -120,6 +123,31 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
         "zone-1_resume_control",
     ]
     assert all(entity.__class__.__module__.split(".")[-1] != "climate" for entity in entities)
+    assert all(entity.device_info["identifiers"] == {("athb", "zone-1")} for entity in entities)
+    assert all(entity.device_info["name"] == "Living room" for entity in entities)
+    assert all(entity.device_info["manufacturer"] == "ATHB" for entity in entities)
+
+
+def test_optional_surface_entities_are_disabled_and_inapplicable_targets_unavailable() -> None:
+    runtime = _runtime()
+    surface_temperature = next(item for item in DESCRIPTIONS if item.key == "surface_temperature")
+    surface_humidity = next(
+        item for item in DESCRIPTIONS if item.key == "surface_relative_humidity"
+    )
+
+    assert AthbSensor(runtime, surface_temperature).entity_registry_enabled_default is False
+    assert AthbSensor(runtime, surface_humidity).entity_registry_enabled_default is False
+    assert SurfaceSaturationBinarySensor(runtime).entity_registry_enabled_default is False
+
+    target = {
+        "target_uuid": "target-1",
+        "entity_id": "climate.target",
+        "registry_identity": "registry-1",
+    }
+    runtime.publish({"effective_targets": {"target-1": {"temperature": 21.5}}})
+    assert TargetSensor(runtime, target, "temperature").available
+    assert not TargetSensor(runtime, target, "target_low").available
+    assert not TargetSensor(runtime, target, "target_high").available
 
 
 def test_strategy_select_persists_authoritative_option_without_reload() -> None:

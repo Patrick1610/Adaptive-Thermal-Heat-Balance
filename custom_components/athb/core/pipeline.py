@@ -23,10 +23,13 @@ from .contracts import (
     Clothing,
     ComfortStrategy,
     ControlProfile,
+    CriticalEligibilityMode,
     DeclaredRelativeHumidity,
     MeasuredRelativeHumidity,
     NumericalFailure,
+    RootName,
     RootSet,
+    RootSuccess,
 )
 from .inverse import (
     DirectionalEligibility,
@@ -124,6 +127,31 @@ def _fixed_fallback(
     return replace(result, hold_condition=hold_condition)
 
 
+def _roots_are_extrapolated(roots: RootSet, names: tuple[RootName, ...]) -> bool:
+    return any(
+        isinstance(root := getattr(roots, name.value), RootSuccess)
+        and ApplicabilityReason.EXTRAPOLATED in root.applicability_reasons
+        for name in names
+    )
+
+
+def _critical_required_roots(
+    mode: CriticalEligibilityMode, direction: ActuationDirection
+) -> tuple[RootName, ...]:
+    names: list[RootName] = []
+    if direction in {ActuationDirection.HEATING_ONLY, ActuationDirection.RANGED} and mode in {
+        CriticalEligibilityMode.HEATING,
+        CriticalEligibilityMode.BOTH,
+    }:
+        names.append(RootName.HEATING_CONTROL)
+    if direction in {ActuationDirection.COOLING_ONLY, ActuationDirection.RANGED} and mode in {
+        CriticalEligibilityMode.COOLING,
+        CriticalEligibilityMode.BOTH,
+    }:
+        names.append(RootName.COOLING_CONTROL)
+    return tuple(names)
+
+
 def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
     """Run observations/history through ATHB, roots, policy, bounds, and grid."""
 
@@ -192,10 +220,23 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
             hold_condition=reason,
         )
     assert isinstance(current, AthbSuccess)
-    if (
-        inputs.reject_extrapolation
-        and ApplicabilityReason.EXTRAPOLATED in current.applicability_reasons
-    ):
+    critical_solutions = tuple(
+        solve_critical_location(location, votes, budget=budget)
+        for location in inputs.critical_locations
+    )
+    extrapolated_decision = (
+        ApplicabilityReason.EXTRAPOLATED in current.applicability_reasons
+        or _roots_are_extrapolated(roots, eligibility.required_roots)
+        or any(
+            location.control_eligible
+            and _roots_are_extrapolated(
+                location.roots,
+                _critical_required_roots(location.mode, inputs.direction),
+            )
+            for location in critical_solutions
+        )
+    )
+    if inputs.reject_extrapolation and extrapolated_decision:
         if inputs.failure_hold_elapsed:
             return _fixed_fallback(
                 inputs,
@@ -217,10 +258,6 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
             eligibility,
             hold_condition="extrapolation_rejected",
         )
-    critical_solutions = tuple(
-        solve_critical_location(location, votes, budget=budget)
-        for location in inputs.critical_locations
-    )
     critical_demands = tuple(
         CriticalDemand(
             location.location_id,

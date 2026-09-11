@@ -25,12 +25,12 @@ def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None
         "dependencies": ["climate"],
         "documentation": "https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance",
         "domain": "athb",
-        "integration_type": "helper",
+        "integration_type": "device",
         "iot_class": "calculated",
         "issue_tracker": ("https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance/issues"),
         "name": "Adaptive Thermal Heat Balance",
         "requirements": [],
-        "version": "0.1.0",
+        "version": "0.1.1",
     }
     assert manifest["domain"] == DOMAIN
 

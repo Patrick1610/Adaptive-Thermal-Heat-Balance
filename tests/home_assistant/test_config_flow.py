@@ -13,6 +13,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.athb.const import DOMAIN, PLATFORMS
 
 
+def _schema_keys(result: config_entries.ConfigFlowResult) -> set[str]:
+    return {str(marker.schema) for marker in result["data_schema"].schema}
+
+
 async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -26,9 +30,13 @@ async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult
         {
             "primary_temperature": "sensor.room",
             "rh_mode": "declared",
-            "rh_declared": 47.0,
             "outdoor_source": "sensor.outdoor",
         },
+    )
+    assert result["step_id"] == "humidity"
+    assert _schema_keys(result) == {"rh_declared"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"rh_declared": 47.0}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"targets": ["climate.target"]}
@@ -36,10 +44,11 @@ async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"comfort_strategy": "balanced"}
     )
-    return await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {"minimum_control_temperature": 18.0, "maximum_control_temperature": 26.0},
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"advanced_settings": False}
     )
+    assert result["step_id"] == "review"
+    return await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
 
 async def test_config_flow_stores_tagged_declaration_stable_target_identity_and_disabled_control(
@@ -79,9 +88,11 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
         {
             "primary_temperature": "sensor.room",
             "rh_mode": "declared",
-            "rh_declared": 50.0,
             "outdoor_source": "sensor.outdoor",
         },
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"rh_declared": 50.0}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"targets": ["climate.target"]}
@@ -90,8 +101,21 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
         result["flow_id"], {"comfort_strategy": "balanced"}
     )
     result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"advanced_settings": True}
+    )
+    assert result["step_id"] == "advanced_control"
+    result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
-        {"minimum_control_temperature": 26.0, "maximum_control_temperature": 18.0},
+        {
+            "met": 1.1,
+            "air_speed_m_s": 0.1,
+            "minimum_control_temperature": 26.0,
+            "maximum_control_temperature": 18.0,
+            "fallback_mode": "fixed",
+            "fallback_heating_c": 18.0,
+            "fallback_cooling_c": 26.0,
+            "manual_override_minutes": 120.0,
+        },
     )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "invalid_control_bounds"}
@@ -151,6 +175,13 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "radiant"
     result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"surface_modelled": False}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "surface_details"
+    assert "surface_temperature_entity" in _schema_keys(result)
+    assert "surface_f_rsi" not in _schema_keys(result)
+    result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"surface_temperature_entity": "sensor.surface"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -173,8 +204,8 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
             "zone_uuid": "zone-1",
             "primary_temperature": "sensor.old",
             "outdoor_source": "sensor.outdoor",
-            "rh_mode": "declared",
-            "rh_declared": 40.0,
+            "rh_mode": "measured",
+            "rh_entity": "sensor.old_humidity",
             "targets": [
                 {
                     "target_uuid": "stable-target-uuid",
@@ -192,19 +223,33 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
         context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
     assert result["type"] is FlowResultType.FORM
+    assert _schema_keys(result) == {
+        "primary_temperature",
+        "rh_mode",
+        "outdoor_source",
+    }
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
             "primary_temperature": "sensor.new",
             "outdoor_source": "sensor.outdoor",
             "rh_mode": "declared",
-            "rh_declared": 45.0,
-            "targets": [target.entity_id],
         },
+    )
+    assert result["step_id"] == "reconfigure_humidity"
+    assert _schema_keys(result) == {"rh_declared"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"rh_declared": 45.0}
+    )
+    assert result["step_id"] == "reconfigure_targets"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"targets": [target.entity_id]}
     )
     assert result["type"] is FlowResultType.ABORT
     assert entry.data["targets"][0]["target_uuid"] == "stable-target-uuid"
     assert entry.data["primary_temperature"] == "sensor.new"
+    assert entry.data["rh_declared"] == 45.0
+    assert "rh_entity" not in entry.data
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
         await hass.config_entries.async_unload(entry.entry_id)
@@ -242,12 +287,14 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
     assert result["step_id"] == "radiant"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            "surface_modelled": True,
-            "surface_f_rsi": 0.65,
-            "surface_view_factor": 0.25,
-            "surface_rh_threshold_pct": 80.0,
-        },
+        {"surface_modelled": True},
+    )
+    assert result["step_id"] == "surface_details"
+    assert "surface_f_rsi" in _schema_keys(result)
+    assert "surface_temperature_entity" not in _schema_keys(result)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"surface_f_rsi": 0.65, "surface_view_factor": 0.25, "surface_rh_threshold_pct": 80.0},
     )
     assert result["step_id"] == "advanced"
     result = await hass.config_entries.options.async_configure(
@@ -298,15 +345,10 @@ async def test_config_flow_reports_invalid_environment_and_target_registration(
             "outdoor_source": "sensor.outdoor",
         },
     )
-    assert result["errors"] == {"rh_entity": "invalid_rh_source"}
+    assert result["step_id"] == "humidity"
+    assert _schema_keys(result) == {"rh_entity"}
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {
-            "primary_temperature": "sensor.room",
-            "rh_mode": "measured",
-            "rh_entity": "sensor.rh",
-            "outdoor_source": "sensor.outdoor",
-        },
+        result["flow_id"], {"rh_entity": "sensor.rh"}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"targets": ["climate.not_registered"]}
@@ -348,9 +390,11 @@ async def test_config_flow_rejects_target_claimed_by_enabled_entry(
         {
             "primary_temperature": "sensor.room",
             "rh_mode": "declared",
-            "rh_declared": 50.0,
             "outdoor_source": "sensor.outdoor",
         },
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"rh_declared": 50.0}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"targets": [target.entity_id]}
@@ -398,7 +442,21 @@ async def test_radiant_options_cover_direct_globe_and_surface_validation(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"surface_modelled": False}
     )
-    assert result["errors"] == {"surface_temperature_entity": "required"}
+    assert result["step_id"] == "surface_details"
+    assert "surface_temperature_entity" in _schema_keys(result)
+    assert "surface_f_rsi" not in _schema_keys(result)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"comfort_strategy": "balanced", "profile": "comfort", "radiant_model": "surface"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"surface_modelled": True}
+    )
+    assert result["step_id"] == "surface_details"
+    assert "surface_f_rsi" in _schema_keys(result)
+    assert "surface_temperature_entity" not in _schema_keys(result)
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
         await hass.config_entries.async_unload(entry.entry_id)

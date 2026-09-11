@@ -110,6 +110,12 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         data.get("fixed_clothing_clo", 0.7), 0.1, 2.0
     ):
         errors["fixed_clothing_clo"] = "invalid_option"
+    if (
+        data.get("radiant_model") == "surface"
+        and data.get("surface_modelled", False)
+        and "surface_f_rsi" not in data
+    ):
+        errors["surface_f_rsi"] = "required"
     minimum = data.get("minimum_control_temperature", 18.0)
     maximum = data.get("maximum_control_temperature", 26.0)
     if (

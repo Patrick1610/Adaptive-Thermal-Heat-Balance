@@ -353,6 +353,18 @@ class CommandBroker:
     def invalidate(self, target_identity: str) -> None:
         self._states.setdefault(target_identity, _TargetBrokerState()).queued = None
 
+    async def async_resume_target(self, target_identity: str) -> None:
+        """Resolve an uncertain command only on explicit user resume."""
+
+        state = self._states.setdefault(target_identity, _TargetBrokerState())
+        pending = state.pending
+        state.pending = None
+        state.queued = None
+        state.last_feedback_status = None
+        state.last_feedback_reason = None
+        if pending is not None:
+            await self._persistence.async_resolve(pending, "explicit_resume")
+
     @staticmethod
     def _feedback_during_dispatch(
         state: _TargetBrokerState,

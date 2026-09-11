@@ -14,6 +14,7 @@ from .core.climate import (
     ClimateCapabilitySnapshot,
     ClimateFailure,
     GridOptions,
+    NormalizedRangeTarget,
     NormalizedScalarTarget,
     ha_to_celsius,
     resolve_capability,
@@ -157,15 +158,17 @@ def _radiant_model(
     *,
     air_c: float,
     outdoor_c: float | None,
+    ambient_speed_m_s: float,
 ) -> tuple[RadiantModel, tuple[str, ...], float | None]:
     mode = str(snapshot.options.get("radiant_model", "uniform"))
     source = snapshot.optional_radiant
     if mode == "surface" and bool(snapshot.options.get("surface_modelled", False)):
-        if outdoor_c is not None:
+        f_rsi = snapshot.options.get("surface_f_rsi")
+        if outdoor_c is not None and not isinstance(f_rsi, bool) and isinstance(f_rsi, int | float):
             estimate = estimate_surface_temperature(
                 indoor_temperature_c=air_c,
                 current_outdoor_temperature_c=outdoor_c,
-                f_rsi=_finite_option(snapshot.options, "surface_f_rsi", 0.6),
+                f_rsi=float(f_rsi),
             )
             if not isinstance(estimate, SurfaceFailure):
                 return (
@@ -223,7 +226,7 @@ def _radiant_model(
         model = GlobeRadiantModel.from_observations(
             globe=MeasuredGlobeTemperature(value),
             air_temperature_c=air_c,
-            ambient_air_speed_m_s=_finite_option(snapshot.options, "air_speed_m_s", 0.1),
+            ambient_air_speed_m_s=ambient_speed_m_s,
             diameter_m=_finite_option(snapshot.options, "globe_diameter_m", 0.15),
             emissivity=_finite_option(snapshot.options, "globe_emissivity", 0.95),
         )
@@ -382,11 +385,23 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         )
     assert air_c is not None
     assert rh_value is not None
-    radiant, radiant_reasons, surface_temperature_c = (
-        (UniformRadiantModel(), ("air_speed_invalid_fixed_fallback",), None)
-        if fallback_for_speed
-        else _radiant_model(snapshot, air_c=air_c, outdoor_c=outdoor_c)
-    )
+    radiant: RadiantModel
+    radiant_reasons: tuple[str, ...]
+    surface_temperature_c: float | None
+    if fallback_for_speed:
+        radiant, radiant_reasons, surface_temperature_c = (
+            UniformRadiantModel(),
+            ("air_speed_invalid_fixed_fallback",),
+            None,
+        )
+    else:
+        assert ambient_speed is not None
+        radiant, radiant_reasons, surface_temperature_c = _radiant_model(
+            snapshot,
+            air_c=air_c,
+            outdoor_c=outdoor_c,
+            ambient_speed_m_s=ambient_speed,
+        )
     radiant_provenance = (
         "estimated"
         if fallback_for_speed
@@ -638,12 +653,12 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         normalized = target.result.normalized if target.result is not None else None
         if normalized is None:
             continue
-        if hasattr(normalized, "normalized_ha"):
-            effective[target.target_uuid] = {"temperature": normalized.normalized_ha}
-        else:
+        if isinstance(normalized, NormalizedScalarTarget):
+            effective[target.target_uuid] = {"temperature": normalized.normalized_actuator_c}
+        elif isinstance(normalized, NormalizedRangeTarget):
             effective[target.target_uuid] = {
-                "target_low": normalized.heating.normalized_ha,
-                "target_high": normalized.cooling.normalized_ha,
+                "target_low": normalized.heating.normalized_actuator_c,
+                "target_high": normalized.cooling.normalized_actuator_c,
             }
     current = numerical.current if numerical is not None else None
     sensation = current.public_sensation_vote if isinstance(current, AthbSuccess) else None

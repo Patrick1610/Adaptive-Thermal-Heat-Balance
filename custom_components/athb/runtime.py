@@ -924,7 +924,8 @@ class ZoneRuntime:
             outcomes[target.target_uuid] = outcome.reason
             self._schedule_broker_deadline(
                 target.registry_identity,
-                acknowledgement=outcome.acknowledgement_status is AcknowledgementStatus.PENDING,
+                acknowledgement=outcome.acknowledgement_status
+                in {AcknowledgementStatus.PENDING, AcknowledgementStatus.UNKNOWN},
                 queued=outcome.reason == "command_interval",
                 explicit_transition=result.explicit_transition,
             )
@@ -1402,6 +1403,12 @@ class ZoneRuntime:
         if self.persistence is not None:
             self.persistence.requires_resume = False
         for identity in self.ownership:
+            if self.broker is not None:
+                await self.broker.async_resume_target(identity)
+            if (timer := self.timers.pop(f"ack:{identity}", None)) is not None:
+                timer()
+            if (timer := self.timers.pop(f"queue:{identity}", None)) is not None:
+                timer()
             self._transition(identity, OwnershipEvent.RESUME)
         self.explicit_transition = True
         self.publish({**self.values, "resume_requested": True})

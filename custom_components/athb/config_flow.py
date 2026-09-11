@@ -41,6 +41,7 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
         self._options: dict[str, Any] = {}
+        self._reconfigure_data: dict[str, Any] = {}
 
     @override
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -56,12 +57,9 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_environment(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        errors: dict[str, str] = {}
         if user_input is not None:
-            errors = validate_environment(user_input)
-            if not errors:
-                self._data.update(user_input)
-                return await self.async_step_targets()
+            self._data.update(user_input)
+            return await self.async_step_humidity()
         return self.async_show_form(
             step_id="environment",
             data_schema=vol.Schema(
@@ -70,13 +68,33 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_RH_MODE, default="measured"): vol.In(
                         ("measured", "declared")
                     ),
-                    vol.Optional(CONF_RH_ENTITY): ENTITY,
-                    vol.Optional(CONF_RH_DECLARED): vol.Coerce(float),
                     vol.Required(CONF_OUTDOOR_SOURCE): ENTITY,
                 }
             ),
-            errors=errors,
         )
+
+    async def async_step_humidity(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        mode = str(self._data[CONF_RH_MODE])
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            environment = {
+                CONF_PRIMARY_TEMPERATURE: self._data[CONF_PRIMARY_TEMPERATURE],
+                CONF_OUTDOOR_SOURCE: self._data[CONF_OUTDOOR_SOURCE],
+                CONF_RH_MODE: mode,
+                **user_input,
+            }
+            errors = validate_environment(environment)
+            if not errors:
+                self._data.update(user_input)
+                return await self.async_step_targets()
+        schema = (
+            vol.Schema({vol.Required(CONF_RH_ENTITY): ENTITY})
+            if mode == "measured"
+            else vol.Schema({vol.Required(CONF_RH_DECLARED): vol.Coerce(float)})
+        )
+        return self.async_show_form(step_id="humidity", data_schema=schema, errors=errors)
 
     async def async_step_targets(
         self, user_input: dict[str, Any] | None = None
@@ -140,19 +158,12 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            if validate_options(user_input):
-                return self.async_show_form(
-                    step_id="control",
-                    data_schema=self._control_schema(),
-                    errors={"base": "invalid_control_bounds"},
-                )
+            advanced = bool(user_input.pop("advanced_settings", False))
             self._options.update(user_input)
-            self._options[CONF_CONTROL_ENABLED] = False
-            self._options.setdefault(CONF_PROFILE, DEFAULT_PROFILE)
-            title = str(self._data.pop(CONF_NAME))
-            await self.async_set_unique_id(self._data[CONF_ZONE_UUID])
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(title=title, data=self._data, options=self._options)
+            if advanced:
+                return await self.async_step_advanced_control()
+            self._set_initial_defaults()
+            return await self.async_step_review()
         return self.async_show_form(step_id="control", data_schema=self._control_schema())
 
     @staticmethod
@@ -160,6 +171,31 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return vol.Schema(
             {
                 vol.Optional("occupancy_entity"): ENTITY,
+                vol.Optional("advanced_settings", default=False): bool,
+            }
+        )
+
+    async def async_step_advanced_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            if validate_options(user_input):
+                return self.async_show_form(
+                    step_id="advanced_control",
+                    data_schema=self._advanced_control_schema(),
+                    errors={"base": "invalid_control_bounds"},
+                )
+            self._options.update(user_input)
+            self._set_initial_defaults()
+            return await self.async_step_review()
+        return self.async_show_form(
+            step_id="advanced_control", data_schema=self._advanced_control_schema()
+        )
+
+    @staticmethod
+    def _advanced_control_schema() -> vol.Schema:
+        return vol.Schema(
+            {
                 vol.Required("met", default=1.1): vol.All(
                     vol.Coerce(float), vol.Range(min=0.8, max=2.0)
                 ),
@@ -181,6 +217,41 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
+    def _set_initial_defaults(self) -> None:
+        defaults: dict[str, object] = {
+            "met": 1.1,
+            "air_speed_m_s": 0.1,
+            "minimum_control_temperature": 18.0,
+            "maximum_control_temperature": 26.0,
+            "fallback_mode": "fixed",
+            "fallback_heating_c": 18.0,
+            "fallback_cooling_c": 26.0,
+            "manual_override_minutes": 120.0,
+            "radiant_model": "uniform",
+            CONF_PROFILE: DEFAULT_PROFILE,
+            CONF_CONTROL_ENABLED: False,
+        }
+        for key, value in defaults.items():
+            self._options.setdefault(key, value)
+
+    async def async_step_review(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            title = str(self._data.pop(CONF_NAME))
+            await self.async_set_unique_id(self._data[CONF_ZONE_UUID])
+            self._abort_if_unique_id_configured()
+            return self.async_create_entry(title=title, data=self._data, options=self._options)
+        return self.async_show_form(
+            step_id="review",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "zone": str(self._data[CONF_NAME]),
+                "primary": str(self._data[CONF_PRIMARY_TEMPERATURE]),
+                "outdoor": str(self._data[CONF_OUTDOOR_SOURCE]),
+                "target_count": str(len(self._data[CONF_TARGETS])),
+                "strategy": str(self._options[CONF_COMFORT_STRATEGY]),
+            },
+        )
+
     @staticmethod
     @callback
     @override
@@ -191,19 +262,72 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            self._reconfigure_data.update(user_input)
+            return await self.async_step_reconfigure_humidity()
+        defaults = entry.data
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_PRIMARY_TEMPERATURE,
+                        default=defaults[CONF_PRIMARY_TEMPERATURE],
+                    ): ENTITY,
+                    vol.Required(CONF_RH_MODE, default=defaults[CONF_RH_MODE]): vol.In(
+                        ("measured", "declared")
+                    ),
+                    vol.Required(
+                        CONF_OUTDOOR_SOURCE, default=defaults[CONF_OUTDOOR_SOURCE]
+                    ): ENTITY,
+                }
+            ),
+        )
+
+    async def async_step_reconfigure_humidity(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        entry = self._get_reconfigure_entry()
+        mode = str(self._reconfigure_data[CONF_RH_MODE])
         errors: dict[str, str] = {}
         if user_input is not None:
-            environment = {
-                key: value
-                for key, value in user_input.items()
-                if key != CONF_TARGETS and value is not None
-            }
+            environment = {**self._reconfigure_data, **user_input}
             errors = validate_environment(environment)
+            if not errors:
+                self._reconfigure_data.update(user_input)
+                return await self.async_step_reconfigure_targets()
+        if mode == "measured":
+            prior = entry.data.get(CONF_RH_ENTITY)
+            marker = (
+                vol.Required(CONF_RH_ENTITY, default=prior)
+                if prior is not None
+                else vol.Required(CONF_RH_ENTITY)
+            )
+            schema = vol.Schema({marker: ENTITY})
+        else:
+            schema = vol.Schema(
+                {
+                    vol.Required(
+                        CONF_RH_DECLARED,
+                        default=entry.data.get(CONF_RH_DECLARED, 50.0),
+                    ): vol.Coerce(float)
+                }
+            )
+        return self.async_show_form(
+            step_id="reconfigure_humidity", data_schema=schema, errors=errors
+        )
+
+    async def async_step_reconfigure_targets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
             try:
                 target_entities = validate_targets(user_input[CONF_TARGETS])
             except ValueError:
                 errors[CONF_TARGETS] = "invalid_targets"
-            if not errors:
+            else:
                 registry = er.async_get(self.hass)
                 prior = {
                     target["registry_identity"]: target["target_uuid"]
@@ -226,33 +350,26 @@ class AthbConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         errors[CONF_TARGETS] = "target_already_controlled"
                         break
                 if not errors:
-                    return self.async_update_reload_and_abort(
-                        entry, data_updates={**environment, CONF_TARGETS: targets}
+                    updated = {**entry.data, **self._reconfigure_data, CONF_TARGETS: targets}
+                    stale_rh_key = (
+                        CONF_RH_DECLARED
+                        if self._reconfigure_data[CONF_RH_MODE] == "measured"
+                        else CONF_RH_ENTITY
                     )
-        defaults = entry.data
-        schema: dict[vol.Marker, object] = {
-            vol.Required(
-                CONF_PRIMARY_TEMPERATURE, default=defaults[CONF_PRIMARY_TEMPERATURE]
-            ): ENTITY,
-            vol.Required(CONF_RH_MODE, default=defaults[CONF_RH_MODE]): vol.In(
-                ("measured", "declared")
-            ),
-            vol.Optional(CONF_RH_DECLARED, default=defaults.get(CONF_RH_DECLARED)): vol.Coerce(
-                float
-            ),
-            vol.Required(CONF_OUTDOOR_SOURCE, default=defaults[CONF_OUTDOOR_SOURCE]): ENTITY,
-            vol.Required(
-                CONF_TARGETS,
-                default=[target["entity_id"] for target in defaults[CONF_TARGETS]],
-            ): CLIMATES,
-        }
-        if CONF_RH_ENTITY in defaults:
-            schema[vol.Optional(CONF_RH_ENTITY, default=defaults[CONF_RH_ENTITY])] = ENTITY
-        else:
-            schema[vol.Optional(CONF_RH_ENTITY)] = ENTITY
+                    updated.pop(stale_rh_key, None)
+                    await self.async_set_unique_id(str(entry.data[CONF_ZONE_UUID]))
+                    self._abort_if_unique_id_mismatch()
+                    return self.async_update_reload_and_abort(entry, data=updated)
         return self.async_show_form(
-            step_id="reconfigure",
-            data_schema=vol.Schema(schema),
+            step_id="reconfigure_targets",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_TARGETS,
+                        default=[target["entity_id"] for target in entry.data[CONF_TARGETS]],
+                    ): CLIMATES
+                }
+            ),
             errors=errors,
         )
 
@@ -314,13 +431,13 @@ class AthbOptionsFlow(config_entries.OptionsFlowWithReload):
         if user_input is not None:
             self._pending.update(user_input)
             if model == "surface":
-                modelled = bool(self._pending.get("surface_modelled", False))
-                if not modelled and not self._pending.get("surface_temperature_entity"):
-                    return self.async_show_form(
-                        step_id="radiant",
-                        data_schema=self._radiant_schema(model),
-                        errors={"surface_temperature_entity": "required"},
-                    )
+                stale_surface_key = (
+                    "surface_temperature_entity"
+                    if self._pending["surface_modelled"]
+                    else "surface_f_rsi"
+                )
+                self._pending.pop(stale_surface_key, None)
+                return await self.async_step_surface_details()
             return await self.async_step_advanced() if self._advanced else self._finish_options()
         return self.async_show_form(step_id="radiant", data_schema=self._radiant_schema(model))
 
@@ -335,15 +452,55 @@ class AthbOptionsFlow(config_entries.OptionsFlowWithReload):
                     vol.Required("globe_emissivity", default=0.95): vol.Coerce(float),
                 }
             )
-        return vol.Schema(
-            {
-                vol.Required("surface_modelled", default=False): bool,
-                vol.Optional("surface_temperature_entity"): ENTITY,
-                vol.Required("surface_f_rsi", default=0.6): vol.Coerce(float),
-                vol.Required("surface_view_factor", default=0.25): vol.Coerce(float),
-                vol.Required("surface_rh_threshold_pct", default=80.0): vol.Coerce(float),
-            }
+        return vol.Schema({vol.Required("surface_modelled", default=False): bool})
+
+    async def async_step_surface_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            self._pending.update(user_input)
+            errors = validate_options(self._pending)
+            if not errors:
+                return (
+                    await self.async_step_advanced() if self._advanced else self._finish_options()
+                )
+            return self.async_show_form(
+                step_id="surface_details",
+                data_schema=self._surface_details_schema(),
+                errors={key: value for key, value in errors.items() if key in user_input},
+            )
+        return self.async_show_form(
+            step_id="surface_details", data_schema=self._surface_details_schema()
         )
+
+    def _surface_details_schema(self) -> vol.Schema:
+        fields: dict[vol.Marker, object] = {
+            vol.Required(
+                "surface_view_factor",
+                default=self._pending.get("surface_view_factor", 0.25),
+            ): vol.Coerce(float),
+            vol.Required(
+                "surface_rh_threshold_pct",
+                default=self._pending.get("surface_rh_threshold_pct", 80.0),
+            ): vol.Coerce(float),
+        }
+        if self._pending.get("surface_modelled", False):
+            f_rsi = self._pending.get("surface_f_rsi")
+            marker = (
+                vol.Required("surface_f_rsi", default=f_rsi)
+                if f_rsi is not None
+                else vol.Required("surface_f_rsi")
+            )
+            fields[marker] = vol.Coerce(float)
+        else:
+            surface_entity = self._pending.get("surface_temperature_entity")
+            marker = (
+                vol.Required("surface_temperature_entity", default=surface_entity)
+                if surface_entity is not None
+                else vol.Required("surface_temperature_entity")
+            )
+            fields[marker] = ENTITY
+        return vol.Schema(fields)
 
     async def async_step_advanced(
         self, user_input: dict[str, Any] | None = None

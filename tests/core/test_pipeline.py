@@ -9,6 +9,7 @@ import pytest
 
 from custom_components.athb.core import (
     ActuationDirection,
+    ApplicabilityReason,
     AthbSuccess,
     ClimateCapabilitySnapshot,
     ComfortStrategy,
@@ -173,6 +174,26 @@ def test_rejected_extrapolation_holds_then_uses_configured_fallback_or_no_write(
     no_write = calculate_zone(replace(winter, failure_hold_elapsed=True, fallback_no_write=True))
     assert no_write.normalized is None
     assert no_write.suppression_reason == "fallback_no_write"
+
+
+def test_reject_extrapolation_includes_the_required_solved_candidate() -> None:
+    candidate_only = replace(
+        _input(running_mean_c=0.0),
+        air_temperature_c=13.0,
+        relative_humidity_pct=20.0,
+    )
+    allowed = calculate_zone(candidate_only)
+    assert isinstance(allowed.current, AthbSuccess)
+    assert ApplicabilityReason.EXTRAPOLATED not in allowed.current.applicability_reasons
+    assert allowed.roots is not None
+    assert isinstance(allowed.roots.heating_control, RootSuccess)
+    assert ApplicabilityReason.EXTRAPOLATED in allowed.roots.heating_control.applicability_reasons
+    assert allowed.normalized is not None
+
+    rejected = calculate_zone(replace(candidate_only, reject_extrapolation=True))
+    assert rejected.normalized is None
+    assert rejected.suppression_reason == "extrapolation_rejected"
+    assert rejected.hold_condition == "extrapolation_rejected"
 
 
 def test_required_directional_root_failure_holds_then_falls_back() -> None:

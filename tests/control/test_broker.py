@@ -265,6 +265,27 @@ def test_command_failure_is_uncertain_and_never_blindly_retried() -> None:
     assert len(service.calls) == 1
 
 
+def test_explicit_resume_resolves_uncertain_pending_before_a_fresh_command() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    service.error = True
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> object:
+        failed = await broker.async_submit(_intent(), now=NOW)
+        assert failed.reason == "command_outcome_unknown"
+        await broker.async_resume_target("registry-1")
+        service.error = False
+        current[0] = replace(current[0], input_generation=2)
+        return await broker.async_submit(
+            _intent(value=20.5, input_generation=2), now=NOW + timedelta(seconds=1)
+        )
+
+    resumed = asyncio.run(scenario())
+    assert persistence.resolved == [("cmd-1", "explicit_resume")]
+    assert resumed.reason == "awaiting_acknowledgement"
+    assert len(service.calls) == 2
+
+
 def test_acknowledgement_timeout_clears_queue_and_returns_unknown() -> None:
     service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
     broker = _broker(service, persistence, current)

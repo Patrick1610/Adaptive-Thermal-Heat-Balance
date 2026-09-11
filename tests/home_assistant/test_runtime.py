@@ -73,6 +73,35 @@ def test_runtime_callbacks_profile_resume_and_lightweight_strategy() -> None:
     assert updates[-1].get("after_remove") is None
 
 
+def test_runtime_resume_resolves_broker_pending_before_reconciliation() -> None:
+    runtime = _runtime()
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.COMMAND_FAULT,
+        DataReadiness.READY,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+        resume_required=True,
+    )
+
+    class Broker:
+        def __init__(self) -> None:
+            self.resumed: list[str] = []
+
+        async def async_resume_target(self, identity: str) -> None:
+            self.resumed.append(identity)
+
+        def invalidate(self, _identity: str) -> None:
+            return None
+
+    broker = Broker()
+    runtime.broker = cast(Any, broker)
+    asyncio.run(runtime.async_resume())
+
+    assert broker.resumed == ["registry-1"]
+    assert runtime.ownership["registry-1"].ownership is Ownership.RECONCILING
+    assert runtime.ownership["registry-1"].resume_required is False
+
+
 def test_control_status_keeps_ownership_target_and_data_health_separate() -> None:
     runtime = _runtime()
     runtime.control_enabled = True
@@ -904,7 +933,7 @@ async def test_runtime_apply_schedules_deadlines_and_marks_unknown(
             return CommandOutcome(
                 "command",
                 DispatchStatus.NOT_DISPATCHED,
-                AcknowledgementStatus.NOT_APPLICABLE,
+                AcknowledgementStatus.UNKNOWN,
                 "command_outcome_unknown",
             )
 
@@ -915,6 +944,9 @@ async def test_runtime_apply_schedules_deadlines_and_marks_unknown(
     await runtime._async_apply_calculation(calculation)
     assert runtime.values["command_outcomes"] == {"target-living-room": "command_outcome_unknown"}
     assert runtime.ownership["registry-climate-living-room"].ownership is Ownership.COMMAND_FAULT
+    assert "ack:registry-climate-living-room" in runtime.timers
+    for cancel in runtime.timers.values():
+        cancel()
 
 
 async def test_broker_timer_callbacks_cover_timeout_and_queue_paths(
