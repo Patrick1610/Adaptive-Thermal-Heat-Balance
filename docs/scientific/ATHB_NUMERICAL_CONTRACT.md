@@ -173,6 +173,26 @@ coordinates. Surface calibration separately requires a supplied or measured `f_R
 an `estimated` steady-state surface, finite uncapped surface RH diagnostics, a display value
 capped at 100%, and no independent heating demand.
 
+## Outdoor-history contract
+
+Outdoor adaptation uses eligible summaries from the seven previous local calendar days with
+fixed finite normalized weights `alpha^(k-1)`; absent dates retain their age and are never
+compressed. Raw reports are integrated as piecewise-constant observations only until the next
+report, an invalid/unavailable event, or the configured maximum hold. Intervals split at
+localized midnight converted to UTC, so 23-, 24- and 25-hour days retain their actual duration.
+Daily eligibility requires at least 90% temporal coverage. Complete, partial, diagnostic-only
+and unavailable histories remain distinct typed qualities; no instantaneous outdoor value or
+invented shutdown coverage substitutes for missing history.
+
+Source validation precedes history integration and preserves measured versus declared
+provenance. It rejects unknown, Boolean, nonfinite, unconvertible, stale and out-of-range states;
+large jumps enter the specified three-report quarantine. Registry identity retains lineage over
+an entity rename, while replacement or generation-bound unregistered identity does not.
+Versioned history storage rejects incompatible, duplicate, overlapping, impossible or nonfinite
+records and preserves the corrupt payload for diagnosis. Recorder bootstrap is generation- and
+deadline-bound, limited to eight calendar days plus the hold lookback and 100,000 records, and
+uses the same integration path as live collection.
+
 ## Engineering envelope
 
 Inputs are rejected before evaluation when outside this closed envelope, except where an open bound is stated:

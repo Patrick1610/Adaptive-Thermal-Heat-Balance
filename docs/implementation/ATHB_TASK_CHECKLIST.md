@@ -14,9 +14,9 @@ This compact checklist preserves the normative implementation order and dependen
 | ATHB-008 | Implement strategy-vote derivation and bounded inverse solving with typed failures and budgets. | 005–007 | Phase 3: inverse and locations | Complete |
 | ATHB-009 | Implement critical-air typing, moisture, filtering, warm-up, mapped roots, and influence protection. | 008 | Phase 3: inverse and locations | Complete |
 | ATHB-010 | Implement calibrated surface estimates and surface-RH diagnostics without helper dependencies. | 006–007 | Phase 3: inverse and locations | Complete |
-| ATHB-011 | Implement shared source identity, declarations, conversion, freshness, quarantine, and reference counting. | 004 | Phase 4: environmental history | Pending |
-| ATHB-012 | Implement time-weighted daily summaries, calendar weighting, coverage, and DST behavior. | 004, 011 | Phase 4: environmental history | Pending |
-| ATHB-013 | Implement Recorder bootstrap, persisted history, lineage changes, and corrupt-history recovery. | 012 | Phase 4: environmental history | Pending |
+| ATHB-011 | Implement shared source identity, declarations, conversion, freshness, quarantine, and reference counting. | 004 | Phase 4: environmental history | Complete |
+| ATHB-012 | Implement time-weighted daily summaries, calendar weighting, coverage, and DST behavior. | 004, 011 | Phase 4: environmental history | Complete |
+| ATHB-013 | Implement Recorder bootstrap, persisted history, lineage changes, and corrupt-history recovery. | 012 | Phase 4: environmental history | Complete |
 | ATHB-014 | Implement strategy-based policy, critical caps/conflicts, profiles, fallback, bounds, and coordination. | 009–010, 013 | Phase 5: product policy | Pending |
 | ATHB-015 | Implement the climate capability matrix, HA-unit handling, inward grids, and range feasibility. | 014 | Phase 6: climate compatibility | Pending |
 | ATHB-016 | Implement per-target ownership transitions and deterministic acknowledgement classification. | 004, 015 | Phase 7: ownership and broker | Pending |
