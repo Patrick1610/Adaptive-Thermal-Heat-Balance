@@ -38,6 +38,16 @@ def test_hacs_layout_and_runtime_manifest_are_self_contained() -> None:
     assert manifest["requirements"] == []
 
 
+def test_public_repository_metadata_and_brand_assets_are_present() -> None:
+    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    icon = ROOT / "custom_components/athb/brand/icon.png"
+
+    assert license_text.startswith("MIT License\n")
+    assert "Copyright (c) 2026 Patrick1610" in license_text
+    assert icon.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert icon.stat().st_size > 0
+
+
 def test_release_archive_is_reproducible_complete_and_importable(
     tmp_path: Path,
 ) -> None:

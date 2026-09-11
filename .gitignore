@@ -7,3 +7,8 @@ venv/
 .coverage
 coverage.xml
 dist/
+
+# Local build prompts and retired agent-workflow administration.
+/.codex/agents/
+/docs/agent/
+/docs/codex/

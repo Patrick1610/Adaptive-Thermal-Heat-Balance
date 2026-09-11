@@ -52,3 +52,8 @@ mypy
 
 The virtual-installation command produces Markdown, JSON and assertion-summary evidence without
 contacting a household Home Assistant instance or external golden service.
+
+## License
+
+ATHB is available under the [MIT License](LICENSE). The separately retained
+`LICENSES/pythermalcomfort-4.4.2.txt` notice applies to the adapted upstream numerical kernel.

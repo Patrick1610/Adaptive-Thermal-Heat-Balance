@@ -16,7 +16,7 @@ Authority remains in this exact order. SHA-256 values were recomputed from the r
 | 1 | `ATHB_BUILD_CLARIFICATIONS.md` | `c918cf4f885d8ae6cd383540fc6b99d8caa1b8aeb06b626837b30867338c5f72` | Match |
 | 2 | `ATHB_ARCHITECTURE_PLAN.md` | `8874a89030e2750bab0df11c8372a9e6a167d27b9d5d0befa27a19cfdc163313` | Match |
 | 3 | `ATHB_WHITEPAPER.md` | `f6578592a7739d9927340e08d18a9abecb333a3e22b7cc53cb6a6520ae18c684` | Match |
-| Reference | `docs/agent/ATHB_BUILD_START_PROMPT.md` | `02613a0ebdb5ec1f8fa38a0727f588fe7f281b96d2370012d57a7c1d53df2e4f` | Match |
+| Build instructions | Internal build prompt (local-only, not distributed) | n/a | Process input only |
 
 The legacy YAML remains reference material only and has no authority to change the numerical identity.
 
