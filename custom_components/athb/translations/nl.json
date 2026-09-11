@@ -1,0 +1,14 @@
+{
+  "title": "Adaptive Thermal Heat Balance",
+  "config": {
+    "step": {
+      "user": {"title": "Zone", "data": {"name": "Zonenaam"}},
+      "environment": {"title": "Omgeving", "data": {"primary_temperature": "Primaire luchttemperatuur", "rh_mode": "Bron relatieve vochtigheid", "rh_entity": "Gemeten relatieve vochtigheid", "rh_declared": "Gedeclareerde relatieve vochtigheid", "outdoor_source": "Buitentemperatuur"}},
+      "targets": {"title": "Klimaatdoelen", "data": {"targets": "Klimaatdoelen"}},
+      "comfort": {"title": "Comfort", "data": {"comfort_strategy": "Comfortstrategie"}},
+      "control": {"title": "Regeling", "data": {"occupancy_entity": "Aanwezigheid", "minimum_control_temperature": "Minimale insteltemperatuur", "maximum_control_temperature": "Maximale insteltemperatuur"}}
+    },
+    "error": {"invalid_rh_source": "Selecteer precies één geldige vochtbron.", "invalid_targets": "Selecteer één tot en met acht verschillende klimaatdoelen.", "target_not_registered": "Elk klimaatdoel moet een entiteitenregisteridentiteit hebben.", "invalid_control_bounds": "Het minimum moet lager zijn dan het maximum."}
+  },
+  "options": {"step": {"init": {"title": "ATHB-opties", "data": {"comfort_strategy": "Comfortstrategie", "profile": "Profiel"}}}}
+}

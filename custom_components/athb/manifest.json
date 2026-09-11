@@ -1,6 +1,7 @@
 {
   "codeowners": ["@Patrick1610"],
   "dependencies": ["climate"],
+  "config_flow": true,
   "documentation": "https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance",
   "domain": "athb",
   "integration_type": "helper",

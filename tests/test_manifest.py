@@ -21,6 +21,7 @@ def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None
 
     assert manifest == {
         "codeowners": ["@Patrick1610"],
+        "config_flow": True,
         "dependencies": ["climate"],
         "documentation": "https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance",
         "domain": "athb",
@@ -56,8 +57,8 @@ def test_production_python_imports_are_standard_library_only() -> None:
                     non_standard_imports.append((path.relative_to(ROOT), package))
 
     assert forbidden_imports == []
-    assert home_assistant_imports == []
-    assert non_standard_imports == []
+    assert all("core/" not in path.as_posix() for path, _package in home_assistant_imports)
+    assert {package for _path, package in non_standard_imports} <= {"homeassistant", "voluptuous"}
 
 
 def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
@@ -71,7 +72,14 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "__init__.py",
         "adapters/__init__.py",
         "adapters/broker.py",
+        "adapters/climate.py",
         "adapters/storage.py",
+        "binary_sensor.py",
+        "button.py",
+        "config_flow.py",
+        "config_schema.py",
+        "const.py",
+        "controller.py",
         "core/__init__.py",
         "core/athb_engine.py",
         "core/climate.py",
@@ -86,7 +94,15 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "core/radiant.py",
         "core/surface.py",
         "core/sources.py",
+        "entity.py",
         "manifest.json",
+        "runtime.py",
+        "select.py",
+        "sensor.py",
+        "strings.json",
+        "switch.py",
+        "translations/en.json",
+        "translations/nl.json",
     }
 
 
@@ -100,5 +116,5 @@ def test_implementation_checklist_has_every_task_once_in_order() -> None:
     assert re.findall(r"ATHB-\d{3}", checklist) == expected
     assert identifiers == expected
     rows = [line for line in checklist.splitlines() if line.startswith("| ATHB-")]
-    assert all("| Complete |" in row for row in rows[:19])
-    assert all("| Pending |" in row for row in rows[19:])
+    assert all("| Complete |" in row for row in rows[:22])
+    assert all("| Pending |" in row for row in rows[22:])

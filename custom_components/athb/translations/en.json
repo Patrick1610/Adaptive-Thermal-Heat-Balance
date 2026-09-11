@@ -1,0 +1,14 @@
+{
+  "title": "Adaptive Thermal Heat Balance",
+  "config": {
+    "step": {
+      "user": {"title": "Zone", "data": {"name": "Zone name"}},
+      "environment": {"title": "Environment", "data": {"primary_temperature": "Primary air temperature", "rh_mode": "Relative humidity source", "rh_entity": "Measured relative humidity", "rh_declared": "Declared relative humidity", "outdoor_source": "Outdoor temperature"}},
+      "targets": {"title": "Climate targets", "data": {"targets": "Climate targets"}},
+      "comfort": {"title": "Comfort", "data": {"comfort_strategy": "Comfort strategy"}},
+      "control": {"title": "Control", "data": {"occupancy_entity": "Occupancy", "minimum_control_temperature": "Minimum command temperature", "maximum_control_temperature": "Maximum command temperature"}}
+    },
+    "error": {"invalid_rh_source": "Select exactly one valid humidity source.", "invalid_targets": "Select one through eight distinct climate targets.", "target_not_registered": "Every climate target must have an entity-registry identity.", "invalid_control_bounds": "The minimum must be below the maximum."}
+  },
+  "options": {"step": {"init": {"title": "ATHB options", "data": {"comfort_strategy": "Comfort strategy", "profile": "Profile"}}}}
+}
