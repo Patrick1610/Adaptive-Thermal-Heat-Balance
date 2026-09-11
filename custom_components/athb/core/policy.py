@@ -101,6 +101,24 @@ class ActuatorBoundResult:
     limitations: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class OpposingTarget:
+    """Known intended or observed opposing actuator in room coordinates."""
+
+    target_identity: str
+    direction: ActuationDirection
+    owned: bool
+    available: bool
+    intended_room_c: float | None
+    observed_room_c: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class CoordinationResult:
+    eligible: bool
+    reason: str | None
+
+
 def resolve_profile(
     *,
     selected: ControlProfile,
@@ -450,3 +468,52 @@ def boost_expiry(
     if selected_at.tzinfo is None or selected_at.utcoffset() is None or duration <= timedelta(0):
         raise ValueError("boost selection and duration must be valid")
     return selected_at + duration
+
+
+def check_cross_actuator_coordination(
+    *,
+    direction: ActuationDirection,
+    proposed_room_c: float,
+    opposing_targets: tuple[OpposingTarget, ...],
+    minimum_range_gap_c: float = DEFAULT_MINIMUM_RANGE_GAP_C,
+) -> CoordinationResult:
+    """Fail closed when an opposing target cannot preserve the common room gap."""
+
+    values = (proposed_room_c, minimum_range_gap_c)
+    if any(isinstance(value, bool) or not math.isfinite(float(value)) for value in values):
+        return CoordinationResult(False, "invalid_coordination_configuration")
+    if direction is ActuationDirection.RANGED or minimum_range_gap_c < 1.0:
+        return CoordinationResult(False, "invalid_coordination_configuration")
+    opposite = (
+        ActuationDirection.COOLING_ONLY
+        if direction is ActuationDirection.HEATING_ONLY
+        else ActuationDirection.HEATING_ONLY
+    )
+    for target in sorted(opposing_targets, key=lambda item: item.target_identity):
+        if target.direction is not opposite:
+            continue
+        established = (
+            target.intended_room_c if target.owned and target.available else target.observed_room_c
+        )
+        if established is None or isinstance(established, bool) or not math.isfinite(established):
+            return CoordinationResult(False, "opposing_target_unknown")
+        if direction is ActuationDirection.HEATING_ONLY:
+            conflict = established - proposed_room_c < minimum_range_gap_c
+        else:
+            conflict = proposed_room_c - established < minimum_range_gap_c
+        if conflict:
+            return CoordinationResult(False, "cross_actuator_conflict")
+    return CoordinationResult(True, None)
+
+
+def cooling_dewpoint_eligible(
+    *, normalized_room_c: float, dewpoint_constraint_c: float
+) -> CoordinationResult:
+    """Apply fallback dew-point protection after final room normalization."""
+
+    values = (normalized_room_c, dewpoint_constraint_c)
+    if any(isinstance(value, bool) or not math.isfinite(float(value)) for value in values):
+        return CoordinationResult(False, "invalid_dewpoint_constraint")
+    if normalized_room_c < dewpoint_constraint_c:
+        return CoordinationResult(False, "fallback_below_dewpoint")
+    return CoordinationResult(True, None)

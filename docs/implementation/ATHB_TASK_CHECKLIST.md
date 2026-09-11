@@ -19,10 +19,10 @@ This compact checklist preserves the normative implementation order and dependen
 | ATHB-013 | Implement Recorder bootstrap, persisted history, lineage changes, and corrupt-history recovery. | 012 | Phase 4: environmental history | Complete |
 | ATHB-014 | Implement strategy-based policy, critical caps/conflicts, profiles, fallback, bounds, and coordination. | 009–010, 013 | Phase 5: product policy | Complete |
 | ATHB-015 | Implement the climate capability matrix, HA-unit handling, inward grids, and range feasibility. | 014 | Phase 6: climate compatibility | Complete |
-| ATHB-016 | Implement per-target ownership transitions and deterministic acknowledgement classification. | 004, 015 | Phase 7: ownership and broker | Pending |
-| ATHB-017 | Implement versioned recovery storage, verified writes, and clean/unclean restart reconciliation. | 013, 016 | Phase 7: ownership and broker | Pending |
-| ATHB-018 | Implement the sole broker, preflight, coalescing, hysteresis, limits, and acknowledgement handling. | 015–017 | Phase 7: ownership and broker | Pending |
-| ATHB-019 | Pass ownership, race, and failure tests before enabling the production dispatch path. | 018 | Phase 7: ownership and broker | Pending |
+| ATHB-016 | Implement per-target ownership transitions and deterministic acknowledgement classification. | 004, 015 | Phase 7: ownership and broker | Complete |
+| ATHB-017 | Implement versioned recovery storage, verified writes, and clean/unclean restart reconciliation. | 013, 016 | Phase 7: ownership and broker | Complete |
+| ATHB-018 | Implement the sole broker, preflight, coalescing, hysteresis, limits, and acknowledgement handling. | 015–017 | Phase 7: ownership and broker | Complete |
+| ATHB-019 | Pass ownership, race, and failure tests before enabling the production dispatch path. | 018 | Phase 7: ownership and broker | Complete |
 | ATHB-020 | Implement zone orchestration, executor limits, coherent snapshots, timers, and unload cleanup. | 011–019 | Phase 8: native Home Assistant | Pending |
 | ATHB-021 | Implement config, reconfigure, and options flows with progressive disclosure and validation. | 020 | Phase 8: native Home Assistant | Pending |
 | ATHB-022 | Implement entity platforms, lightweight strategy persistence, and stable identities. | 020–021 | Phase 8: native Home Assistant | Pending |

@@ -20,6 +20,7 @@ from custom_components.athb.core.policy import (
     ActuatorBoundResult,
     CriticalDemand,
     OccupancyState,
+    OpposingTarget,
     PolicyFailure,
     PolicyTargets,
     apply_calibration_and_user_bounds,
@@ -27,6 +28,8 @@ from custom_components.athb.core.policy import (
     boost_expiry,
     build_adaptive_policy,
     build_fixed_fallback,
+    check_cross_actuator_coordination,
+    cooling_dewpoint_eligible,
     resolve_profile,
 )
 
@@ -429,3 +432,71 @@ def test_boost_expiry_is_not_extended_implicitly() -> None:
     assert persisted_after_restart == expiry
     with pytest.raises(ValueError, match="valid"):
         boost_expiry(selected_at=datetime(2026, 9, 11), duration=timedelta(minutes=60))
+
+
+def test_cross_actuator_coordination_uses_room_reference_and_manual_observation() -> None:
+    opposing = OpposingTarget(
+        "cool-b",
+        ActuationDirection.COOLING_ONLY,
+        owned=False,
+        available=True,
+        intended_room_c=None,
+        observed_room_c=20.0,
+    )
+    assert (
+        check_cross_actuator_coordination(
+            direction=ActuationDirection.HEATING_ONLY,
+            proposed_room_c=19.5,
+            opposing_targets=(opposing,),
+        ).reason
+        == "cross_actuator_conflict"
+    )
+    assert check_cross_actuator_coordination(
+        direction=ActuationDirection.HEATING_ONLY,
+        proposed_room_c=19.0,
+        opposing_targets=(opposing,),
+    ).eligible
+
+
+def test_cross_actuator_unknown_opponent_suspends_affected_direction() -> None:
+    unknown = OpposingTarget(
+        "heat-a",
+        ActuationDirection.HEATING_ONLY,
+        owned=False,
+        available=False,
+        intended_room_c=None,
+        observed_room_c=None,
+    )
+    result = check_cross_actuator_coordination(
+        direction=ActuationDirection.COOLING_ONLY,
+        proposed_room_c=24.0,
+        opposing_targets=(unknown,),
+    )
+    assert result.reason == "opposing_target_unknown"
+
+
+def test_owned_opponent_uses_normalized_intent_not_stale_observation() -> None:
+    opponent = OpposingTarget(
+        "heat-a",
+        ActuationDirection.HEATING_ONLY,
+        owned=True,
+        available=True,
+        intended_room_c=20.0,
+        observed_room_c=17.0,
+    )
+    assert (
+        check_cross_actuator_coordination(
+            direction=ActuationDirection.COOLING_ONLY,
+            proposed_room_c=20.5,
+            opposing_targets=(opponent,),
+        ).reason
+        == "cross_actuator_conflict"
+    )
+
+
+def test_fallback_dewpoint_check_uses_final_normalized_room_target() -> None:
+    assert (
+        cooling_dewpoint_eligible(normalized_room_c=18.9, dewpoint_constraint_c=19.0).reason
+        == "fallback_below_dewpoint"
+    )
+    assert cooling_dewpoint_eligible(normalized_room_c=19.0, dewpoint_constraint_c=19.0).eligible

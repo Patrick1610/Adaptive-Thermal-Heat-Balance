@@ -69,6 +69,9 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
 
     assert production_files == {
         "__init__.py",
+        "adapters/__init__.py",
+        "adapters/broker.py",
+        "adapters/storage.py",
         "core/__init__.py",
         "core/athb_engine.py",
         "core/climate.py",
@@ -76,6 +79,7 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "core/history.py",
         "core/inverse.py",
         "core/locations.py",
+        "core/ownership.py",
         "core/pmv_core.py",
         "core/policy.py",
         "core/psychrometrics.py",
@@ -96,5 +100,5 @@ def test_implementation_checklist_has_every_task_once_in_order() -> None:
     assert re.findall(r"ATHB-\d{3}", checklist) == expected
     assert identifiers == expected
     rows = [line for line in checklist.splitlines() if line.startswith("| ATHB-")]
-    assert all("| Complete |" in row for row in rows[:15])
-    assert all("| Pending |" in row for row in rows[15:])
+    assert all("| Complete |" in row for row in rows[:19])
+    assert all("| Pending |" in row for row in rows[19:])
