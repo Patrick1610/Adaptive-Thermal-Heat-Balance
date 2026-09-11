@@ -1,0 +1,3973 @@
+{
+  "fixture_kind": "athb_roots",
+  "formulation_id": "athb_2022_ptc_4_4_2",
+  "future_production_solver": false,
+  "generator_solver": {
+    "bracket_samples": 257,
+    "method": "independent constant-vapor-pressure bracket scan and bisection",
+    "temperature_width_c": 1e-10
+  },
+  "numerical_contract_version": 1,
+  "oracle": {
+    "package": "pythermalcomfort==4.4.2",
+    "repository_commit": "2597e88fed10fec2f40d49759ed9b74e10ce9f89",
+    "transformation": "remove only pmv_athb final three-decimal rounding"
+  },
+  "scenarios": [
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.173,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -20.25383222487648,
+        "unrounded_vote": -0.17308845704988404
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 40.41723846201746,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 23.48103849931806,
+            "tr_c": 23.48103849931806
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            23.435898969415657,
+            23.555928687028587
+          ],
+          "local_candidate_temperature_c": 23.48103849931806,
+          "requested_vote": 0.25,
+          "residual_vote": -1.3565260026382475e-12,
+          "room_temperature_c": 23.48103849931806,
+          "unrounded_vote": 0.24999999999864347
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 52.018368429987234,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.362709070799177,
+            "tr_c": 19.362709070799177
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            19.354888570576037,
+            19.474918288188967
+          ],
+          "local_candidate_temperature_c": 19.362709070799177,
+          "requested_vote": -0.25,
+          "residual_vote": -1.8302026560945706e-13,
+          "room_temperature_c": 19.362709070799177,
+          "unrounded_vote": -0.250000000000183
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641576866,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512717433,
+            "tr_c": 17.281546512717433
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.194353653543295,
+            17.314383371156225
+          ],
+          "local_candidate_temperature_c": 17.281546512717433,
+          "requested_vote": -0.5,
+          "residual_vote": -2.0495827257605015e-12,
+          "room_temperature_c": 17.281546512717433,
+          "unrounded_vote": -0.5000000000020496
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338848943,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.42914493671656,
+            "tr_c": 21.42914493671656
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.39539376999585,
+            21.51542348760878
+          ],
+          "local_candidate_temperature_c": 21.42914493671656,
+          "requested_vote": 0.0,
+          "residual_vote": 7.033713889104121e-13,
+          "room_temperature_c": 21.42914493671656,
+          "unrounded_vote": 7.033713889104121e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043371511,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.518574656303755,
+            "tr_c": 25.518574656303755
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.47640416883547,
+            25.5964338864484
+          ],
+          "local_candidate_temperature_c": 25.518574656303755,
+          "requested_vote": 0.5,
+          "residual_vote": -3.1017965973489936e-12,
+          "room_temperature_c": 25.518574656303755,
+          "unrounded_vote": 0.4999999999968982
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_BASE_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.173,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -20.25383222487648,
+        "unrounded_vote": -0.17308845704988404
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.35,
+        "heating_control": -0.35,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 38.48057735566088,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 24.297765484892828,
+            "tr_c": 24.297765484892828
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.27610699270617,
+            24.396136710319098
+          ],
+          "local_candidate_temperature_c": 24.297765484892828,
+          "requested_vote": 0.35,
+          "residual_vote": -7.371880883511039e-13,
+          "room_temperature_c": 24.297765484892828,
+          "unrounded_vote": 0.3499999999992628
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 54.788160880834546,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 18.53202155352797,
+            "tr_c": 18.53202155352797
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            18.514680547285526,
+            18.63471026489846
+          ],
+          "local_candidate_temperature_c": 18.53202155352797,
+          "requested_vote": -0.35,
+          "residual_vote": -2.0151103008458904e-12,
+          "room_temperature_c": 18.53202155352797,
+          "unrounded_vote": -0.3500000000020151
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641576866,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512717433,
+            "tr_c": 17.281546512717433
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.194353653543295,
+            17.314383371156225
+          ],
+          "local_candidate_temperature_c": 17.281546512717433,
+          "requested_vote": -0.5,
+          "residual_vote": -2.0495827257605015e-12,
+          "room_temperature_c": 17.281546512717433,
+          "unrounded_vote": -0.5000000000020496
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338848943,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.42914493671656,
+            "tr_c": 21.42914493671656
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.39539376999585,
+            21.51542348760878
+          ],
+          "local_candidate_temperature_c": 21.42914493671656,
+          "requested_vote": 0.0,
+          "residual_vote": 7.033713889104121e-13,
+          "room_temperature_c": 21.42914493671656,
+          "unrounded_vote": 7.033713889104121e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043371511,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.518574656303755,
+            "tr_c": 25.518574656303755
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.47640416883547,
+            25.5964338864484
+          ],
+          "local_candidate_temperature_c": 25.518574656303755,
+          "requested_vote": 0.5,
+          "residual_vote": -3.1017965973489936e-12,
+          "room_temperature_c": 25.518574656303755,
+          "unrounded_vote": 0.4999999999968982
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_BASE_E",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.173,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -20.25383222487648,
+        "unrounded_vote": -0.17308845704988404
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.15,
+        "heating_control": -0.15,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 42.470346102586234,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.662014325819833,
+            "tr_c": 22.662014325819833
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.595690946125146,
+            22.715720663738075
+          ],
+          "local_candidate_temperature_c": 22.662014325819833,
+          "requested_vote": 0.15,
+          "residual_vote": 3.1863955918254305e-12,
+          "room_temperature_c": 22.662014325819833,
+          "unrounded_vote": 0.1500000000031864
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 49.412226247038014,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.191040308745578,
+            "tr_c": 20.191040308745578
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.075066876253615,
+            20.195096593866545
+          ],
+          "local_candidate_temperature_c": 20.191040308745578,
+          "requested_vote": -0.15,
+          "residual_vote": 5.753453269363717e-13,
+          "room_temperature_c": 20.191040308745578,
+          "unrounded_vote": -0.14999999999942465
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641576866,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512717433,
+            "tr_c": 17.281546512717433
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.194353653543295,
+            17.314383371156225
+          ],
+          "local_candidate_temperature_c": 17.281546512717433,
+          "requested_vote": -0.5,
+          "residual_vote": -2.0495827257605015e-12,
+          "room_temperature_c": 17.281546512717433,
+          "unrounded_vote": -0.5000000000020496
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338848943,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.42914493671656,
+            "tr_c": 21.42914493671656
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.39539376999585,
+            21.51542348760878
+          ],
+          "local_candidate_temperature_c": 21.42914493671656,
+          "requested_vote": 0.0,
+          "residual_vote": 7.033713889104121e-13,
+          "room_temperature_c": 21.42914493671656,
+          "unrounded_vote": 7.033713889104121e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043371511,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.518574656303755,
+            "tr_c": 25.518574656303755
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.47640416883547,
+            25.5964338864484
+          ],
+          "local_candidate_temperature_c": 25.518574656303755,
+          "requested_vote": 0.5,
+          "residual_vote": -3.1017965973489936e-12,
+          "room_temperature_c": 25.518574656303755,
+          "unrounded_vote": 0.4999999999968982
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_BASE_C",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 51.5759274364,
+        "tdb_c": 19.5
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.233,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -22.47599300206476,
+        "unrounded_vote": -0.23344521023117604
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 51.5759274364,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 19.5,
+        "tr_c": 19.5
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 40.41723846201745,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 23.481038499318245,
+            "tr_c": 23.481038499318245
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            23.43589896941584,
+            23.555928687028768
+          ],
+          "local_candidate_temperature_c": 23.481038499318245,
+          "requested_vote": 0.25,
+          "residual_vote": -1.3547774013744629e-12,
+          "room_temperature_c": 23.481038499318245,
+          "unrounded_vote": 0.24999999999864522
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 52.01836842998705,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.362709070799404,
+            "tr_c": 19.362709070799404
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            19.354888570576264,
+            19.474918288189194
+          ],
+          "local_candidate_temperature_c": 19.362709070799404,
+          "requested_vote": -0.25,
+          "residual_vote": -1.5865087021893487e-13,
+          "room_temperature_c": 19.362709070799404,
+          "unrounded_vote": -0.25000000000015865
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641576801,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.28154651271769,
+            "tr_c": 17.28154651271769
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.19435365354355,
+            17.314383371156477
+          ],
+          "local_candidate_temperature_c": 17.28154651271769,
+          "requested_vote": -0.5,
+          "residual_vote": -2.0153878566020467e-12,
+          "room_temperature_c": 17.28154651271769,
+          "unrounded_vote": -0.5000000000020154
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338848926,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.429144936716767,
+            "tr_c": 21.429144936716767
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.395393769996055,
+            21.515423487608984
+          ],
+          "local_candidate_temperature_c": 21.429144936716767,
+          "requested_vote": 0.0,
+          "residual_vote": 7.352729536336255e-13,
+          "room_temperature_c": 21.429144936716767,
+          "unrounded_vote": 7.352729536336255e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043371522,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.51857465630392,
+            "tr_c": 25.51857465630392
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.47640416883563,
+            25.59643388644856
+          ],
+          "local_candidate_temperature_c": 25.51857465630392,
+          "requested_vote": 0.5,
+          "residual_vote": -3.0715985310791893e-12,
+          "room_temperature_c": 25.51857465630392,
+          "unrounded_vote": 0.4999999999969284
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_NEAR_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 64.3079856685,
+        "tdb_c": 16.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.653,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -37.92535787703031,
+        "unrounded_vote": -0.65306988911957
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 64.3079856685,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 16.0,
+        "tr_c": 16.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 40.417238462013856,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 23.481038499316902,
+            "tr_c": 23.481038499316902
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            23.435898969414495,
+            23.555928687027432
+          ],
+          "local_candidate_temperature_c": 23.481038499316902,
+          "requested_vote": 0.25,
+          "residual_vote": -1.519090409018986e-12,
+          "room_temperature_c": 23.481038499316902,
+          "unrounded_vote": 0.2499999999984809
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 52.01836842998428,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.362709070797727,
+            "tr_c": 19.362709070797727
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            19.354888570574587,
+            19.474918288187524
+          ],
+          "local_candidate_temperature_c": 19.362709070797727,
+          "requested_vote": -0.25,
+          "residual_vote": -3.9523939676655573e-13,
+          "room_temperature_c": 19.362709070797727,
+          "unrounded_vote": -0.25000000000039524
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641576528,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512715842,
+            "tr_c": 17.281546512715842
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.194353653541693,
+            17.314383371154634
+          ],
+          "local_candidate_temperature_c": 17.281546512715842,
+          "requested_vote": -0.5,
+          "residual_vote": -2.2450930003969916e-12,
+          "room_temperature_c": 17.281546512715842,
+          "unrounded_vote": -0.5000000000022451
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338848584,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.42914493671526,
+            "tr_c": 21.42914493671526
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.39539376999454,
+            21.515423487607478
+          ],
+          "local_candidate_temperature_c": 21.42914493671526,
+          "requested_vote": 0.0,
+          "residual_vote": 5.263636748686906e-13,
+          "room_temperature_c": 21.42914493671526,
+          "unrounded_vote": 5.263636748686906e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043371192,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.51857465630274,
+            "tr_c": 25.51857465630274
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.476404168834446,
+            25.596433886447386
+          ],
+          "local_candidate_temperature_c": 25.51857465630274,
+          "requested_vote": 0.5,
+          "residual_vote": -3.2367442059921814e-12,
+          "room_temperature_c": 25.51857465630274,
+          "unrounded_vote": 0.49999999999676326
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_BELOW_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.228,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -22.293177841025123,
+        "unrounded_vote": -0.22847971463520508
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 19.01533175255446
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "surface_composite",
+        "surface_temperature_c": 16.0,
+        "view_factor": 0.25
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 38.12336825212806,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 24.453465105487176,
+            "tr_c": 22.40744849861153
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.396136710319098,
+            24.516166427932028
+          ],
+          "local_candidate_temperature_c": 24.453465105487176,
+          "requested_vote": 0.25,
+          "residual_vote": -6.620815007352121e-13,
+          "room_temperature_c": 24.453465105487176,
+          "unrounded_vote": 0.24999999999933792
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 50.62895149980297,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.798353506443803,
+            "tr_c": 18.86260046175198
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            19.714977723414826,
+            19.835007441027756
+          ],
+          "local_candidate_temperature_c": 19.798353506443803,
+          "requested_vote": -0.25,
+          "residual_vote": -1.4964696148922485e-12,
+          "room_temperature_c": 19.798353506443803,
+          "unrounded_vote": -0.25000000000149647
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 58.657952016971876,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.44727462645851,
+            "tr_c": 17.08748233506884
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.434413088769155,
+            17.554442806382085
+          ],
+          "local_candidate_temperature_c": 17.44727462645851,
+          "requested_vote": -0.5,
+          "residual_vote": 4.4875214655348827e-13,
+          "room_temperature_c": 17.44727462645851,
+          "unrounded_vote": -0.49999999999955125
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 43.85695571298984,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.13370532606009,
+            "tr_c": 20.636044246700465
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.115572075673427,
+            22.235601793286357
+          ],
+          "local_candidate_temperature_c": 22.13370532606009,
+          "requested_vote": 0.0,
+          "residual_vote": 6.194628143774139e-13,
+          "room_temperature_c": 22.13370532606009,
+          "unrounded_vote": 6.194628143774139e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 33.25104086070549,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 26.75777247816135,
+            "tr_c": 24.176471513363026
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.67670134496477,
+            26.7967310625777
+          ],
+          "local_candidate_temperature_c": 26.75777247816135,
+          "requested_vote": 0.5,
+          "residual_vote": -2.522482223099587e-12,
+          "room_temperature_c": 26.75777247816135,
+          "unrounded_vote": 0.4999999999974775
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_SURFACE16_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.255,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -23.2820889661096,
+        "unrounded_vote": -0.25533981643687614
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 18.534473160249036
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "surface_composite",
+        "surface_temperature_c": 14.0,
+        "view_factor": 0.25
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 37.564567873067666,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 24.700362901038744,
+            "tr_c": 22.133001548288178
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.636196145544957,
+            24.756225863157887
+          ],
+          "local_candidate_temperature_c": 24.700362901038744,
+          "requested_vote": 0.25,
+          "residual_vote": -2.7121915824324105e-12,
+          "room_temperature_c": 24.700362901038744,
+          "unrounded_vote": 0.2499999999972878
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 49.8454049692927,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.05000124911073,
+            "tr_c": 18.572544482744433
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            19.955037158640685,
+            20.075066876253615
+          ],
+          "local_candidate_temperature_c": 20.05000124911073,
+          "requested_vote": -0.25,
+          "residual_vote": 7.868705687030797e-13,
+          "room_temperature_c": 20.05000124911073,
+          "unrounded_vote": -0.24999999999921313
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 57.72480538727715,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.701331723005225,
+            "tr_c": 16.78923137929354
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.674472523995014,
+            17.794502241607944
+          ],
+          "local_candidate_temperature_c": 17.701331723005225,
+          "requested_vote": -0.5,
+          "residual_vote": -1.4144241333724494e-12,
+          "room_temperature_c": 17.701331723005225,
+          "unrounded_vote": -0.5000000000014144
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 43.19648722982581,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.38296647293445,
+            "tr_c": 20.353920169653236
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.355631510899286,
+            22.475661228512216
+          ],
+          "local_candidate_temperature_c": 22.38296647293445,
+          "requested_vote": 0.0,
+          "residual_vote": 5.831099492148439e-14,
+          "room_temperature_c": 22.38296647293445,
+          "unrounded_vote": 5.831099492148439e-14
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 32.77655231529183,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 27.00233062445748,
+            "tr_c": 23.90945509944254
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.91676078019063,
+            27.03679049780356
+          ],
+          "local_candidate_temperature_c": 27.00233062445748,
+          "requested_vote": 0.5,
+          "residual_vote": 5.362377208939506e-13,
+          "room_temperature_c": 27.00233062445748,
+          "unrounded_vote": 0.5000000000005362
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_SURFACE14_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.1402061855670105,
+        "effective_clo": 0.9693533682699977,
+        "public_vote": 0.207,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -10.864055917469482,
+        "unrounded_vote": 0.20671480116953517
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": -10.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 48.83318026084979,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.38175995490232,
+            "tr_c": 20.38175995490232
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.315126311479474,
+            20.435156029092404
+          ],
+          "local_candidate_temperature_c": 20.38175995490232,
+          "requested_vote": 0.25,
+          "residual_vote": -2.4873714199458163e-12,
+          "room_temperature_c": 20.38175995490232,
+          "unrounded_vote": 0.24999999999751263
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 64.53745484509587,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 15.94427009091893,
+            "tr_c": 15.94427009091893
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            15.874026759801065,
+            15.994056477413995
+          ],
+          "local_candidate_temperature_c": 15.94427009091893,
+          "requested_vote": -0.25,
+          "residual_vote": 1.0502987368710137e-12,
+          "room_temperature_c": 15.94427009091893,
+          "unrounded_vote": -0.2499999999989497
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 74.57623658153051,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 13.702541105987464,
+            "tr_c": 13.702541105987464
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            13.593462125155396,
+            13.713491842768326
+          ],
+          "local_candidate_temperature_c": 13.702541105987464,
+          "requested_vote": -0.5,
+          "residual_vote": -2.73003841755326e-13,
+          "room_temperature_c": 13.702541105987464,
+          "unrounded_vote": -0.500000000000273
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 56.04466357731975,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 18.170613868588916,
+            "tr_c": 18.170613868588916
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            18.154591394446737,
+            18.274621112059666
+          ],
+          "local_candidate_temperature_c": 18.170613868588916,
+          "requested_vote": 0.0,
+          "residual_vote": 3.026960626595354e-12,
+          "room_temperature_c": 18.170613868588916,
+          "unrounded_vote": 3.026960626595354e-12
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 42.68777726306293,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.57789782744745,
+            "tr_c": 22.57789782744745
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.475661228512216,
+            22.595690946125146
+          ],
+          "local_candidate_temperature_c": 22.57789782744745,
+          "requested_vote": 0.5,
+          "residual_vote": -6.786238238021269e-13,
+          "room_temperature_c": 22.57789782744745,
+          "unrounded_vote": 0.4999999999993214
+        }
+      },
+      "running_mean_c": -10.0,
+      "scenario_id": "G_WINTER_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 80.0,
+        "tdb_c": 28.0
+      },
+      "current_expected": {
+        "adapted_met": 0.9994845360824743,
+        "effective_clo": 0.583755207826335,
+        "public_vote": 0.564,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": 16.447610236404568,
+        "unrounded_vote": 0.5639479489801329
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 80.0,
+        "running_mean_c": 25.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 28.0,
+        "tr_c": 28.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.738698405366449e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 91.79489106773427,
+            "running_mean_c": 25.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.660781299348635,
+            "tr_c": 25.660781299348635
+          },
+          "evaluation_count": 288,
+          "initial_bracket_c": [
+            25.642551649995607,
+            25.704171599995625
+          ],
+          "local_candidate_temperature_c": 25.660781299348635,
+          "requested_vote": 0.25,
+          "residual_vote": 2.551348021739841e-12,
+          "room_temperature_c": 25.660781299348635,
+          "unrounded_vote": 0.25000000000255135
+        },
+        "heating_control": {
+          "evaluation_count": 257,
+          "failure": "moisture_limited_no_solution",
+          "requested_vote": -0.25
+        },
+        "lower_comfort": {
+          "evaluation_count": 257,
+          "failure": "moisture_limited_no_solution",
+          "requested_vote": -0.5
+        },
+        "thermal_neutral": {
+          "evaluation_count": 257,
+          "failure": "moisture_limited_no_solution",
+          "requested_vote": 0.0
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.738698405366449e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 82.24845137949997,
+            "running_mean_c": 25.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 27.52521008211611,
+            "tr_c": 27.52521008211611
+          },
+          "evaluation_count": 288,
+          "initial_bracket_c": [
+            27.491150149996173,
+            27.55277009999619
+          ],
+          "local_candidate_temperature_c": 27.52521008211611,
+          "requested_vote": 0.5,
+          "residual_vote": 2.3062662890538377e-12,
+          "room_temperature_c": 27.52521008211611,
+          "unrounded_vote": 0.5000000000023063
+        }
+      },
+      "running_mean_c": 25.0,
+      "scenario_id": "G_HUMID_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.173,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -20.25383222487648,
+        "unrounded_vote": -0.17308845704988404
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.5,
+        "heating_control": -0.5,
+        "lower_comfort": -1.0,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 1.0
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043371511,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.518574656303755,
+            "tr_c": 25.518574656303755
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.47640416883547,
+            25.5964338864484
+          ],
+          "local_candidate_temperature_c": 25.518574656303755,
+          "requested_vote": 0.5,
+          "residual_vote": -3.1017965973489936e-12,
+          "room_temperature_c": 25.518574656303755,
+          "unrounded_vote": 0.4999999999968982
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641576866,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512717433,
+            "tr_c": 17.281546512717433
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.194353653543295,
+            17.314383371156225
+          ],
+          "local_candidate_temperature_c": 17.281546512717433,
+          "requested_vote": -0.5,
+          "residual_vote": -2.0495827257605015e-12,
+          "room_temperature_c": 17.281546512717433,
+          "unrounded_vote": -0.5000000000020496
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 77.69312565357639,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 13.074783159799455,
+            "tr_c": 13.074783159799455
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            12.993313537090746,
+            13.113343254703675
+          ],
+          "local_candidate_temperature_c": 13.074783159799455,
+          "requested_vote": -1.0,
+          "residual_vote": -1.5207834991315394e-12,
+          "room_temperature_c": 13.074783159799455,
+          "unrounded_vote": -1.0000000000015208
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338848943,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.42914493671656,
+            "tr_c": 21.42914493671656
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.39539376999585,
+            21.51542348760878
+          ],
+          "local_candidate_temperature_c": 21.42914493671656,
+          "requested_vote": 0.0,
+          "residual_vote": 7.033713889104121e-13,
+          "room_temperature_c": 21.42914493671656,
+          "unrounded_vote": 7.033713889104121e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 28.260871007529126,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 29.55131553274086,
+            "tr_c": 29.55131553274086
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            29.43738485006216,
+            29.55741456767509
+          ],
+          "local_candidate_temperature_c": 29.55131553274086,
+          "requested_vote": 1.0,
+          "residual_vote": 1.998845533535132e-12,
+          "room_temperature_c": 29.55131553274086,
+          "unrounded_vote": 1.0000000000019988
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "G_WIDE_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.395,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -28.419043963655078,
+        "unrounded_vote": -0.3948661405773666
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 16.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "fixed",
+        "tr_c": 16.0
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 27.47611505492311,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 30.041135077230003,
+            "tr_c": 16.0
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            30.037533438126808,
+            30.157563155739737
+          ],
+          "local_candidate_temperature_c": 30.041135077230003,
+          "requested_vote": 0.25,
+          "residual_vote": 7.188694084447889e-14,
+          "room_temperature_c": 30.041135077230003,
+          "unrounded_vote": 0.2500000000000719
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 43.54905502907789,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.24937745659868,
+            "tr_c": 16.0
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.235601793286357,
+            22.355631510899286
+          ],
+          "local_candidate_temperature_c": 22.24937745659868,
+          "requested_vote": -0.25,
+          "residual_vote": -3.571032358706816e-13,
+          "room_temperature_c": 22.24937745659868,
+          "unrounded_vote": -0.2500000000003571
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 55.34799633527529,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 18.369857724491204,
+            "tr_c": 16.0
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            18.274621112059666,
+            18.394650829672596
+          ],
+          "local_candidate_temperature_c": 18.369857724491204,
+          "requested_vote": -0.5,
+          "residual_vote": 4.961031585537512e-13,
+          "room_temperature_c": 18.369857724491204,
+          "unrounded_vote": -0.4999999999995039
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 34.48479486136342,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 26.139878511164383,
+            "tr_c": 16.0
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.076552756900117,
+            26.196582474513047
+          ],
+          "local_candidate_temperature_c": 26.139878511164383,
+          "requested_vote": 0.0,
+          "residual_vote": 6.80417527876287e-13,
+          "room_temperature_c": 26.139878511164383,
+          "unrounded_vote": 6.80417527876287e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589839702224708e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 22.022504665640582,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 33.953144861106594,
+            "tr_c": 16.0
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            33.878484401740565,
+            33.9985141193535
+          ],
+          "local_candidate_temperature_c": 33.953144861106594,
+          "requested_vote": 0.5,
+          "residual_vote": -9.050538096744276e-13,
+          "room_temperature_c": 33.953144861106594,
+          "unrounded_vote": 0.49999999999909495
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "FIXED_MRT16_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.354,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -26.908916729760996,
+        "unrounded_vote": -0.3538491369185132
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 54.89820219230507,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 18.5,
+        "tr_c": 18.5
+      },
+      "local_delta_c": 1.5,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.3162807489570696e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 40.417238461990465,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 23.481038499329102,
+            "tr_c": 23.481038499329102
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.92951477509324,
+            25.04368511770617
+          ],
+          "local_candidate_temperature_c": 23.481038499329102,
+          "requested_vote": 0.25,
+          "residual_vote": -1.942890293094024e-14,
+          "room_temperature_c": 24.981038499329102,
+          "unrounded_vote": 0.24999999999998057
+        },
+        "heating_control": {
+          "bracket_width_c": 5.3162807489570696e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 52.01836842991793,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.36270907082055,
+            "tr_c": 19.36270907082055
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.819382441027756,
+            20.933552783640685
+          ],
+          "local_candidate_temperature_c": 19.36270907082055,
+          "requested_vote": -0.25,
+          "residual_vote": 2.3730184484094252e-12,
+          "room_temperature_c": 20.86270907082055,
+          "unrounded_vote": -0.24999999999762698
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.3162807489570696e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641575097,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.28154651272198,
+            "tr_c": 17.28154651272198
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            18.764316273995014,
+            18.878486616607944
+          ],
+          "local_candidate_temperature_c": 17.28154651272198,
+          "requested_vote": -0.5,
+          "residual_vote": -1.4943601911454607e-12,
+          "room_temperature_c": 18.78154651272198,
+          "unrounded_vote": -0.5000000000014944
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.3166360203249496e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338849626,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.429144936714152,
+            "tr_c": 21.429144936714152
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.874448608060497,
+            22.988618950673427
+          ],
+          "local_candidate_temperature_c": 21.429144936714152,
+          "requested_vote": 0.0,
+          "residual_vote": 4.035730083451483e-13,
+          "room_temperature_c": 22.929144936714152,
+          "unrounded_vote": 4.035730083451483e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.3162807489570696e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043367049,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.518574656324795,
+            "tr_c": 25.518574656324795
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.984580942125977,
+            27.098751284738906
+          ],
+          "local_candidate_temperature_c": 25.518574656324795,
+          "requested_vote": 0.5,
+          "residual_vote": -5.102029909664907e-13,
+          "room_temperature_c": 27.018574656324795,
+          "unrounded_vote": 0.4999999999994898
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "CRITICAL_DELTA_1_5_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.414,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -29.119695872275223,
+        "unrounded_vote": -0.4138967502203358
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 56.649061982315956,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 18.0,
+        "tr_c": 18.0
+      },
+      "local_delta_c": 2.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.225686550147657e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 40.41723846203856,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 23.4810384993093,
+            "tr_c": 23.4810384993093
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.411761710319098,
+            25.523978927932028
+          ],
+          "local_candidate_temperature_c": 23.4810384993093,
+          "requested_vote": 0.25,
+          "residual_vote": -2.443628632775585e-12,
+          "room_temperature_c": 25.4810384993093,
+          "unrounded_vote": 0.24999999999755637
+        },
+        "heating_control": {
+          "bracket_width_c": 5.225331278779777e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 52.01836843005691,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.362709070777804,
+            "tr_c": 19.362709070777804
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.259724658640685,
+            21.371941876253615
+          ],
+          "local_candidate_temperature_c": 19.362709070777804,
+          "requested_vote": -0.25,
+          "residual_vote": -2.7603475061255267e-12,
+          "room_temperature_c": 21.362709070777804,
+          "unrounded_vote": -0.25000000000276035
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.225686550147657e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641575181,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512721896,
+            "tr_c": 17.281546512721896
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            19.239814741607947,
+            19.352031959220877
+          ],
+          "local_candidate_temperature_c": 17.281546512721896,
+          "requested_vote": -0.5,
+          "residual_vote": -1.5111245588173006e-12,
+          "room_temperature_c": 19.281546512721896,
+          "unrounded_vote": -0.5000000000015111
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.225686550147657e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.786163388510246,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.429144936709186,
+            "tr_c": 21.429144936709186
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            23.391851793286357,
+            23.504069010899286
+          ],
+          "local_candidate_temperature_c": 21.429144936709186,
+          "requested_vote": 0.0,
+          "residual_vote": -2.0018708912772354e-13,
+          "room_temperature_c": 23.429144936709186,
+          "unrounded_vote": -2.0018708912772354e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.225686550147657e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043364405,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.5185746563372,
+            "tr_c": 25.5185746563372
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            27.43167162735184,
+            27.54388884496477
+          ],
+          "local_candidate_temperature_c": 25.5185746563372,
+          "requested_vote": 0.5,
+          "residual_vote": 1.024624829426557e-12,
+          "room_temperature_c": 27.5185746563372,
+          "unrounded_vote": 0.5000000000010246
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "CRITICAL_DELTA_2_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.534,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -33.52992949532047,
+        "unrounded_vote": -0.5336843843962867
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 60.34224719009189,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 17.0,
+        "tr_c": 17.0
+      },
+      "local_delta_c": 3.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.043432338425191e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 40.41723846200884,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 23.481038499321585,
+            "tr_c": 23.481038499321585
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.461129048383746,
+            26.569440015996676
+          ],
+          "local_candidate_temperature_c": 23.481038499321585,
+          "requested_vote": 0.25,
+          "residual_vote": -9.426626146336048e-13,
+          "room_temperature_c": 26.481038499321585,
+          "unrounded_vote": 0.24999999999905734
+        },
+        "heating_control": {
+          "bracket_width_c": 5.043787609793071e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 52.01836842996599,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.362709070805842,
+            "tr_c": 19.362709070805842
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.345312279092404,
+            22.453623246705337
+          ],
+          "local_candidate_temperature_c": 19.362709070805842,
+          "requested_vote": -0.25,
+          "residual_vote": 6.029898802495381e-13,
+          "room_temperature_c": 22.362709070805842,
+          "unrounded_vote": -0.249999999999397
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.043432338425191e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641572212,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512729662,
+            "tr_c": 17.281546512729662
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.179092926833807,
+            20.287403894446737
+          ],
+          "local_candidate_temperature_c": 17.281546512729662,
+          "requested_vote": -0.5,
+          "residual_vote": -5.706546346573305e-13,
+          "room_temperature_c": 20.281546512729662,
+          "unrounded_vote": -0.5000000000005707
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.043787609793071e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338846682,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.429144936724732,
+            "tr_c": 21.429144936724732
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.403220663738075,
+            24.511531631351005
+          ],
+          "local_candidate_temperature_c": 21.429144936724732,
+          "requested_vote": 0.0,
+          "residual_vote": 1.7004522789854093e-12,
+          "room_temperature_c": 24.429144936724732,
+          "unrounded_vote": 1.7004522789854093e-12
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.043787609793071e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.777690433652694,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.518574656333158,
+            "tr_c": 25.518574656333158
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            28.410726465416488,
+            28.519037433029418
+          ],
+          "local_candidate_temperature_c": 25.518574656333158,
+          "requested_vote": 0.5,
+          "residual_vote": 5.330180741225377e-13,
+          "room_temperature_c": 28.518574656333158,
+          "unrounded_vote": 0.500000000000533
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "CRITICAL_DELTA_3_B",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.1804123711340206,
+        "effective_clo": 1.145370463307356,
+        "public_vote": 0.463,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -4.364659055833844,
+        "unrounded_vote": 0.4625119301679938
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": -20.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 56.55605802618098,
+            "running_mean_c": -20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 18.026120305858363,
+            "tr_c": 18.026120305858363
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.914531959220877,
+            18.034561676833807
+          ],
+          "local_candidate_temperature_c": 18.026120305858363,
+          "requested_vote": 0.25,
+          "residual_vote": 1.5627499294623703e-12,
+          "room_temperature_c": 18.026120305858363,
+          "unrounded_vote": 0.25000000000156275
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 76.31805294294698,
+            "running_mean_c": -20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 13.348185030337305,
+            "tr_c": 13.348185030337305
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            13.233372972316605,
+            13.353402689929535
+          ],
+          "local_candidate_temperature_c": 13.348185030337305,
+          "requested_vote": -0.25,
+          "residual_vote": 2.8718694089491237e-13,
+          "room_temperature_c": 13.348185030337305,
+          "unrounded_vote": -0.2499999999997128
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 89.19281810852412,
+            "running_mean_c": -20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 10.98113468358305,
+            "tr_c": 10.98113468358305
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            10.952808337670936,
+            11.072838055283865
+          ],
+          "local_candidate_temperature_c": 10.98113468358305,
+          "requested_vote": -0.5,
+          "residual_vote": 2.503552920529728e-14,
+          "room_temperature_c": 10.98113468358305,
+          "unrounded_vote": -0.49999999999997496
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 65.55617370884136,
+            "running_mean_c": -20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 15.699516378365441,
+            "tr_c": 15.699516378365441
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            15.633967324575206,
+            15.753997042188136
+          ],
+          "local_candidate_temperature_c": 15.699516378365441,
+          "requested_vote": 0.0,
+          "residual_vote": 2.3793744752254042e-12,
+          "room_temperature_c": 15.699516378365441,
+          "unrounded_vote": 2.3793744752254042e-12
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 48.937955777906865,
+            "running_mean_c": -20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.347062274325815,
+            "tr_c": 20.347062274325815
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.315126311479474,
+            20.435156029092404
+          ],
+          "local_candidate_temperature_c": 20.347062274325815,
+          "requested_vote": 0.5,
+          "residual_vote": 9.57012247226885e-13,
+          "room_temperature_c": 20.347062274325815,
+          "unrounded_vote": 0.500000000000957
+        }
+      },
+      "running_mean_c": -20.0,
+      "scenario_id": "OUTDOOR_MATRIX_-20.0",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.1402061855670105,
+        "effective_clo": 0.9693533682699977,
+        "public_vote": 0.207,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -10.864055917469482,
+        "unrounded_vote": 0.20671480116953517
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": -10.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 48.83318026084979,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.38175995490232,
+            "tr_c": 20.38175995490232
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.315126311479474,
+            20.435156029092404
+          ],
+          "local_candidate_temperature_c": 20.38175995490232,
+          "requested_vote": 0.25,
+          "residual_vote": -2.4873714199458163e-12,
+          "room_temperature_c": 20.38175995490232,
+          "unrounded_vote": 0.24999999999751263
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 64.53745484509587,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 15.94427009091893,
+            "tr_c": 15.94427009091893
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            15.874026759801065,
+            15.994056477413995
+          ],
+          "local_candidate_temperature_c": 15.94427009091893,
+          "requested_vote": -0.25,
+          "residual_vote": 1.0502987368710137e-12,
+          "room_temperature_c": 15.94427009091893,
+          "unrounded_vote": -0.2499999999989497
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589306795172888e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 74.57623658153051,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 13.702541105987464,
+            "tr_c": 13.702541105987464
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            13.593462125155396,
+            13.713491842768326
+          ],
+          "local_candidate_temperature_c": 13.702541105987464,
+          "requested_vote": -0.5,
+          "residual_vote": -2.73003841755326e-13,
+          "room_temperature_c": 13.702541105987464,
+          "unrounded_vote": -0.500000000000273
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 56.04466357731975,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 18.170613868588916,
+            "tr_c": 18.170613868588916
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            18.154591394446737,
+            18.274621112059666
+          ],
+          "local_candidate_temperature_c": 18.170613868588916,
+          "requested_vote": 0.0,
+          "residual_vote": 3.026960626595354e-12,
+          "room_temperature_c": 18.170613868588916,
+          "unrounded_vote": 3.026960626595354e-12
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 42.68777726306293,
+            "running_mean_c": -10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.57789782744745,
+            "tr_c": 22.57789782744745
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.475661228512216,
+            22.595690946125146
+          ],
+          "local_candidate_temperature_c": 22.57789782744745,
+          "requested_vote": 0.5,
+          "residual_vote": -6.786238238021269e-13,
+          "room_temperature_c": 22.57789782744745,
+          "unrounded_vote": 0.4999999999993214
+        }
+      },
+      "running_mean_c": -10.0,
+      "scenario_id": "OUTDOOR_MATRIX_-10.0",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.1,
+        "effective_clo": 0.8284303478458541,
+        "public_vote": -0.046,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -17.177911185586257,
+        "unrounded_vote": -0.04633034872218089
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 0.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 42.90764132711811,
+            "running_mean_c": 0.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.49332936252108,
+            "tr_c": 22.49332936252108
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.475661228512216,
+            22.595690946125146
+          ],
+          "local_candidate_temperature_c": 22.49332936252108,
+          "requested_vote": 0.25,
+          "residual_vote": -1.709743457922741e-12,
+          "room_temperature_c": 22.49332936252108,
+          "unrounded_vote": 0.24999999999829026
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 55.68101172322087,
+            "running_mean_c": 0.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 18.274267290794285,
+            "tr_c": 18.274267290794285
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            18.154591394446737,
+            18.274621112059666
+          ],
+          "local_candidate_temperature_c": 18.274267290794285,
+          "requested_vote": -0.25,
+          "residual_vote": -2.25297558387183e-12,
+          "room_temperature_c": 18.274267290794285,
+          "unrounded_vote": -0.250000000002253
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 63.72589438862932,
+            "running_mean_c": 0.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 16.142376429073764,
+            "tr_c": 16.142376429073764
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            16.114086195026925,
+            16.234115912639858
+          ],
+          "local_candidate_temperature_c": 16.142376429073764,
+          "requested_vote": -0.5,
+          "residual_vote": 1.0434986208451846e-12,
+          "room_temperature_c": 16.142376429073764,
+          "unrounded_vote": -0.4999999999989565
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 48.80474975818078,
+            "running_mean_c": 0.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.39118950682326,
+            "tr_c": 20.39118950682326
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.315126311479474,
+            20.435156029092404
+          ],
+          "local_candidate_temperature_c": 20.39118950682326,
+          "requested_vote": 0.0,
+          "residual_vote": 8.095746295566641e-13,
+          "room_temperature_c": 20.39118950682326,
+          "unrounded_vote": 8.095746295566641e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 37.83384383634104,
+            "running_mean_c": 0.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 24.580874050841764,
+            "tr_c": 24.580874050841764
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.516166427932028,
+            24.636196145544957
+          ],
+          "local_candidate_temperature_c": 24.580874050841764,
+          "requested_vote": 0.5,
+          "residual_vote": -1.694866469392764e-12,
+          "room_temperature_c": 24.580874050841764,
+          "unrounded_vote": 0.49999999999830513
+        }
+      },
+      "running_mean_c": 0.0,
+      "scenario_id": "OUTDOOR_MATRIX_+00.0",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.173,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -20.25383222487648,
+        "unrounded_vote": -0.17308845704988404
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 40.41723846201746,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 23.48103849931806,
+            "tr_c": 23.48103849931806
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            23.435898969415657,
+            23.555928687028587
+          ],
+          "local_candidate_temperature_c": 23.48103849931806,
+          "requested_vote": 0.25,
+          "residual_vote": -1.3565260026382475e-12,
+          "room_temperature_c": 23.48103849931806,
+          "unrounded_vote": 0.24999999999864347
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 52.018368429987234,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 19.362709070799177,
+            "tr_c": 19.362709070799177
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            19.354888570576037,
+            19.474918288188967
+          ],
+          "local_candidate_temperature_c": 19.362709070799177,
+          "requested_vote": -0.25,
+          "residual_vote": -1.8302026560945706e-13,
+          "room_temperature_c": 19.362709070799177,
+          "unrounded_vote": -0.250000000000183
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 59.27579641576866,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 17.281546512717433,
+            "tr_c": 17.281546512717433
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            17.194353653543295,
+            17.314383371156225
+          ],
+          "local_candidate_temperature_c": 17.281546512717433,
+          "requested_vote": -0.5,
+          "residual_vote": -2.0495827257605015e-12,
+          "room_temperature_c": 17.281546512717433,
+          "unrounded_vote": -0.5000000000020496
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 45.78616338848943,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 21.42914493671656,
+            "tr_c": 21.42914493671656
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            21.39539376999585,
+            21.51542348760878
+          ],
+          "local_candidate_temperature_c": 21.42914493671656,
+          "requested_vote": 0.0,
+          "residual_vote": 7.033713889104121e-13,
+          "room_temperature_c": 21.42914493671656,
+          "unrounded_vote": 7.033713889104121e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 35.77769043371511,
+            "running_mean_c": 5.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 25.518574656303755,
+            "tr_c": 25.518574656303755
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            25.47640416883547,
+            25.5964338864484
+          ],
+          "local_candidate_temperature_c": 25.518574656303755,
+          "requested_vote": 0.5,
+          "residual_vote": -3.1017965973489936e-12,
+          "room_temperature_c": 25.518574656303755,
+          "unrounded_vote": 0.4999999999968982
+        }
+      },
+      "running_mean_c": 5.0,
+      "scenario_id": "OUTDOOR_MATRIX_+05.0",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.0597938144329897,
+        "effective_clo": 0.7149367277824048,
+        "public_vote": -0.301,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -23.293528000396105,
+        "unrounded_vote": -0.3013003352596638
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 10.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 38.160065463339926,
+            "running_mean_c": 10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 24.437393951532023,
+            "tr_c": 24.437393951532023
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.396136710319098,
+            24.516166427932028
+          ],
+          "local_candidate_temperature_c": 24.437393951532023,
+          "requested_vote": 0.25,
+          "residual_vote": 5.185851748024106e-13,
+          "room_temperature_c": 24.437393951532023,
+          "unrounded_vote": 0.2500000000005186
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 48.730448442831786,
+            "running_mean_c": 10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.41586224911599,
+            "tr_c": 20.41586224911599
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.315126311479474,
+            20.435156029092404
+          ],
+          "local_candidate_temperature_c": 20.41586224911599,
+          "requested_vote": -0.25,
+          "residual_vote": 1.6563972415895023e-12,
+          "room_temperature_c": 20.41586224911599,
+          "unrounded_vote": -0.2499999999983436
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 55.300739441575395,
+            "running_mean_c": 10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 18.38347493526898,
+            "tr_c": 18.38347493526898
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            18.274621112059666,
+            18.394650829672596
+          ],
+          "local_candidate_temperature_c": 18.38347493526898,
+          "requested_vote": -0.5,
+          "residual_vote": -5.677680547933051e-13,
+          "room_temperature_c": 18.38347493526898,
+          "unrounded_vote": -0.5000000000005678
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 43.06323929857974,
+            "running_mean_c": 10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.433774552480195,
+            "tr_c": 22.433774552480195
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.355631510899286,
+            22.475661228512216
+          ],
+          "local_candidate_temperature_c": 22.433774552480195,
+          "requested_vote": 0.0,
+          "residual_vote": -5.526412660827873e-13,
+          "room_temperature_c": 22.433774552480195,
+          "unrounded_vote": -5.526412660827873e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 33.905379521052694,
+            "running_mean_c": 10.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 26.426902652826108,
+            "tr_c": 26.426902652826108
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.316612192125977,
+            26.436641909738906
+          ],
+          "local_candidate_temperature_c": 26.426902652826108,
+          "requested_vote": 0.5,
+          "residual_vote": 2.8197444379429726e-12,
+          "room_temperature_c": 26.426902652826108,
+          "unrounded_vote": 0.5000000000028197
+        }
+      },
+      "running_mean_c": 10.0,
+      "scenario_id": "OUTDOOR_MATRIX_+10.0",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 1.0195876288659795,
+        "effective_clo": 0.6230414613075507,
+        "public_vote": -0.56,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -29.109491009246327,
+        "unrounded_vote": -0.5603172019015761
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 20.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 34.267882688463935,
+            "running_mean_c": 20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 26.246688265341348,
+            "tr_c": 26.246688265341348
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.196582474513047,
+            26.316612192125977
+          ],
+          "local_candidate_temperature_c": 26.246688265341348,
+          "requested_vote": 0.25,
+          "residual_vote": 2.4851232183209504e-12,
+          "room_temperature_c": 26.246688265341348,
+          "unrounded_vote": 0.2500000000024851
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 43.12716678405953,
+            "running_mean_c": 20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.40937663288046,
+            "tr_c": 22.40937663288046
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.355631510899286,
+            22.475661228512216
+          ],
+          "local_candidate_temperature_c": 22.40937663288046,
+          "requested_vote": -0.25,
+          "residual_vote": -2.116640196447861e-13,
+          "room_temperature_c": 22.40937663288046,
+          "unrounded_vote": -0.25000000000021166
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 48.56784210407935,
+            "running_mean_c": 20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 20.470005822629865,
+            "tr_c": 20.470005822629865
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            20.435156029092404,
+            20.555185746705337
+          ],
+          "local_candidate_temperature_c": 20.470005822629865,
+          "requested_vote": -0.5,
+          "residual_vote": -3.247180302423658e-12,
+          "room_temperature_c": 20.470005822629865,
+          "unrounded_vote": -0.5000000000032472
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 38.39508883713801,
+            "running_mean_c": 20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 24.33487931679975,
+            "tr_c": 24.33487931679975
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.27610699270617,
+            24.396136710319098
+          ],
+          "local_candidate_temperature_c": 24.33487931679975,
+          "requested_vote": 0.0,
+          "residual_vote": 8.91932361302139e-13,
+          "room_temperature_c": 24.33487931679975,
+          "unrounded_vote": 8.91932361302139e-13
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 30.658530656895724,
+            "running_mean_c": 20.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 28.144977484131147,
+            "tr_c": 28.144977484131147
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            28.11705795631993,
+            28.23708767393286
+          ],
+          "local_candidate_temperature_c": 28.144977484131147,
+          "requested_vote": 0.5,
+          "residual_vote": -3.125388836622278e-12,
+          "room_temperature_c": 28.144977484131147,
+          "unrounded_vote": 0.4999999999968746
+        }
+      },
+      "running_mean_c": 20.0,
+      "scenario_id": "OUTDOOR_MATRIX_+20.0",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    },
+    {
+      "clothing": {
+        "kind": "automatic"
+      },
+      "current": {
+        "rh_pct": 50.0,
+        "tdb_c": 20.0
+      },
+      "current_expected": {
+        "adapted_met": 0.9793814432989691,
+        "effective_clo": 0.5482820407918013,
+        "public_vote": -0.841,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -35.11317403853232,
+        "unrounded_vote": -0.8405844090151023
+      },
+      "current_inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 30.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      },
+      "local_delta_c": 0.0,
+      "met": 1.1,
+      "moisture_model": "constant_vapor_pressure",
+      "radiant": {
+        "kind": "moving_uniform"
+      },
+      "requested_votes": {
+        "cooling_control": 0.25,
+        "heating_control": -0.25,
+        "lower_comfort": -0.5,
+        "thermal_neutral": 0.0,
+        "upper_comfort": 0.5
+      },
+      "roots": {
+        "cooling_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 30.832374277527936,
+            "running_mean_c": 30.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 28.047878714608878,
+            "tr_c": 28.047878714608878
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            27.997028238707,
+            28.11705795631993
+          ],
+          "local_candidate_temperature_c": 28.047878714608878,
+          "requested_vote": 0.25,
+          "residual_vote": 3.2087665857716274e-12,
+          "room_temperature_c": 28.047878714608878,
+          "unrounded_vote": 0.25000000000320877
+        },
+        "heating_control": {
+          "bracket_width_c": 5.589129159488948e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 38.270222121847354,
+            "running_mean_c": 30.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 24.38925645790563,
+            "tr_c": 24.38925645790563
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            24.27610699270617,
+            24.396136710319098
+          ],
+          "local_candidate_temperature_c": 24.38925645790563,
+          "requested_vote": -0.25,
+          "residual_vote": 1.6497359034417514e-12,
+          "room_temperature_c": 24.38925645790563,
+          "unrounded_vote": -0.24999999999835026
+        },
+        "lower_comfort": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 42.78536937718975,
+            "running_mean_c": 30.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 22.54029961635632,
+            "tr_c": 22.54029961635632
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            22.475661228512216,
+            22.595690946125146
+          ],
+          "local_candidate_temperature_c": 22.54029961635632,
+          "requested_vote": -0.5,
+          "residual_vote": -3.936850845320805e-13,
+          "room_temperature_c": 22.54029961635632,
+          "unrounded_vote": -0.5000000000003937
+        },
+        "thermal_neutral": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 34.31167839011608,
+            "running_mean_c": 30.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 26.22506146462296,
+            "tr_c": 26.22506146462296
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            26.196582474513047,
+            26.316612192125977
+          ],
+          "local_candidate_temperature_c": 26.22506146462296,
+          "requested_vote": 0.0,
+          "residual_vote": 1.5688110532874333e-12,
+          "room_temperature_c": 26.22506146462296,
+          "unrounded_vote": 1.5688110532874333e-12
+        },
+        "upper_comfort": {
+          "bracket_width_c": 5.589484430856828e-11,
+          "candidate_inputs": {
+            "clothing": {
+              "kind": "automatic"
+            },
+            "met": 1.1,
+            "rh_pct": 27.766806838849256,
+            "running_mean_c": 30.0,
+            "speed": {
+              "kind": "ambient",
+              "value_m_s": 0.1
+            },
+            "tdb_c": 29.85787158752263,
+            "tr_c": 29.85787158752263
+          },
+          "evaluation_count": 289,
+          "initial_bracket_c": [
+            29.797474002900948,
+            29.917503720513878
+          ],
+          "local_candidate_temperature_c": 29.85787158752263,
+          "requested_vote": 0.5,
+          "residual_vote": 2.0149437673921966e-12,
+          "room_temperature_c": 29.85787158752263,
+          "unrounded_vote": 0.5000000000020149
+        }
+      },
+      "running_mean_c": 30.0,
+      "scenario_id": "OUTDOOR_MATRIX_+30.0",
+      "search_domain_room_c": [
+        5.0,
+        40.0
+      ],
+      "speed": {
+        "kind": "ambient",
+        "value_m_s": 0.1
+      }
+    }
+  ],
+  "tolerances": {
+    "displayed_current_vote_absolute": 1e-06,
+    "root_temperature_absolute_c": 0.01,
+    "unrounded_vote_absolute": 1e-07
+  }
+}

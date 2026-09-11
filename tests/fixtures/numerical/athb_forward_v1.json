@@ -1,0 +1,6476 @@
+{
+  "dense_grid": {
+    "axes": {
+      "rh_pct": [
+        0.0,
+        16.9,
+        50.0,
+        87.7,
+        100.0
+      ],
+      "running_mean_c": [
+        -30.0,
+        -2.7,
+        16.0,
+        30.0,
+        41.3,
+        45.0
+      ],
+      "secondary_cycles": {
+        "clothing": [
+          {
+            "kind": "automatic"
+          },
+          {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          {
+            "clo": 2.0,
+            "kind": "fixed"
+          }
+        ],
+        "met": [
+          0.8,
+          1.0,
+          1.1,
+          1.5,
+          2.0
+        ],
+        "speed": [
+          {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          {
+            "kind": "relative",
+            "value_m_s": 2.0
+          }
+        ],
+        "tr_c": [
+          0.0,
+          12.6,
+          20.0,
+          27.0,
+          38.5,
+          50.0
+        ]
+      },
+      "tdb_c": [
+        5.0,
+        12.6,
+        20.0,
+        27.0,
+        38.5,
+        40.0
+      ]
+    },
+    "cases": [
+      {
+        "case_id": "dense-000",
+        "expected": {
+          "adapted_met": 0.920618556701031,
+          "effective_clo": 1.1579493599450408,
+          "public_vote": -1.155,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -78.5022881064424,
+          "unrounded_vote": -1.154516162667613
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-001",
+        "expected": {
+          "adapted_met": 1.0108556701030929,
+          "effective_clo": 0.1,
+          "public_vote": -4.487,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -181.4807280677604,
+          "unrounded_vote": -4.487331135086727
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 0.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 5.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-002",
+        "expected": {
+          "adapted_met": 1.0356701030927835,
+          "effective_clo": 0.7,
+          "public_vote": -2.671,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -110.70186364392427,
+          "unrounded_vote": -2.670592286803747
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 0.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 5.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-003",
+        "expected": {
+          "adapted_met": 1.379381443298969,
+          "effective_clo": 2.0,
+          "public_vote": -0.663,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -25.503598577970813,
+          "unrounded_vote": -0.6629255637276392
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 0.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 5.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-004",
+        "expected": {
+          "adapted_met": 1.8339484536082473,
+          "effective_clo": 0.3623034008709053,
+          "public_vote": -2.564,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -153.56452799112063,
+          "unrounded_vote": -2.5640581604892954
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 0.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-005",
+        "expected": {
+          "adapted_met": 0.6190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": -1.983,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -62.48748808603967,
+          "unrounded_vote": -1.9834761339132294
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-006",
+        "expected": {
+          "adapted_met": 1.120618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -2.395,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -104.62550211400128,
+          "unrounded_vote": -2.3947974735586977
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 5.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-007",
+        "expected": {
+          "adapted_met": 1.110855670103093,
+          "effective_clo": 2.0,
+          "public_vote": -0.547,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -35.914824827094385,
+          "unrounded_vote": -0.5470095330810314
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 16.9,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 5.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-008",
+        "expected": {
+          "adapted_met": 1.4356701030927834,
+          "effective_clo": 0.6559710673329174,
+          "public_vote": -3.193,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -129.61317592774031,
+          "unrounded_vote": -3.1930052937103808
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 16.9,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 5.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-009",
+        "expected": {
+          "adapted_met": 1.879381443298969,
+          "effective_clo": 0.1,
+          "public_vote": -6.065,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -320.85819959740024,
+          "unrounded_vote": -6.064918362536149
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-010",
+        "expected": {
+          "adapted_met": 0.6339484536082475,
+          "effective_clo": 0.7,
+          "public_vote": -1.639,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -54.252560083988634,
+          "unrounded_vote": -1.6391194868837087
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 16.9,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-011",
+        "expected": {
+          "adapted_met": 0.8190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": -0.013,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 5.156826066619175,
+          "unrounded_vote": -0.012796975590599592
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 5.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-012",
+        "expected": {
+          "adapted_met": 1.220618556701031,
+          "effective_clo": 1.366619354383117,
+          "public_vote": -1.49,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -68.11722690319827,
+          "unrounded_vote": -1.4896494660554676
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 5.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-013",
+        "expected": {
+          "adapted_met": 1.5108556701030929,
+          "effective_clo": 0.1,
+          "public_vote": -10.539,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -375.78558307015885,
+          "unrounded_vote": -10.53855627379322
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 50.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 5.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-014",
+        "expected": {
+          "adapted_met": 1.9356701030927834,
+          "effective_clo": 0.7,
+          "public_vote": -2.631,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -103.02761674610164,
+          "unrounded_vote": -2.631356030716551
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-015",
+        "expected": {
+          "adapted_met": 0.6793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": -0.641,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -29.088419572609798,
+          "unrounded_vote": -0.6412353937916093
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 50.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-016",
+        "expected": {
+          "adapted_met": 0.8339484536082474,
+          "effective_clo": 0.4954084508854714,
+          "public_vote": -1.537,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -53.90251651532684,
+          "unrounded_vote": -1.5369435650464438
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 5.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-017",
+        "expected": {
+          "adapted_met": 0.9190721649484537,
+          "effective_clo": 0.1,
+          "public_vote": -4.113,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -153.3231862613324,
+          "unrounded_vote": -4.113387101787904
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 5.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-018",
+        "expected": {
+          "adapted_met": 1.620618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -4.681,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -135.22900348952794,
+          "unrounded_vote": -4.6814980563093656
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 5.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-019",
+        "expected": {
+          "adapted_met": 2.010855670103093,
+          "effective_clo": 2.0,
+          "public_vote": -0.746,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -10.156651206447606,
+          "unrounded_vote": -0.7461462919935712
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 87.7,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-020",
+        "expected": {
+          "adapted_met": 0.7356701030927836,
+          "effective_clo": 0.6586833483640705,
+          "public_vote": -2.031,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -89.25017302766041,
+          "unrounded_vote": -2.030527844595955
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 87.7,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-021",
+        "expected": {
+          "adapted_met": 0.8793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": -3.564,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -137.3806554869001,
+          "unrounded_vote": -3.5636412392679913
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 87.7,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 5.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-022",
+        "expected": {
+          "adapted_met": 0.9339484536082475,
+          "effective_clo": 0.7,
+          "public_vote": -2.16,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -79.88502355224746,
+          "unrounded_vote": -2.159511913776111
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 87.7,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 5.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-023",
+        "expected": {
+          "adapted_met": 1.3190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": -0.389,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -8.628951798223397,
+          "unrounded_vote": -0.38888330781725966
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 5.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-024",
+        "expected": {
+          "adapted_met": 2.120618556701031,
+          "effective_clo": 2.2465783380244395,
+          "public_vote": -0.885,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -4.3142301136380325,
+          "unrounded_vote": -0.8852428700158547
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-025",
+        "expected": {
+          "adapted_met": 0.8108556701030928,
+          "effective_clo": 0.1,
+          "public_vote": -4.527,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -191.25798225176214,
+          "unrounded_vote": -4.526789632457997
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 100.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-026",
+        "expected": {
+          "adapted_met": 0.9356701030927835,
+          "effective_clo": 0.7,
+          "public_vote": -1.651,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -73.28291687393278,
+          "unrounded_vote": -1.650660512947674
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 5.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-027",
+        "expected": {
+          "adapted_met": 0.9793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": -0.619,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -26.5238455173118,
+          "unrounded_vote": -0.6185937446828295
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 100.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 5.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-028",
+        "expected": {
+          "adapted_met": 1.3339484536082473,
+          "effective_clo": 0.42366043782254814,
+          "public_vote": -3.326,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -150.38203337000976,
+          "unrounded_vote": -3.32591509948102
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 100.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 5.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-029",
+        "expected": {
+          "adapted_met": 1.8190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": -3.577,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -236.54785460545057,
+          "unrounded_vote": -3.5771106604880094
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 5.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-030",
+        "expected": {
+          "adapted_met": 0.920618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -1.546,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -92.09214647528998,
+          "unrounded_vote": -1.546478094089629
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-031",
+        "expected": {
+          "adapted_met": 1.0108556701030929,
+          "effective_clo": 2.0,
+          "public_vote": 0.082,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -17.014911568754695,
+          "unrounded_vote": 0.0819694184634026
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 0.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 12.6,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-032",
+        "expected": {
+          "adapted_met": 1.0356701030927835,
+          "effective_clo": 0.6575195716856937,
+          "public_vote": -1.922,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -82.33133926004984,
+          "unrounded_vote": -1.9215543524953977
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 0.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 12.6,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-033",
+        "expected": {
+          "adapted_met": 1.379381443298969,
+          "effective_clo": 0.1,
+          "public_vote": -5.523,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -242.9222553202729,
+          "unrounded_vote": -5.523132251699702
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 0.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 12.6,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-034",
+        "expected": {
+          "adapted_met": 1.8339484536082473,
+          "effective_clo": 0.7,
+          "public_vote": -0.891,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -41.40440461532485,
+          "unrounded_vote": -0.8909710390606932
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 0.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-035",
+        "expected": {
+          "adapted_met": 0.6190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 0.037,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 5.5641096618551975,
+          "unrounded_vote": 0.03656993156623181
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-036",
+        "expected": {
+          "adapted_met": 1.120618556701031,
+          "effective_clo": 1.2931877053333767,
+          "public_vote": -0.656,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -47.79313905128433,
+          "unrounded_vote": -0.6564297173091316
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 12.6,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-037",
+        "expected": {
+          "adapted_met": 1.110855670103093,
+          "effective_clo": 0.1,
+          "public_vote": -5.564,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -215.98793010393723,
+          "unrounded_vote": -5.564065821650612
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 16.9,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 12.6,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-038",
+        "expected": {
+          "adapted_met": 1.4356701030927834,
+          "effective_clo": 0.7,
+          "public_vote": -1.976,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -80.01131614996382,
+          "unrounded_vote": -1.9757648875806573
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 16.9,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 12.6,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-039",
+        "expected": {
+          "adapted_met": 1.879381443298969,
+          "effective_clo": 2.0,
+          "public_vote": -0.111,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 10.077876374428016,
+          "unrounded_vote": -0.11116717082251881
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-040",
+        "expected": {
+          "adapted_met": 0.6339484536082475,
+          "effective_clo": 0.5274018036457235,
+          "public_vote": -1.14,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -37.25369443022057,
+          "unrounded_vote": -1.1404755181246784
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 16.9,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-041",
+        "expected": {
+          "adapted_met": 0.8190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": -0.258,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -3.887183252715033,
+          "unrounded_vote": -0.25758155142607037
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 12.6,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-042",
+        "expected": {
+          "adapted_met": 1.220618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -2.411,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -97.38978104916025,
+          "unrounded_vote": -2.410573917835638
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 12.6,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-043",
+        "expected": {
+          "adapted_met": 1.5108556701030929,
+          "effective_clo": 2.0,
+          "public_vote": -0.158,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -7.371248997310536,
+          "unrounded_vote": -0.15833822535260303
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 50.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 12.6,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-044",
+        "expected": {
+          "adapted_met": 1.9356701030927834,
+          "effective_clo": 0.6540405642474845,
+          "public_vote": -1.793,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -65.2685266471821,
+          "unrounded_vote": -1.792612717719837
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-045",
+        "expected": {
+          "adapted_met": 0.6793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": -2.872,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -107.47392626145485,
+          "unrounded_vote": -2.872325060638832
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 50.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-046",
+        "expected": {
+          "adapted_met": 0.8339484536082474,
+          "effective_clo": 0.7,
+          "public_vote": -0.523,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -16.256600725295456,
+          "unrounded_vote": -0.5230968326585497
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 12.6,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-047",
+        "expected": {
+          "adapted_met": 0.9190721649484537,
+          "effective_clo": 2.0,
+          "public_vote": -0.007,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 6.120686928407451,
+          "unrounded_vote": -0.006609464585089209
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 12.6,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-048",
+        "expected": {
+          "adapted_met": 1.620618556701031,
+          "effective_clo": 1.7044786551322653,
+          "public_vote": -0.544,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -16.84703602229057,
+          "unrounded_vote": -0.5439135575643841
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 12.6,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-049",
+        "expected": {
+          "adapted_met": 2.010855670103093,
+          "effective_clo": 0.1,
+          "public_vote": -7.639,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -251.42590301063078,
+          "unrounded_vote": -7.63875194109706
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 87.7,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-050",
+        "expected": {
+          "adapted_met": 0.7356701030927836,
+          "effective_clo": 0.7,
+          "public_vote": -1.241,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -60.85722461430289,
+          "unrounded_vote": -1.2412522298467887
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 87.7,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-051",
+        "expected": {
+          "adapted_met": 0.8793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": 0.032,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -2.815983663236103,
+          "unrounded_vote": 0.03160896952716887
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 87.7,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 12.6,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-052",
+        "expected": {
+          "adapted_met": 0.9339484536082475,
+          "effective_clo": 0.4801471005988077,
+          "public_vote": -1.771,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -64.80001745528179,
+          "unrounded_vote": -1.7713791644131804
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 87.7,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 12.6,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-053",
+        "expected": {
+          "adapted_met": 1.3190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": -3.418,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -156.22775237535598,
+          "unrounded_vote": -3.4177119225693855
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 12.6,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-054",
+        "expected": {
+          "adapted_met": 2.120618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -3.509,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -71.03938045591978,
+          "unrounded_vote": -3.508518010848672
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-055",
+        "expected": {
+          "adapted_met": 0.8108556701030928,
+          "effective_clo": 2.0,
+          "public_vote": 0.149,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -21.98593969882971,
+          "unrounded_vote": 0.14945047602801742
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 100.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-056",
+        "expected": {
+          "adapted_met": 0.9356701030927835,
+          "effective_clo": 0.6579072686003388,
+          "public_vote": -1.041,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -50.59539898902611,
+          "unrounded_vote": -1.041105507601685
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 12.6,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-057",
+        "expected": {
+          "adapted_met": 0.9793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": -4.34,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -170.49673465354405,
+          "unrounded_vote": -4.3395641588692175
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 100.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 12.6,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-058",
+        "expected": {
+          "adapted_met": 1.3339484536082473,
+          "effective_clo": 0.7,
+          "public_vote": -1.285,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -52.82801059764597,
+          "unrounded_vote": -1.2846911655763078
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 100.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 12.6,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-059",
+        "expected": {
+          "adapted_met": 1.8190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 0.134,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 29.02726598723214,
+          "unrounded_vote": 0.13441739400321417
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 12.6,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-060",
+        "expected": {
+          "adapted_met": 0.920618556701031,
+          "effective_clo": 1.1579493599450408,
+          "public_vote": -0.345,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -50.422300841028246,
+          "unrounded_vote": -0.3446264828687867
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-061",
+        "expected": {
+          "adapted_met": 1.0108556701030929,
+          "effective_clo": 0.1,
+          "public_vote": -2.207,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -99.41422060175145,
+          "unrounded_vote": -2.207303917427016
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 0.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 20.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-062",
+        "expected": {
+          "adapted_met": 1.0356701030927835,
+          "effective_clo": 0.7,
+          "public_vote": -0.969,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -46.25645510673559,
+          "unrounded_vote": -0.9691060881985881
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 0.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 20.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-063",
+        "expected": {
+          "adapted_met": 1.379381443298969,
+          "effective_clo": 2.0,
+          "public_vote": 0.154,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 11.053737607347852,
+          "unrounded_vote": 0.1542821795476842
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 0.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 20.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-064",
+        "expected": {
+          "adapted_met": 1.8339484536082473,
+          "effective_clo": 0.3623034008709053,
+          "public_vote": -0.73,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -30.641347529033958,
+          "unrounded_vote": -0.7304190384361986
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 0.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-065",
+        "expected": {
+          "adapted_met": 0.6190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": 0.514,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 21.654746957111694,
+          "unrounded_vote": 0.5142049854815596
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-066",
+        "expected": {
+          "adapted_met": 1.120618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -1.142,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -63.66270398369531,
+          "unrounded_vote": -1.1418422269696658
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 20.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-067",
+        "expected": {
+          "adapted_met": 1.110855670103093,
+          "effective_clo": 2.0,
+          "public_vote": 0.352,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -3.649607609018016,
+          "unrounded_vote": 0.3519387618192324
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 16.9,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 20.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-068",
+        "expected": {
+          "adapted_met": 1.4356701030927834,
+          "effective_clo": 0.6559710673329174,
+          "public_vote": -1.074,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -43.258488904183984,
+          "unrounded_vote": -1.0738425289534417
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 16.9,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 20.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-069",
+        "expected": {
+          "adapted_met": 1.879381443298969,
+          "effective_clo": 0.1,
+          "public_vote": -2.484,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -121.82304119786112,
+          "unrounded_vote": -2.4841488497706568
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-070",
+        "expected": {
+          "adapted_met": 0.6339484536082475,
+          "effective_clo": 0.7,
+          "public_vote": -0.279,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -7.881804507508277,
+          "unrounded_vote": -0.2788818059720035
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 16.9,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-071",
+        "expected": {
+          "adapted_met": 0.8190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 0.653,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 29.739147193040335,
+          "unrounded_vote": 0.6525465504403213
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 20.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-072",
+        "expected": {
+          "adapted_met": 1.220618556701031,
+          "effective_clo": 1.366619354383117,
+          "public_vote": -0.072,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -23.050175526380393,
+          "unrounded_vote": -0.0718247905728889
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 20.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-073",
+        "expected": {
+          "adapted_met": 1.5108556701030929,
+          "effective_clo": 0.1,
+          "public_vote": -4.995,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -179.0410225250109,
+          "unrounded_vote": -4.995201280717847
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 50.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 20.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-074",
+        "expected": {
+          "adapted_met": 1.9356701030927834,
+          "effective_clo": 0.7,
+          "public_vote": -0.704,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -16.260163657440277,
+          "unrounded_vote": -0.7039891139498446
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-075",
+        "expected": {
+          "adapted_met": 0.6793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": 0.071,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -4.062406091936897,
+          "unrounded_vote": 0.07108098250929766
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 50.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-076",
+        "expected": {
+          "adapted_met": 0.8339484536082474,
+          "effective_clo": 0.4954084508854714,
+          "public_vote": -0.001,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 3.1218473927632213,
+          "unrounded_vote": -0.001213491771818273
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 20.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-077",
+        "expected": {
+          "adapted_met": 0.9190721649484537,
+          "effective_clo": 0.1,
+          "public_vote": -0.71,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -21.194034329622752,
+          "unrounded_vote": -0.7101516213628334
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 20.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-078",
+        "expected": {
+          "adapted_met": 1.620618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -1.602,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -47.113758648251775,
+          "unrounded_vote": -1.6017699612404694
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 20.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-079",
+        "expected": {
+          "adapted_met": 2.010855670103093,
+          "effective_clo": 2.0,
+          "public_vote": 0.518,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 34.093749920195044,
+          "unrounded_vote": 0.5180038742619049
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 87.7,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-080",
+        "expected": {
+          "adapted_met": 0.7356701030927836,
+          "effective_clo": 0.6586833483640705,
+          "public_vote": -0.64,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -39.24495780031981,
+          "unrounded_vote": -0.6404680165487949
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 87.7,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-081",
+        "expected": {
+          "adapted_met": 0.8793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": -1.216,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -49.52372838693206,
+          "unrounded_vote": -1.2163116525382738
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 87.7,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 20.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-082",
+        "expected": {
+          "adapted_met": 0.9339484536082475,
+          "effective_clo": 0.7,
+          "public_vote": -0.384,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -10.87299700177877,
+          "unrounded_vote": -0.38385286319548734
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 87.7,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 20.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-083",
+        "expected": {
+          "adapted_met": 1.3190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 0.469,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 33.166455221363634,
+          "unrounded_vote": 0.46878710854891303
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 20.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-084",
+        "expected": {
+          "adapted_met": 2.120618556701031,
+          "effective_clo": 2.2465783380244395,
+          "public_vote": 0.772,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 37.82704016815577,
+          "unrounded_vote": 0.7715259220552716
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-085",
+        "expected": {
+          "adapted_met": 0.8108556701030928,
+          "effective_clo": 0.1,
+          "public_vote": -2.103,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -103.51719618496452,
+          "unrounded_vote": -2.102898617925295
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 100.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-086",
+        "expected": {
+          "adapted_met": 0.9356701030927835,
+          "effective_clo": 0.7,
+          "public_vote": -0.316,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -23.62457345770521,
+          "unrounded_vote": -0.31646908927109185
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 20.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-087",
+        "expected": {
+          "adapted_met": 0.9793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": 0.331,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 10.202669154492547,
+          "unrounded_vote": 0.3306007552667781
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 100.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 20.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-088",
+        "expected": {
+          "adapted_met": 1.3339484536082473,
+          "effective_clo": 0.42366043782254814,
+          "public_vote": -0.872,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -33.10671561496616,
+          "unrounded_vote": -0.8720420693911634
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 100.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 20.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-089",
+        "expected": {
+          "adapted_met": 1.8190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": -0.716,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -31.828820524221815,
+          "unrounded_vote": -0.7160729375825736
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 20.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-090",
+        "expected": {
+          "adapted_met": 0.920618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -0.613,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -59.73443355202251,
+          "unrounded_vote": -0.6132092321508877
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-091",
+        "expected": {
+          "adapted_met": 1.0108556701030929,
+          "effective_clo": 2.0,
+          "public_vote": 0.589,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 1.2218135617508672,
+          "unrounded_vote": 0.5886344507940838
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 0.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 27.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-092",
+        "expected": {
+          "adapted_met": 1.0356701030927835,
+          "effective_clo": 0.6575195716856937,
+          "public_vote": -0.237,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -18.518177358654277,
+          "unrounded_vote": -0.23676071507240226
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 0.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 27.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-093",
+        "expected": {
+          "adapted_met": 1.379381443298969,
+          "effective_clo": 0.1,
+          "public_vote": -1.381,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -57.61689792123697,
+          "unrounded_vote": -1.3807906935172296
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 0.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 27.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-094",
+        "expected": {
+          "adapted_met": 1.8339484536082473,
+          "effective_clo": 0.7,
+          "public_vote": 0.286,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 37.51166988525223,
+          "unrounded_vote": 0.28621621739616354
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 0.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-095",
+        "expected": {
+          "adapted_met": 0.6190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 0.678,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 27.170382066786917,
+          "unrounded_vote": 0.6779312956733654
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-096",
+        "expected": {
+          "adapted_met": 1.120618556701031,
+          "effective_clo": 1.2931877053333767,
+          "public_vote": 0.13,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -22.084255445386535,
+          "unrounded_vote": 0.12994431152276525
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 27.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-097",
+        "expected": {
+          "adapted_met": 1.110855670103093,
+          "effective_clo": 0.1,
+          "public_vote": -2.057,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -90.12901179627892,
+          "unrounded_vote": -2.057482889139786
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 16.9,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 27.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-098",
+        "expected": {
+          "adapted_met": 1.4356701030927834,
+          "effective_clo": 0.7,
+          "public_vote": -0.025,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": -0.525413900855634,
+          "unrounded_vote": -0.025163592210658052
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 16.9,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 27.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-099",
+        "expected": {
+          "adapted_met": 1.879381443298969,
+          "effective_clo": 2.0,
+          "public_vote": 0.561,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 47.450450545072606,
+          "unrounded_vote": 0.5611892876036781
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-100",
+        "expected": {
+          "adapted_met": 0.6339484536082475,
+          "effective_clo": 0.5274018036457235,
+          "public_vote": 0.275,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 11.01209408363906,
+          "unrounded_vote": 0.27535097465662517
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 16.9,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-101",
+        "expected": {
+          "adapted_met": 0.8190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": 1.78,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 71.4096095548874,
+          "unrounded_vote": 1.7803966105134115
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 27.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-102",
+        "expected": {
+          "adapted_met": 1.220618556701031,
+          "effective_clo": 0.7,
+          "public_vote": -0.316,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -30.824686594349902,
+          "unrounded_vote": -0.316413537678045
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 27.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-103",
+        "expected": {
+          "adapted_met": 1.5108556701030929,
+          "effective_clo": 2.0,
+          "public_vote": 0.965,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 32.50557308429692,
+          "unrounded_vote": 0.9652068433474351
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 50.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 27.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-104",
+        "expected": {
+          "adapted_met": 1.9356701030927834,
+          "effective_clo": 0.6540405642474845,
+          "public_vote": 0.168,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 23.01413436453796,
+          "unrounded_vote": 0.16841153850965176
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-105",
+        "expected": {
+          "adapted_met": 0.6793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": -0.707,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -31.388016466872454,
+          "unrounded_vote": -0.7066889079095899
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 50.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-106",
+        "expected": {
+          "adapted_met": 0.8339484536082474,
+          "effective_clo": 0.7,
+          "public_vote": 0.691,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 28.82404314378826,
+          "unrounded_vote": 0.690975464998651
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 27.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-107",
+        "expected": {
+          "adapted_met": 0.9190721649484537,
+          "effective_clo": 2.0,
+          "public_vote": 0.842,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 39.058823780143484,
+          "unrounded_vote": 0.8417743655848114
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 27.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-108",
+        "expected": {
+          "adapted_met": 1.620618556701031,
+          "effective_clo": 1.7044786551322653,
+          "public_vote": 1.163,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 31.99394770346297,
+          "unrounded_vote": 1.1631344117393962
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 27.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-109",
+        "expected": {
+          "adapted_met": 2.010855670103093,
+          "effective_clo": 0.1,
+          "public_vote": -1.945,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": -52.11418307507302,
+          "unrounded_vote": -1.9447935253958715
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 87.7,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-110",
+        "expected": {
+          "adapted_met": 0.7356701030927836,
+          "effective_clo": 0.7,
+          "public_vote": 0.001,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -16.183531697472418,
+          "unrounded_vote": 0.0006003571659358373
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 87.7,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-111",
+        "expected": {
+          "adapted_met": 0.8793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": 0.737,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 23.602499763313826,
+          "unrounded_vote": 0.7374484500397066
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 87.7,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 27.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-112",
+        "expected": {
+          "adapted_met": 0.9339484536082475,
+          "effective_clo": 0.4801471005988077,
+          "public_vote": 0.353,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 17.779202982955645,
+          "unrounded_vote": 0.35335977589044804
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 87.7,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 27.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-113",
+        "expected": {
+          "adapted_met": 1.3190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": 0.546,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 36.92366188986044,
+          "unrounded_vote": 0.5458875661717629
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 27.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-114",
+        "expected": {
+          "adapted_met": 2.120618556701031,
+          "effective_clo": 0.7,
+          "public_vote": 0.057,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 19.641521697352204,
+          "unrounded_vote": 0.05656884390860223
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-115",
+        "expected": {
+          "adapted_met": 0.8108556701030928,
+          "effective_clo": 2.0,
+          "public_vote": 0.845,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 3.1790096004789645,
+          "unrounded_vote": 0.8446470570265939
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 100.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-116",
+        "expected": {
+          "adapted_met": 0.9356701030927835,
+          "effective_clo": 0.6579072686003388,
+          "public_vote": 0.203,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -4.281515786358678,
+          "unrounded_vote": 0.2032289086359152
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 27.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-117",
+        "expected": {
+          "adapted_met": 0.9793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": -0.912,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": -37.862823830899856,
+          "unrounded_vote": -0.9116489378174111
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 100.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 27.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-118",
+        "expected": {
+          "adapted_met": 1.3339484536082473,
+          "effective_clo": 0.7,
+          "public_vote": 0.529,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 33.84295778485644,
+          "unrounded_vote": 0.5288153409660438
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 100.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 27.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-119",
+        "expected": {
+          "adapted_met": 1.8190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 0.77,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 74.52864907919198,
+          "unrounded_vote": 0.7703190533419118
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 27.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-120",
+        "expected": {
+          "adapted_met": 0.920618556701031,
+          "effective_clo": 1.1579493599450408,
+          "public_vote": 0.706,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -13.999861741603752,
+          "unrounded_vote": 0.7058781794341672
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-121",
+        "expected": {
+          "adapted_met": 1.0108556701030929,
+          "effective_clo": 0.1,
+          "public_vote": -0.213,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -27.621237911711138,
+          "unrounded_vote": -0.21270271378662756
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 0.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 38.5,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-122",
+        "expected": {
+          "adapted_met": 1.0356701030927835,
+          "effective_clo": 0.7,
+          "public_vote": 1.101,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 32.132775915636934,
+          "unrounded_vote": 1.1005245919587325
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 0.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 38.5,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-123",
+        "expected": {
+          "adapted_met": 1.379381443298969,
+          "effective_clo": 2.0,
+          "public_vote": 1.142,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 55.23277762246244,
+          "unrounded_vote": 1.1418665431294337
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 0.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 38.5,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-124",
+        "expected": {
+          "adapted_met": 1.8339484536082473,
+          "effective_clo": 0.3623034008709053,
+          "public_vote": 1.512,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 119.67161097005402,
+          "unrounded_vote": 1.5117920743854465
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 0.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-125",
+        "expected": {
+          "adapted_met": 0.6190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": 2.709,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 95.58457369651495,
+          "unrounded_vote": 2.7087406109309953
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-126",
+        "expected": {
+          "adapted_met": 1.120618556701031,
+          "effective_clo": 0.7,
+          "public_vote": 0.336,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": -15.36261992158638,
+          "unrounded_vote": 0.33554326666283774
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 38.5,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-127",
+        "expected": {
+          "adapted_met": 1.110855670103093,
+          "effective_clo": 2.0,
+          "public_vote": 1.488,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 37.143398065549455,
+          "unrounded_vote": 1.488481641637957
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 16.9,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 38.5,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-128",
+        "expected": {
+          "adapted_met": 1.4356701030927834,
+          "effective_clo": 0.6559710673329174,
+          "public_vote": 1.556,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 63.88925800913658,
+          "unrounded_vote": 1.555586439092837
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 16.9,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 38.5,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-129",
+        "expected": {
+          "adapted_met": 1.879381443298969,
+          "effective_clo": 0.1,
+          "public_vote": 1.964,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 125.44145851497943,
+          "unrounded_vote": 1.9642972905018206
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-130",
+        "expected": {
+          "adapted_met": 0.6339484536082475,
+          "effective_clo": 0.7,
+          "public_vote": 1.064,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 37.884648589511244,
+          "unrounded_vote": 1.0636292928943596
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 16.9,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-131",
+        "expected": {
+          "adapted_met": 0.8190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 1.419,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 58.064665364046746,
+          "unrounded_vote": 1.4192032074593515
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 38.5,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-132",
+        "expected": {
+          "adapted_met": 1.220618556701031,
+          "effective_clo": 1.366619354383117,
+          "public_vote": 1.822,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 37.15621553167873,
+          "unrounded_vote": 1.8222886305634112
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 38.5,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-133",
+        "expected": {
+          "adapted_met": 1.5108556701030929,
+          "effective_clo": 0.1,
+          "public_vote": 2.001,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 69.25181557247326,
+          "unrounded_vote": 2.0005466067908433
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 50.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 38.5,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-134",
+        "expected": {
+          "adapted_met": 1.9356701030927834,
+          "effective_clo": 0.7,
+          "public_vote": 1.789,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 95.98981781404903,
+          "unrounded_vote": 1.789421640826546
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-135",
+        "expected": {
+          "adapted_met": 0.6793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": 0.929,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 26.092223586744026,
+          "unrounded_vote": 0.929373357281735
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 50.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-136",
+        "expected": {
+          "adapted_met": 0.8339484536082474,
+          "effective_clo": 0.4954084508854714,
+          "public_vote": 1.623,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 63.43208407890987,
+          "unrounded_vote": 1.6230088205455653
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 38.5,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-137",
+        "expected": {
+          "adapted_met": 0.9190721649484537,
+          "effective_clo": 0.1,
+          "public_vote": 3.618,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 146.83244964063675,
+          "unrounded_vote": 3.6176873417920277
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 38.5,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-138",
+        "expected": {
+          "adapted_met": 1.620618556701031,
+          "effective_clo": 0.7,
+          "public_vote": 2.529,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 71.06820550256525,
+          "unrounded_vote": 2.52882419396298
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 38.5,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-139",
+        "expected": {
+          "adapted_met": 2.010855670103093,
+          "effective_clo": 2.0,
+          "public_vote": 2.386,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 99.47997415011535,
+          "unrounded_vote": 2.3859644831275313
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 87.7,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-140",
+        "expected": {
+          "adapted_met": 0.7356701030927836,
+          "effective_clo": 0.6586833483640705,
+          "public_vote": 0.951,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 18.006178497269087,
+          "unrounded_vote": 0.9510160779705865
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 87.7,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-141",
+        "expected": {
+          "adapted_met": 0.8793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": 1.147,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 38.925638851096956,
+          "unrounded_vote": 1.1468465354223332
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 87.7,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 38.5,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-142",
+        "expected": {
+          "adapted_met": 0.9339484536082475,
+          "effective_clo": 0.7,
+          "public_vote": 2.016,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 82.41710379091398,
+          "unrounded_vote": 2.016473863639323
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 87.7,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 38.5,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-143",
+        "expected": {
+          "adapted_met": 1.3190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 1.716,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 93.9618196846748,
+          "unrounded_vote": 1.7163496823012212
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 38.5,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-144",
+        "expected": {
+          "adapted_met": 2.120618556701031,
+          "effective_clo": 2.2465783380244395,
+          "public_vote": 3.319,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 102.61574860141327,
+          "unrounded_vote": 3.318670549947285
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-145",
+        "expected": {
+          "adapted_met": 0.8108556701030928,
+          "effective_clo": 0.1,
+          "public_vote": 0.329,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -15.495216696612703,
+          "unrounded_vote": 0.3287605308857094
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 100.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-146",
+        "expected": {
+          "adapted_met": 0.9356701030927835,
+          "effective_clo": 0.7,
+          "public_vote": 1.277,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 35.69263429370086,
+          "unrounded_vote": 1.2772310709421908
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 38.5,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-147",
+        "expected": {
+          "adapted_met": 0.9793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": 1.755,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 65.32308849728507,
+          "unrounded_vote": 1.755184583670776
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 100.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 38.5,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-148",
+        "expected": {
+          "adapted_met": 1.3339484536082473,
+          "effective_clo": 0.42366043782254814,
+          "public_vote": 2.37,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 121.84301129618092,
+          "unrounded_vote": 2.37013167326493
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 100.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 38.5,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-149",
+        "expected": {
+          "adapted_met": 1.8190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": 2.987,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 233.13735332416857,
+          "unrounded_vote": 2.9869448207631093
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 38.5,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-150",
+        "expected": {
+          "adapted_met": 0.920618556701031,
+          "effective_clo": 0.7,
+          "public_vote": 0.38,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": -25.2986262145116,
+          "unrounded_vote": 0.3799965237698649
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-151",
+        "expected": {
+          "adapted_met": 1.0108556701030929,
+          "effective_clo": 2.0,
+          "public_vote": 1.09,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 19.2642777840869,
+          "unrounded_vote": 1.0899023951819493
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 0.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 40.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-152",
+        "expected": {
+          "adapted_met": 1.0356701030927835,
+          "effective_clo": 0.6575195716856937,
+          "public_vote": 1.268,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 38.4673160037269,
+          "unrounded_vote": 1.267768974127193
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 0.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 40.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-153",
+        "expected": {
+          "adapted_met": 1.379381443298969,
+          "effective_clo": 0.1,
+          "public_vote": 2.354,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 109.43810948750489,
+          "unrounded_vote": 2.35358001979984
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 0.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 40.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-154",
+        "expected": {
+          "adapted_met": 1.8339484536082473,
+          "effective_clo": 0.7,
+          "public_vote": 1.337,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 107.95856246677758,
+          "unrounded_vote": 1.3370690978616047
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 0.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-155",
+        "expected": {
+          "adapted_met": 0.6190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 1.187,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 44.335392874767145,
+          "unrounded_vote": 1.1874580914295385
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 0.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-156",
+        "expected": {
+          "adapted_met": 1.120618556701031,
+          "effective_clo": 1.2931877053333767,
+          "public_vote": 1.005,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 6.521643077343128,
+          "unrounded_vote": 1.0049311843294413
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 40.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-157",
+        "expected": {
+          "adapted_met": 1.110855670103093,
+          "effective_clo": 0.1,
+          "public_vote": 1.142,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 24.717978809089303,
+          "unrounded_vote": 1.1422943099823077
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 16.9,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 40.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-158",
+        "expected": {
+          "adapted_met": 1.4356701030927834,
+          "effective_clo": 0.7,
+          "public_vote": 1.752,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 71.88793523913728,
+          "unrounded_vote": 1.7518757146072368
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 16.9,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 40.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-159",
+        "expected": {
+          "adapted_met": 1.879381443298969,
+          "effective_clo": 2.0,
+          "public_vote": 1.187,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 82.2501470572901,
+          "unrounded_vote": 1.1872580350874824
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-160",
+        "expected": {
+          "adapted_met": 0.6339484536082475,
+          "effective_clo": 0.5274018036457235,
+          "public_vote": 1.247,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 44.14346100101908,
+          "unrounded_vote": 1.2472250177008994
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.8,
+          "rh_pct": 16.9,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-161",
+        "expected": {
+          "adapted_met": 0.8190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": 3.118,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 120.82055769467696,
+          "unrounded_vote": 3.117750161904624
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 16.9,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 40.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-162",
+        "expected": {
+          "adapted_met": 1.220618556701031,
+          "effective_clo": 0.7,
+          "public_vote": 1.682,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 32.70389343934959,
+          "unrounded_vote": 1.6822170720112661
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 40.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-163",
+        "expected": {
+          "adapted_met": 1.5108556701030929,
+          "effective_clo": 2.0,
+          "public_vote": 2.087,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 72.31931292005717,
+          "unrounded_vote": 2.0869745450822945
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 50.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 40.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-164",
+        "expected": {
+          "adapted_met": 1.9356701030927834,
+          "effective_clo": 0.6540405642474845,
+          "public_vote": 2.026,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 106.65439022420716,
+          "unrounded_vote": 2.0263139698407273
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 2.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-165",
+        "expected": {
+          "adapted_met": 0.6793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": 0.768,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 20.405811188453356,
+          "unrounded_vote": 0.7675207842847972
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 50.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-166",
+        "expected": {
+          "adapted_met": 0.8339484536082474,
+          "effective_clo": 0.7,
+          "public_vote": 1.655,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 64.63605289598341,
+          "unrounded_vote": 1.655433051048949
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 50.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 40.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-167",
+        "expected": {
+          "adapted_met": 0.9190721649484537,
+          "effective_clo": 2.0,
+          "public_vote": 1.692,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 72.0619942233366,
+          "unrounded_vote": 1.6918332585446447
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 50.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 40.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-168",
+        "expected": {
+          "adapted_met": 1.620618556701031,
+          "effective_clo": 1.7044786551322653,
+          "public_vote": 2.956,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 83.30173286043882,
+          "unrounded_vote": 2.956399898640458
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 40.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-169",
+        "expected": {
+          "adapted_met": 2.010855670103093,
+          "effective_clo": 0.1,
+          "public_vote": 3.43,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 136.01303035496323,
+          "unrounded_vote": 3.4296447187711507
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 87.7,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-170",
+        "expected": {
+          "adapted_met": 0.7356701030927836,
+          "effective_clo": 0.7,
+          "public_vote": 1.135,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 24.614977137062763,
+          "unrounded_vote": 1.134729425849691
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 87.7,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-171",
+        "expected": {
+          "adapted_met": 0.8793814432989691,
+          "effective_clo": 2.0,
+          "public_vote": 1.508,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 52.43259879061218,
+          "unrounded_vote": 1.5077206035162616
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 1.0,
+          "rh_pct": 87.7,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 40.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-172",
+        "expected": {
+          "adapted_met": 0.9339484536082475,
+          "effective_clo": 0.4801471005988077,
+          "public_vote": 2.428,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 98.41319451719176,
+          "unrounded_vote": 2.4280485512954266
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1,
+          "rh_pct": 87.7,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 40.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-173",
+        "expected": {
+          "adapted_met": 1.3190721649484536,
+          "effective_clo": 0.1,
+          "public_vote": 4.269,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 218.3497412989346,
+          "unrounded_vote": 4.268875142140116
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 87.7,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 40.0,
+          "tr_c": 50.0
+        }
+      },
+      {
+        "case_id": "dense-174",
+        "expected": {
+          "adapted_met": 2.120618556701031,
+          "effective_clo": 0.7,
+          "public_vote": 3.63,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 110.54352530923221,
+          "unrounded_vote": 3.630348222504233
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": -30.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 0.0
+        }
+      },
+      {
+        "case_id": "dense-175",
+        "expected": {
+          "adapted_met": 0.8108556701030928,
+          "effective_clo": 2.0,
+          "public_vote": 1.758,
+          "relative_air_speed_m_s": 0.0,
+          "thermal_load_w_m2": 36.24331508218832,
+          "unrounded_vote": 1.7580680160987554
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 0.8,
+          "rh_pct": 100.0,
+          "running_mean_c": -2.7,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 12.6
+        }
+      },
+      {
+        "case_id": "dense-176",
+        "expected": {
+          "adapted_met": 0.9356701030927835,
+          "effective_clo": 0.6579072686003388,
+          "public_vote": 1.428,
+          "relative_air_speed_m_s": 0.1,
+          "thermal_load_w_m2": 41.28682295630695,
+          "unrounded_vote": 1.4275324709208055
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 16.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.1
+          },
+          "tdb_c": 40.0,
+          "tr_c": 20.0
+        }
+      },
+      {
+        "case_id": "dense-177",
+        "expected": {
+          "adapted_met": 0.9793814432989691,
+          "effective_clo": 0.1,
+          "public_vote": 2.378,
+          "relative_air_speed_m_s": 0.73,
+          "thermal_load_w_m2": 89.43243192008612,
+          "unrounded_vote": 2.378289073133476
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.1,
+            "kind": "fixed"
+          },
+          "met": 1.1,
+          "rh_pct": 100.0,
+          "running_mean_c": 30.0,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7
+          },
+          "tdb_c": 40.0,
+          "tr_c": 27.0
+        }
+      },
+      {
+        "case_id": "dense-178",
+        "expected": {
+          "adapted_met": 1.3339484536082473,
+          "effective_clo": 0.7,
+          "public_vote": 2.325,
+          "relative_air_speed_m_s": 1.9,
+          "thermal_load_w_m2": 119.67018158403991,
+          "unrounded_vote": 2.32466730504435
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.7,
+            "kind": "fixed"
+          },
+          "met": 1.5,
+          "rh_pct": 100.0,
+          "running_mean_c": 41.3,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.9
+          },
+          "tdb_c": 40.0,
+          "tr_c": 38.5
+        }
+      },
+      {
+        "case_id": "dense-179",
+        "expected": {
+          "adapted_met": 1.8190721649484536,
+          "effective_clo": 2.0,
+          "public_vote": 1.466,
+          "relative_air_speed_m_s": 2.0,
+          "thermal_load_w_m2": 124.33610752740958,
+          "unrounded_vote": 1.466399992478495
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 2.0,
+            "kind": "fixed"
+          },
+          "met": 2.0,
+          "rh_pct": 100.0,
+          "running_mean_c": 45.0,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 2.0
+          },
+          "tdb_c": 40.0,
+          "tr_c": 50.0
+        }
+      }
+    ]
+  },
+  "fixture_kind": "athb_forward",
+  "formulation_id": "athb_2022_ptc_4_4_2",
+  "named_cases": [
+    {
+      "case_id": "published-forward-anchor",
+      "expected": {
+        "adapted_met": 1.1195876288659794,
+        "effective_clo": 0.6196592662892141,
+        "public_vote": 0.206,
+        "relative_air_speed_m_s": 0.1,
+        "thermal_load_w_m2": 2.445656581763135,
+        "unrounded_vote": 0.20625179757427767
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.2,
+        "rh_pct": 50.0,
+        "running_mean_c": 20.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 25.0,
+        "tr_c": 25.0
+      }
+    },
+    {
+      "case_id": "baseline-current-sensation",
+      "expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.173,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -20.25383222487648,
+        "unrounded_vote": -0.17308845704988404
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      }
+    },
+    {
+      "case_id": "near-balanced-target",
+      "expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.233,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -22.47599300206476,
+        "unrounded_vote": -0.23344521023117604
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 51.5759274364,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 19.5,
+        "tr_c": 19.5
+      }
+    },
+    {
+      "case_id": "below-comfort-band",
+      "expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.653,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -37.92535787703031,
+        "unrounded_vote": -0.65306988911957
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 64.3079856685,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 16.0,
+        "tr_c": 16.0
+      }
+    },
+    {
+      "case_id": "winter-current-sensation",
+      "expected": {
+        "adapted_met": 1.1402061855670105,
+        "effective_clo": 0.9693533682699977,
+        "public_vote": 0.207,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": -10.864055917469482,
+        "unrounded_vote": 0.20671480116953517
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": -10.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      }
+    },
+    {
+      "case_id": "humid-current-sensation",
+      "expected": {
+        "adapted_met": 0.9994845360824743,
+        "effective_clo": 0.583755207826335,
+        "public_vote": 0.564,
+        "relative_air_speed_m_s": 0.13,
+        "thermal_load_w_m2": 16.447610236404568,
+        "unrounded_vote": 0.5639479489801329
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 80.0,
+        "running_mean_c": 25.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 28.0,
+        "tr_c": 28.0
+      }
+    },
+    {
+      "case_id": "fixed-clothing-low",
+      "expected": {
+        "adapted_met": 1.2276288659793815,
+        "effective_clo": 0.1,
+        "public_vote": -1.022,
+        "relative_air_speed_m_s": 0.2,
+        "thermal_load_w_m2": -44.56567372462365,
+        "unrounded_vote": -1.022391313593863
+      },
+      "inputs": {
+        "clothing": {
+          "clo": 0.1,
+          "kind": "fixed"
+        },
+        "met": 1.3,
+        "rh_pct": 35.0,
+        "running_mean_c": 18.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.2
+        },
+        "tdb_c": 24.0,
+        "tr_c": 22.0
+      }
+    },
+    {
+      "case_id": "fixed-clothing-high",
+      "expected": {
+        "adapted_met": 0.9,
+        "effective_clo": 2.0,
+        "public_vote": 0.575,
+        "relative_air_speed_m_s": 0.05,
+        "thermal_load_w_m2": -1.634113048596177,
+        "unrounded_vote": 0.5747184798587454
+      },
+      "inputs": {
+        "clothing": {
+          "clo": 2.0,
+          "kind": "fixed"
+        },
+        "met": 0.9,
+        "rh_pct": 65.0,
+        "running_mean_c": 0.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.05
+        },
+        "tdb_c": 18.0,
+        "tr_c": 20.0
+      }
+    },
+    {
+      "case_id": "ambient-speed-stationary-branch",
+      "expected": {
+        "adapted_met": 0.9517525773195876,
+        "effective_clo": 0.6920324473770474,
+        "public_vote": -0.412,
+        "relative_air_speed_m_s": 0.4,
+        "thermal_load_w_m2": -29.084080392544365,
+        "unrounded_vote": -0.411853173112091
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.0,
+        "rh_pct": 45.0,
+        "running_mean_c": 12.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.4
+        },
+        "tdb_c": 22.0,
+        "tr_c": 22.0
+      }
+    },
+    {
+      "case_id": "ambient-speed-moving-branch",
+      "expected": {
+        "adapted_met": 1.6517525773195876,
+        "effective_clo": 0.713001523342434,
+        "public_vote": -0.226,
+        "relative_air_speed_m_s": 0.61,
+        "thermal_load_w_m2": -3.4414810143348764,
+        "unrounded_vote": -0.22633015632881137
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.7,
+        "rh_pct": 45.0,
+        "running_mean_c": 12.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.4
+        },
+        "tdb_c": 22.0,
+        "tr_c": 22.0
+      }
+    },
+    {
+      "case_id": "relative-air-speed-numpy-tie-even",
+      "expected": {
+        "adapted_met": 1.4517525773195876,
+        "effective_clo": 0.7069463519458378,
+        "public_vote": -0.287,
+        "relative_air_speed_m_s": 0.616,
+        "thermal_load_w_m2": -11.58305216887868,
+        "unrounded_vote": -0.28712997074875846
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.5,
+        "rh_pct": 45.0,
+        "running_mean_c": 12.0,
+        "speed": {
+          "kind": "ambient",
+          "value_m_s": 0.4665
+        },
+        "tdb_c": 22.0,
+        "tr_c": 22.0
+      }
+    },
+    {
+      "case_id": "public-vote-numpy-tie-even",
+      "expected": {
+        "adapted_met": 1.1195876288659794,
+        "effective_clo": 0.6196592662892141,
+        "public_vote": -1.186,
+        "relative_air_speed_m_s": 0.1,
+        "thermal_load_w_m2": -51.92846665667432,
+        "unrounded_vote": -1.1864999999999983
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.2,
+        "rh_pct": 29.499923881562744,
+        "running_mean_c": 20.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 15.0,
+        "tr_c": 15.0
+      }
+    },
+    {
+      "case_id": "public-vote-upstream-binary64-straddle",
+      "expected": {
+        "adapted_met": 1.1195876288659794,
+        "effective_clo": 0.6196592662892141,
+        "public_vote": -1.285,
+        "relative_air_speed_m_s": 0.1,
+        "thermal_load_w_m2": -55.793504353973056,
+        "unrounded_vote": -1.2854999999999959
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.2,
+        "rh_pct": 50.0,
+        "running_mean_c": 20.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 14.005708558508,
+        "tr_c": 14.005708558508
+      }
+    },
+    {
+      "case_id": "zero-relative-air-speed",
+      "expected": {
+        "adapted_met": 1.079896907216495,
+        "effective_clo": 0.7686561169335108,
+        "public_vote": -0.123,
+        "relative_air_speed_m_s": 0.0,
+        "thermal_load_w_m2": -18.417814301114284,
+        "unrounded_vote": -0.12321984187202124
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 50.0,
+        "running_mean_c": 5.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.0
+        },
+        "tdb_c": 20.0,
+        "tr_c": 20.0
+      }
+    },
+    {
+      "case_id": "relative-humidity-zero",
+      "expected": {
+        "adapted_met": 1.0356701030927835,
+        "effective_clo": 0.6575195716856937,
+        "public_vote": -0.403,
+        "relative_air_speed_m_s": 0.1,
+        "thermal_load_w_m2": -24.804459071689685,
+        "unrounded_vote": -0.4027309807291328
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 0.0,
+        "running_mean_c": 16.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 21.0,
+        "tr_c": 21.0
+      }
+    },
+    {
+      "case_id": "relative-humidity-hundred",
+      "expected": {
+        "adapted_met": 1.0356701030927835,
+        "effective_clo": 0.6575195716856937,
+        "public_vote": -0.135,
+        "relative_air_speed_m_s": 0.1,
+        "thermal_load_w_m2": -14.6767337105101,
+        "unrounded_vote": -0.13533900795008597
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.1,
+        "rh_pct": 100.0,
+        "running_mean_c": 16.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.1
+        },
+        "tdb_c": 21.0,
+        "tr_c": 21.0
+      }
+    },
+    {
+      "case_id": "engineering-lower-temperature-boundaries",
+      "expected": {
+        "adapted_met": 0.920618556701031,
+        "effective_clo": 0.1,
+        "public_vote": -5.38,
+        "relative_air_speed_m_s": 0.0,
+        "thermal_load_w_m2": -224.99677016655588,
+        "unrounded_vote": -5.37974490107567
+      },
+      "inputs": {
+        "clothing": {
+          "clo": 0.1,
+          "kind": "fixed"
+        },
+        "met": 0.8,
+        "rh_pct": 0.0,
+        "running_mean_c": -30.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.0
+        },
+        "tdb_c": 5.0,
+        "tr_c": 0.0
+      }
+    },
+    {
+      "case_id": "engineering-upper-temperature-boundaries",
+      "expected": {
+        "adapted_met": 1.8190721649484536,
+        "effective_clo": 2.0,
+        "public_vote": 1.466,
+        "relative_air_speed_m_s": 2.0,
+        "thermal_load_w_m2": 124.33610752740958,
+        "unrounded_vote": 1.466399992478495
+      },
+      "inputs": {
+        "clothing": {
+          "clo": 2.0,
+          "kind": "fixed"
+        },
+        "met": 2.0,
+        "rh_pct": 100.0,
+        "running_mean_c": 45.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 2.0
+        },
+        "tdb_c": 40.0,
+        "tr_c": 50.0
+      }
+    },
+    {
+      "case_id": "divergent-cold-mrt",
+      "expected": {
+        "adapted_met": 1.1597938144329896,
+        "effective_clo": 0.7197366336139281,
+        "public_vote": 0.01,
+        "relative_air_speed_m_s": 0.15,
+        "thermal_load_w_m2": -8.89658562491628,
+        "unrounded_vote": 0.009529056104450317
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.2,
+        "rh_pct": 55.0,
+        "running_mean_c": 10.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.15
+        },
+        "tdb_c": 26.0,
+        "tr_c": 16.8
+      }
+    },
+    {
+      "case_id": "divergent-warm-mrt",
+      "expected": {
+        "adapted_met": 1.1597938144329896,
+        "effective_clo": 0.7197366336139281,
+        "public_vote": -0.559,
+        "relative_air_speed_m_s": 0.15,
+        "thermal_load_w_m2": -30.369806097394793,
+        "unrounded_vote": -0.559299985499313
+      },
+      "inputs": {
+        "clothing": {
+          "kind": "automatic"
+        },
+        "met": 1.2,
+        "rh_pct": 55.0,
+        "running_mean_c": 10.0,
+        "speed": {
+          "kind": "relative",
+          "value_m_s": 0.15
+        },
+        "tdb_c": 14.0,
+        "tr_c": 23.2
+      }
+    }
+  ],
+  "numerical_contract_version": 1,
+  "oracle": {
+    "package": "pythermalcomfort==4.4.2",
+    "repository_commit": "2597e88fed10fec2f40d49759ed9b74e10ce9f89",
+    "transformation": "remove only pmv_athb final three-decimal rounding"
+  },
+  "quantization_boundary_case_ids": [
+    "relative-air-speed-numpy-tie-even",
+    "public-vote-numpy-tie-even",
+    "public-vote-upstream-binary64-straddle"
+  ],
+  "seeded_random": {
+    "cases": [
+      {
+        "case_id": "seeded-000",
+        "expected": {
+          "adapted_met": 1.8744642131371105,
+          "effective_clo": 0.7945899884418773,
+          "public_vote": -0.882,
+          "relative_air_speed_m_s": 1.6178483307891645,
+          "thermal_load_w_m2": -22.834767941806,
+          "unrounded_vote": -0.882243653155733
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.9060571864885139,
+          "rh_pct": 9.128609793273512,
+          "running_mean_c": 7.857739525861845,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.6178483307891645
+          },
+          "tdb_c": 17.675389204432715,
+          "tr_c": 22.428867554035403
+        }
+      },
+      {
+        "case_id": "seeded-001",
+        "expected": {
+          "adapted_met": 0.91177549801134,
+          "effective_clo": 0.8784462110203548,
+          "public_vote": -0.895,
+          "relative_air_speed_m_s": 0.9779657014132697,
+          "thermal_load_w_m2": -55.411898590019895,
+          "unrounded_vote": -0.8951369297120508
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.8784462110203548,
+            "kind": "fixed"
+          },
+          "met": 0.9048826197142383,
+          "rh_pct": 75.23126937816068,
+          "running_mean_c": -1.7143825508175752,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.9779657014132697
+          },
+          "tdb_c": 9.75673112944013,
+          "tr_c": 38.10551623612528
+        }
+      },
+      {
+        "case_id": "seeded-002",
+        "expected": {
+          "adapted_met": 1.443832589618981,
+          "effective_clo": 0.5555340082769025,
+          "public_vote": 1.127,
+          "relative_air_speed_m_s": 1.349,
+          "thermal_load_w_m2": 53.07435559737777,
+          "unrounded_vote": 1.1269336089288897
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5440038908917755,
+          "rh_pct": 48.57982224613231,
+          "running_mean_c": 24.914400572977094,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.18612594209977
+          },
+          "tdb_c": 27.85875102913549,
+          "tr_c": 47.40786198744754
+        }
+      },
+      {
+        "case_id": "seeded-003",
+        "expected": {
+          "adapted_met": 0.831817153291543,
+          "effective_clo": 1.2519481972128665,
+          "public_vote": 1.724,
+          "relative_air_speed_m_s": 0.912384302284561,
+          "thermal_load_w_m2": 65.73498137477067,
+          "unrounded_vote": 1.7236028498416298
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.2519481972128665,
+            "kind": "fixed"
+          },
+          "met": 0.9904107638055452,
+          "rh_pct": 80.33470568109338,
+          "running_mean_c": 39.44507748681589,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.912384302284561
+          },
+          "tdb_c": 38.807811919844994,
+          "tr_c": 37.649233128955046
+        }
+      },
+      {
+        "case_id": "seeded-004",
+        "expected": {
+          "adapted_met": 1.9636077530772449,
+          "effective_clo": 1.8567651505501583,
+          "public_vote": 0.758,
+          "relative_air_speed_m_s": 0.535,
+          "thermal_load_w_m2": 33.548593813800075,
+          "unrounded_vote": 0.758470720375191
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.8597290037412586,
+          "rh_pct": 66.5502219748226,
+          "running_mean_c": -25.836509450232484,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.27659581390571253
+          },
+          "tdb_c": 25.39666159649592,
+          "tr_c": 1.245484605382785
+        }
+      },
+      {
+        "case_id": "seeded-005",
+        "expected": {
+          "adapted_met": 1.3893053711980254,
+          "effective_clo": 0.547963453271334,
+          "public_vote": -1.62,
+          "relative_air_speed_m_s": 1.27,
+          "thermal_load_w_m2": -66.68614781867082,
+          "unrounded_vote": -1.6202860573411606
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.547963453271334,
+            "kind": "fixed"
+          },
+          "met": 1.4671750951927733,
+          "rh_pct": 34.63545371884397,
+          "running_mean_c": 19.367598019206532,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.1297474082917724
+          },
+          "tdb_c": 11.466346946186938,
+          "tr_c": 38.373932470495966
+        }
+      },
+      {
+        "case_id": "seeded-006",
+        "expected": {
+          "adapted_met": 1.6568512518894494,
+          "effective_clo": 1.2984596228915717,
+          "public_vote": 1.0,
+          "relative_air_speed_m_s": 0.958538847959427,
+          "thermal_load_w_m2": 33.210740214693445,
+          "unrounded_vote": 0.9998592859851074
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.5915709733730827,
+          "rh_pct": 68.6397749720177,
+          "running_mean_c": -16.23637696432708,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.958538847959427
+          },
+          "tdb_c": 24.521325589212406,
+          "tr_c": 27.088354029061286
+        }
+      },
+      {
+        "case_id": "seeded-007",
+        "expected": {
+          "adapted_met": 0.9289252878693711,
+          "effective_clo": 1.5486782216111017,
+          "public_vote": -0.323,
+          "relative_air_speed_m_s": 1.382,
+          "thermal_load_w_m2": -12.69684936621394,
+          "unrounded_vote": -0.3230502212375497
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.5486782216111017,
+            "kind": "fixed"
+          },
+          "met": 1.0684093013134035,
+          "rh_pct": 69.23808921535861,
+          "running_mean_c": 34.692177702746505,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.3618572341513653
+          },
+          "tdb_c": 17.622509876701628,
+          "tr_c": 28.58904822177405
+        }
+      },
+      {
+        "case_id": "seeded-008",
+        "expected": {
+          "adapted_met": 1.0662154948414384,
+          "effective_clo": 0.7425456695295677,
+          "public_vote": 1.372,
+          "relative_air_speed_m_s": 1.622,
+          "thermal_load_w_m2": 37.65267798539203,
+          "unrounded_vote": 1.3716642511693127
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0957054767863617,
+          "rh_pct": 32.893734694162816,
+          "running_mean_c": 7.334687817070666,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.5937788862542486
+          },
+          "tdb_c": 29.244715780838757,
+          "tr_c": 45.35622395139724
+        }
+      },
+      {
+        "case_id": "seeded-009",
+        "expected": {
+          "adapted_met": 0.7094752260558408,
+          "effective_clo": 1.1307300770436377,
+          "public_vote": -0.672,
+          "relative_air_speed_m_s": 0.8292335135992712,
+          "thermal_load_w_m2": -30.690178889952577,
+          "unrounded_vote": -0.6722608131848367
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.1307300770436377,
+            "kind": "fixed"
+          },
+          "met": 0.8266379984160889,
+          "rh_pct": 17.208922958484784,
+          "running_mean_c": 29.14048440754889,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.8292335135992712
+          },
+          "tdb_c": 16.26474334774207,
+          "tr_c": 38.399343379017445
+        }
+      },
+      {
+        "case_id": "seeded-010",
+        "expected": {
+          "adapted_met": 1.3054480484229891,
+          "effective_clo": 0.7160823433868446,
+          "public_vote": 1.483,
+          "relative_air_speed_m_s": 1.275,
+          "thermal_load_w_m2": 52.393148780642015,
+          "unrounded_vote": 1.482681111625942
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.349171856290119,
+          "rh_pct": 56.07241519028082,
+          "running_mean_c": 10.874895802850254,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.169906642372073
+          },
+          "tdb_c": 27.791711067206315,
+          "tr_c": 48.98828295645473
+        }
+      },
+      {
+        "case_id": "seeded-011",
+        "expected": {
+          "adapted_met": 1.084180098091238,
+          "effective_clo": 0.3853507387492008,
+          "public_vote": 1.811,
+          "relative_air_speed_m_s": 1.733,
+          "thermal_load_w_m2": 55.157106812538515,
+          "unrounded_vote": 1.811306965768702
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.3853507387492008,
+            "kind": "fixed"
+          },
+          "met": 1.117047545963868,
+          "rh_pct": 95.5704758640048,
+          "running_mean_c": 8.174724214474665,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.6981678463121823
+          },
+          "tdb_c": 32.93299187461284,
+          "tr_c": 35.94872114232175
+        }
+      },
+      {
+        "case_id": "seeded-012",
+        "expected": {
+          "adapted_met": 1.3092640305319228,
+          "effective_clo": 1.3943275654475444,
+          "public_vote": 3.115,
+          "relative_air_speed_m_s": 1.0085398055703212,
+          "thermal_load_w_m2": 81.7355510798522,
+          "unrounded_vote": 3.1152007917996904
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1954756583708583,
+          "rh_pct": 87.53813166721842,
+          "running_mean_c": -28.301210511854485,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.0085398055703212
+          },
+          "tdb_c": 35.964243204564426,
+          "tr_c": 40.469510810157765
+        }
+      },
+      {
+        "case_id": "seeded-013",
+        "expected": {
+          "adapted_met": 1.5351364206294744,
+          "effective_clo": 1.5426135372238365,
+          "public_vote": -1.167,
+          "relative_air_speed_m_s": 1.791,
+          "thermal_load_w_m2": -39.770243454188204,
+          "unrounded_vote": -1.1673253351839492
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.5426135372238365,
+            "kind": "fixed"
+          },
+          "met": 1.436843695336108,
+          "rh_pct": 68.76414186933148,
+          "running_mean_c": -24.447165008862967,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.6595845013866
+          },
+          "tdb_c": 6.9888638766801705,
+          "tr_c": 10.023120945462788
+        }
+      },
+      {
+        "case_id": "seeded-014",
+        "expected": {
+          "adapted_met": 1.227920924571888,
+          "effective_clo": 0.9406946314879845,
+          "public_vote": 0.489,
+          "relative_air_speed_m_s": 0.19,
+          "thermal_load_w_m2": 3.9310323932394624,
+          "unrounded_vote": 0.4890540778188592
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.2020649662723812,
+          "rh_pct": 0.6861635482358186,
+          "running_mean_c": -6.430840910390135,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.12980970062994857
+          },
+          "tdb_c": 9.649489929558626,
+          "tr_c": 42.767290173491496
+        }
+      },
+      {
+        "case_id": "seeded-015",
+        "expected": {
+          "adapted_met": 0.7634582008625989,
+          "effective_clo": 1.5231185867921353,
+          "public_vote": -1.999,
+          "relative_air_speed_m_s": 0.5874993544759115,
+          "thermal_load_w_m2": -67.4871088711782,
+          "unrounded_vote": -1.9993245469687806
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.5231185867921353,
+            "kind": "fixed"
+          },
+          "met": 0.9399773279720028,
+          "rh_pct": 70.21986296058792,
+          "running_mean_c": 43.90347520413381,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.5874993544759115
+          },
+          "tdb_c": 6.205975543117707,
+          "tr_c": 8.599026702246714
+        }
+      },
+      {
+        "case_id": "seeded-016",
+        "expected": {
+          "adapted_met": 1.0611099469722451,
+          "effective_clo": 0.6541960003082268,
+          "public_vote": -0.005,
+          "relative_air_speed_m_s": 0.974,
+          "thermal_load_w_m2": -8.975720446467012,
+          "unrounded_vote": -0.0053631272131623095
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1268528207725355,
+          "rh_pct": 77.15810011246018,
+          "running_mean_c": 16.35143271443119,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.9357030537196582
+          },
+          "tdb_c": 28.587895450336855,
+          "tr_c": 13.143676848529006
+        }
+      },
+      {
+        "case_id": "seeded-017",
+        "expected": {
+          "adapted_met": 1.1654033573489457,
+          "effective_clo": 1.7647383914005415,
+          "public_vote": -0.236,
+          "relative_air_speed_m_s": 0.807,
+          "thermal_load_w_m2": -19.088222683380764,
+          "unrounded_vote": -0.2357060051501151
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.7647383914005415,
+            "kind": "fixed"
+          },
+          "met": 1.1943378943851601,
+          "rh_pct": 80.67640499920904,
+          "running_mean_c": 7.196538698750757,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.748515500178653
+          },
+          "tdb_c": 8.738391141685575,
+          "tr_c": 26.71750256637958
+        }
+      },
+      {
+        "case_id": "seeded-018",
+        "expected": {
+          "adapted_met": 1.3381015087374404,
+          "effective_clo": 1.3518940356071771,
+          "public_vote": 2.191,
+          "relative_air_speed_m_s": 0.20639081816644023,
+          "thermal_load_w_m2": 55.2870420255476,
+          "unrounded_vote": 2.19132277318098
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.2350256253867944,
+          "rh_pct": 97.86448994990815,
+          "running_mean_c": -25.63682226926325,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.20639081816644023
+          },
+          "tdb_c": 37.20781857097396,
+          "tr_c": 15.891583182993118
+        }
+      },
+      {
+        "case_id": "seeded-019",
+        "expected": {
+          "adapted_met": 0.953291322399898,
+          "effective_clo": 0.9392725614497945,
+          "public_vote": 0.284,
+          "relative_air_speed_m_s": 1.3016876232084564,
+          "thermal_load_w_m2": -23.560418103304144,
+          "unrounded_vote": 0.2843627947838495
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.9392725614497945,
+            "kind": "fixed"
+          },
+          "met": 0.8563422397267626,
+          "rh_pct": 91.75925443930058,
+          "running_mean_c": -24.112976972549063,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.3016876232084564
+          },
+          "tdb_c": 18.719591678876572,
+          "tr_c": 31.461491567312915
+        }
+      },
+      {
+        "case_id": "seeded-020",
+        "expected": {
+          "adapted_met": 1.9311402134284166,
+          "effective_clo": 0.6634485775183988,
+          "public_vote": -0.513,
+          "relative_air_speed_m_s": 0.549,
+          "thermal_load_w_m2": -7.683637823961679,
+          "unrounded_vote": -0.5132482204762004
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.993135525852226,
+          "rh_pct": 14.26669854609025,
+          "running_mean_c": 15.419346936178258,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.2510145774311112
+          },
+          "tdb_c": 22.779883968406867,
+          "tr_c": 14.77206222729251
+        }
+      },
+      {
+        "case_id": "seeded-021",
+        "expected": {
+          "adapted_met": 0.9725358740535605,
+          "effective_clo": 0.12243457918323347,
+          "public_vote": 4.264,
+          "relative_air_speed_m_s": 1.6968421416752353,
+          "thermal_load_w_m2": 145.13321689280713,
+          "unrounded_vote": 4.263597413080287
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.12243457918323347,
+            "kind": "fixed"
+          },
+          "met": 1.0210525433444075,
+          "rh_pct": 67.30294768076902,
+          "running_mean_c": 12.066966464646576,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.6968421416752353
+          },
+          "tdb_c": 37.726425704452495,
+          "tr_c": 48.2115202977766
+        }
+      },
+      {
+        "case_id": "seeded-022",
+        "expected": {
+          "adapted_met": 0.8700373765520837,
+          "effective_clo": 0.6503203574710774,
+          "public_vote": 1.325,
+          "relative_air_speed_m_s": 0.21525292561593123,
+          "thermal_load_w_m2": 36.16440850028921,
+          "unrounded_vote": 1.3249380628944065
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.9384951525112495,
+          "rh_pct": 93.51181597599194,
+          "running_mean_c": 17.02667761035662,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.21525292561593123
+          },
+          "tdb_c": 30.960339605771495,
+          "tr_c": 34.50248636639511
+        }
+      },
+      {
+        "case_id": "seeded-023",
+        "expected": {
+          "adapted_met": 1.8776567685959917,
+          "effective_clo": 1.7145588657349333,
+          "public_vote": 2.199,
+          "relative_air_speed_m_s": 0.845,
+          "thermal_load_w_m2": 83.46014244311137,
+          "unrounded_vote": 2.199185848279924
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.7145588657349333,
+            "kind": "fixed"
+          },
+          "met": 1.8441948983927243,
+          "rh_pct": 95.25951191251394,
+          "running_mean_c": -8.32256771722291,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.5919698739273824
+          },
+          "tdb_c": 35.44567357514093,
+          "tr_c": 18.883889311812435
+        }
+      },
+      {
+        "case_id": "seeded-024",
+        "expected": {
+          "adapted_met": 0.9418244645569642,
+          "effective_clo": 0.5791248707577975,
+          "public_vote": -0.228,
+          "relative_air_speed_m_s": 0.7764974313703241,
+          "thermal_load_w_m2": -14.18582506350526,
+          "unrounded_vote": -0.22831121331628118
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0470192080576939,
+          "rh_pct": 74.83215689900875,
+          "running_mean_c": 26.163820819412244,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.7764974313703241
+          },
+          "tdb_c": 30.335224343881027,
+          "tr_c": 11.14439127592961
+        }
+      },
+      {
+        "case_id": "seeded-025",
+        "expected": {
+          "adapted_met": 1.1883853804538378,
+          "effective_clo": 0.4775496620277848,
+          "public_vote": 2.269,
+          "relative_air_speed_m_s": 0.185,
+          "thermal_load_w_m2": 77.08824324322295,
+          "unrounded_vote": 2.2693701520428293
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.4775496620277848,
+            "kind": "fixed"
+          },
+          "met": 1.2265775178987148,
+          "rh_pct": 69.29633715350471,
+          "running_mean_c": 9.499070082443772,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.11675920056614819
+          },
+          "tdb_c": 34.961499533124794,
+          "tr_c": 39.057925081112536
+        }
+      },
+      {
+        "case_id": "seeded-026",
+        "expected": {
+          "adapted_met": 1.1255807584430482,
+          "effective_clo": 0.6917975672116982,
+          "public_vote": 1.182,
+          "relative_air_speed_m_s": 1.422,
+          "thermal_load_w_m2": 35.82207781858177,
+          "unrounded_vote": 1.1818015827141934
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.1759376898371643,
+          "rh_pct": 49.95133144481257,
+          "running_mean_c": 12.524672680075007,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.368768856637652
+          },
+          "tdb_c": 38.2306741234906,
+          "tr_c": 4.41617589014785
+        }
+      },
+      {
+        "case_id": "seeded-027",
+        "expected": {
+          "adapted_met": 1.3115608764383266,
+          "effective_clo": 1.7817087719240077,
+          "public_vote": 0.671,
+          "relative_air_speed_m_s": 1.0989848749540276,
+          "thermal_load_w_m2": 18.430057828122344,
+          "unrounded_vote": 0.6712823178861582
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.7817087719240077,
+            "kind": "fixed"
+          },
+          "met": 1.3314509412354474,
+          "rh_pct": 21.638057496245356,
+          "running_mean_c": 4.947016116206974,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.0989848749540276
+          },
+          "tdb_c": 28.875410764713926,
+          "tr_c": 6.9914828617428535
+        }
+      },
+      {
+        "case_id": "seeded-028",
+        "expected": {
+          "adapted_met": 1.490811408266414,
+          "effective_clo": 0.6776957699090717,
+          "public_vote": -0.369,
+          "relative_air_speed_m_s": 1.914,
+          "thermal_load_w_m2": -13.430433118862139,
+          "unrounded_vote": -0.3687888547775197
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.548252957896835,
+          "rh_pct": 4.62800873426138,
+          "running_mean_c": 14.286744395258538,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.7495829296250875
+          },
+          "tdb_c": 21.1879450913558,
+          "tr_c": 34.684591411227586
+        }
+      },
+      {
+        "case_id": "seeded-029",
+        "expected": {
+          "adapted_met": 0.9362022472392949,
+          "effective_clo": 1.7536684497450288,
+          "public_vote": -1.416,
+          "relative_air_speed_m_s": 1.082,
+          "thermal_load_w_m2": -52.117364159153894,
+          "unrounded_vote": -1.4164045588388856
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.7536684497450288,
+            "kind": "fixed"
+          },
+          "met": 1.0944763930589452,
+          "rh_pct": 3.5721679576625753,
+          "running_mean_c": 39.36562088334891,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.053661360828276
+          },
+          "tdb_c": 7.767536369739624,
+          "tr_c": 6.2007198773987025
+        }
+      },
+      {
+        "case_id": "seeded-030",
+        "expected": {
+          "adapted_met": 1.442826248541332,
+          "effective_clo": 1.0333708251204465,
+          "public_vote": 1.621,
+          "relative_air_speed_m_s": 0.12029810136730079,
+          "thermal_load_w_m2": 50.008391642963716,
+          "unrounded_vote": 1.6207800799447345
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.409040283220524,
+          "rh_pct": 29.370425161176648,
+          "running_mean_c": -8.403175990047103,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.12029810136730079
+          },
+          "tdb_c": 33.48473154701921,
+          "tr_c": 30.30321230201466
+        }
+      },
+      {
+        "case_id": "seeded-031",
+        "expected": {
+          "adapted_met": 1.0845921089049468,
+          "effective_clo": 1.5987099998135212,
+          "public_vote": 0.613,
+          "relative_air_speed_m_s": 1.119,
+          "thermal_load_w_m2": -3.693257947426048,
+          "unrounded_vote": 0.6130454278315158
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.5987099998135212,
+            "kind": "fixed"
+          },
+          "met": 1.0040208054450994,
+          "rh_pct": 28.04109448082763,
+          "running_mean_c": -20.039529322064613,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.1175067262910487
+          },
+          "tdb_c": 14.721609480372859,
+          "tr_c": 40.260234173052325
+        }
+      },
+      {
+        "case_id": "seeded-032",
+        "expected": {
+          "adapted_met": 2.049641130302659,
+          "effective_clo": 1.9613153020474634,
+          "public_vote": 1.659,
+          "relative_air_speed_m_s": 1.689,
+          "thermal_load_w_m2": 60.32627660218798,
+          "unrounded_vote": 1.6590588407568545
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.9439662082404439,
+          "rh_pct": 14.607580945233533,
+          "running_mean_c": -26.28324984624329,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.4056112938977776
+          },
+          "tdb_c": 31.419019423280226,
+          "tr_c": 20.512801041099856
+        }
+      },
+      {
+        "case_id": "seeded-033",
+        "expected": {
+          "adapted_met": 1.4319466789650472,
+          "effective_clo": 0.18574190576450778,
+          "public_vote": -2.562,
+          "relative_air_speed_m_s": 0.8231394956470395,
+          "thermal_load_w_m2": -106.47516940350826,
+          "unrounded_vote": -2.5616888979729815
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.18574190576450778,
+            "kind": "fixed"
+          },
+          "met": 1.5160023713131436,
+          "rh_pct": 68.3151159163581,
+          "running_mean_c": 20.90615937888549,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.8231394956470395
+          },
+          "tdb_c": 12.208892221803538,
+          "tr_c": 35.79280313150956
+        }
+      },
+      {
+        "case_id": "seeded-034",
+        "expected": {
+          "adapted_met": 1.3795153613684372,
+          "effective_clo": 0.7192432940605011,
+          "public_vote": -2.321,
+          "relative_air_speed_m_s": 0.379,
+          "thermal_load_w_m2": -92.96265114346187,
+          "unrounded_vote": -2.321107696985634
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.4231863067636739,
+          "rh_pct": 71.04336733769185,
+          "running_mean_c": 10.861747957276812,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.25180608105616353
+          },
+          "tdb_c": 5.960125948978929,
+          "tr_c": 8.111729778051258
+        }
+      },
+      {
+        "case_id": "seeded-035",
+        "expected": {
+          "adapted_met": 1.1201665709580102,
+          "effective_clo": 0.5067641348794704,
+          "public_vote": -0.308,
+          "relative_air_speed_m_s": 1.683,
+          "thermal_load_w_m2": -26.44495559250178,
+          "unrounded_vote": -0.30778086646810304
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.5067641348794704,
+            "kind": "fixed"
+          },
+          "met": 1.114989543193024,
+          "rh_pct": 39.23408006001097,
+          "running_mean_c": -1.287619726163257,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.648298796671849
+          },
+          "tdb_c": 29.64130683191496,
+          "tr_c": 5.18124676310861
+        }
+      },
+      {
+        "case_id": "seeded-036",
+        "expected": {
+          "adapted_met": 1.680302569093881,
+          "effective_clo": 0.7225154230106149,
+          "public_vote": 1.149,
+          "relative_air_speed_m_s": 0.5494985547321645,
+          "thermal_load_w_m2": 53.281323584986865,
+          "unrounded_vote": 1.1493293600556067
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.7262995604679428,
+          "rh_pct": 77.74626488528389,
+          "running_mean_c": 11.440277341753799,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.5494985547321645
+          },
+          "tdb_c": 26.29323018841848,
+          "tr_c": 38.500366639274795
+        }
+      },
+      {
+        "case_id": "seeded-037",
+        "expected": {
+          "adapted_met": 1.9788080199277396,
+          "effective_clo": 0.5442454592556151,
+          "public_vote": -0.729,
+          "relative_air_speed_m_s": 0.845,
+          "thermal_load_w_m2": -7.813833368162222,
+          "unrounded_vote": -0.728942927964002
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.5442454592556151,
+            "kind": "fixed"
+          },
+          "met": 1.9080483093071956,
+          "rh_pct": 76.95573855296685,
+          "running_mean_c": -17.599210077417364,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.572921609919997
+          },
+          "tdb_c": 15.42284156067273,
+          "tr_c": 37.017924667720386
+        }
+      },
+      {
+        "case_id": "seeded-038",
+        "expected": {
+          "adapted_met": 1.1163703189489573,
+          "effective_clo": 0.9266168783883545,
+          "public_vote": -0.883,
+          "relative_air_speed_m_s": 1.559,
+          "thermal_load_w_m2": -49.211380656306915,
+          "unrounded_vote": -0.8831188226480842
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.0865037449920223,
+          "rh_pct": 21.795244931364653,
+          "running_mean_c": -7.428353009801789,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.5334598577241607
+          },
+          "tdb_c": 11.325867545921724,
+          "tr_c": 37.900156861456516
+        }
+      },
+      {
+        "case_id": "seeded-039",
+        "expected": {
+          "adapted_met": 1.4035752082303257,
+          "effective_clo": 1.3985408477494983,
+          "public_vote": -1.086,
+          "relative_air_speed_m_s": 0.6382523708094807,
+          "thermal_load_w_m2": -44.231698735741375,
+          "unrounded_vote": -1.085881308792514
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.3985408477494983,
+            "kind": "fixed"
+          },
+          "met": 1.3400920841323862,
+          "rh_pct": 70.07955623829751,
+          "running_mean_c": -15.789392403846493,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 0.6382523708094807
+          },
+          "tdb_c": 5.020600474483184,
+          "tr_c": 15.090516432885437
+        }
+      },
+      {
+        "case_id": "seeded-040",
+        "expected": {
+          "adapted_met": 1.174957809857272,
+          "effective_clo": 0.44646456072187357,
+          "public_vote": 2.194,
+          "relative_air_speed_m_s": 0.599,
+          "thermal_load_w_m2": 102.42669073146625,
+          "unrounded_vote": 2.1936041882659447
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.3403086364008077,
+          "rh_pct": 48.784412111729345,
+          "running_mean_c": 41.125718396725546,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.4965004204249053
+          },
+          "tdb_c": 36.109798995063485,
+          "tr_c": 48.101228691666535
+        }
+      },
+      {
+        "case_id": "seeded-041",
+        "expected": {
+          "adapted_met": 1.5704894606039397,
+          "effective_clo": 0.8860318596875859,
+          "public_vote": 0.534,
+          "relative_air_speed_m_s": 1.385,
+          "thermal_load_w_m2": 35.84853665958935,
+          "unrounded_vote": 0.5337999281945593
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.8860318596875859,
+            "kind": "fixed"
+          },
+          "met": 1.702969858750676,
+          "rh_pct": 85.36253159698342,
+          "running_mean_c": 32.95025287239343,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.173985486660853
+          },
+          "tdb_c": 28.80525778284153,
+          "tr_c": 22.01267017676368
+        }
+      },
+      {
+        "case_id": "seeded-042",
+        "expected": {
+          "adapted_met": 1.1400061693759347,
+          "effective_clo": 0.4601245464157276,
+          "public_vote": -0.973,
+          "relative_air_speed_m_s": 1.3781005780408366,
+          "thermal_load_w_m2": -36.26345920583696,
+          "unrounded_vote": -0.9728428927006405
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.300173404082797,
+          "rh_pct": 91.0986090970791,
+          "running_mean_c": 39.83646606811705,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.3781005780408366
+          },
+          "tdb_c": 26.57531402280477,
+          "tr_c": 10.11729168140591
+        }
+      },
+      {
+        "case_id": "seeded-043",
+        "expected": {
+          "adapted_met": 1.8828130036449238,
+          "effective_clo": 0.6174759009946967,
+          "public_vote": 1.616,
+          "relative_air_speed_m_s": 0.989,
+          "thermal_load_w_m2": 81.57612615675292,
+          "unrounded_vote": 1.6155696289568158
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 0.6174759009946967,
+            "kind": "fixed"
+          },
+          "met": 1.9325806706985829,
+          "rh_pct": 1.127811841458104,
+          "running_mean_c": 12.378112062063927,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.7090081113723188
+          },
+          "tdb_c": 30.706466557831646,
+          "tr_c": 47.60372844701356
+        }
+      },
+      {
+        "case_id": "seeded-044",
+        "expected": {
+          "adapted_met": 1.8639596976880226,
+          "effective_clo": 0.6588931887094701,
+          "public_vote": -2.046,
+          "relative_air_speed_m_s": 1.726,
+          "thermal_load_w_m2": -77.30297431331053,
+          "unrounded_vote": -2.0456894745363527
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 1.9271090215393663,
+          "rh_pct": 7.491911219657932,
+          "running_mean_c": 15.706370291231636,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 1.4478287673702246
+          },
+          "tdb_c": 5.825118862765475,
+          "tr_c": 38.90956802167155
+        }
+      },
+      {
+        "case_id": "seeded-045",
+        "expected": {
+          "adapted_met": 2.0112952886544897,
+          "effective_clo": 1.7399486724719393,
+          "public_vote": 1.804,
+          "relative_air_speed_m_s": 1.409786184170577,
+          "thermal_load_w_m2": 61.4883279106063,
+          "unrounded_vote": 1.8044662118590482
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.7399486724719393,
+            "kind": "fixed"
+          },
+          "met": 1.8917373612319468,
+          "rh_pct": 27.46442739503521,
+          "running_mean_c": -29.7362024615043,
+          "speed": {
+            "kind": "relative",
+            "value_m_s": 1.409786184170577
+          },
+          "tdb_c": 24.364326228614388,
+          "tr_c": 47.9939675134997
+        }
+      },
+      {
+        "case_id": "seeded-046",
+        "expected": {
+          "adapted_met": 0.9922980858137097,
+          "effective_clo": 1.0071906135885298,
+          "public_vote": -0.417,
+          "relative_air_speed_m_s": 0.3607192329363602,
+          "thermal_load_w_m2": -42.10032200939744,
+          "unrounded_vote": -0.41725846981144
+        },
+        "inputs": {
+          "clothing": {
+            "kind": "automatic"
+          },
+          "met": 0.9263986114396728,
+          "rh_pct": 32.89153255925059,
+          "running_mean_c": -16.390382087901468,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.3607192329363602
+          },
+          "tdb_c": 15.898150809937457,
+          "tr_c": 15.268490437620036
+        }
+      },
+      {
+        "case_id": "seeded-047",
+        "expected": {
+          "adapted_met": 2.01251111385348,
+          "effective_clo": 1.958234531980007,
+          "public_vote": 1.43,
+          "relative_air_speed_m_s": 0.757,
+          "thermal_load_w_m2": 53.782889180980675,
+          "unrounded_vote": 1.43013720136741
+        },
+        "inputs": {
+          "clothing": {
+            "clo": 1.958234531980007,
+            "kind": "fixed"
+          },
+          "met": 1.91274594462386,
+          "rh_pct": 53.18065462446712,
+          "running_mean_c": -24.813388244290092,
+          "speed": {
+            "kind": "ambient",
+            "value_m_s": 0.48313675652447907
+          },
+          "tdb_c": 20.5221358449527,
+          "tr_c": 40.75988807010117
+        }
+      }
+    ],
+    "count": 48,
+    "seed": 20260911
+  },
+  "tolerances": {
+    "public_vote_absolute": 0.00051,
+    "unrounded_vote_absolute": 1e-07
+  },
+  "vector_count": 248
+}

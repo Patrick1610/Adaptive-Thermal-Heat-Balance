@@ -1,0 +1,49 @@
+{
+  "artifact_hashes": {
+    "athb_forward_v1.json": "81e861a65970e69e67cbd315d53c4e12c7b03b8ccb5023df0a769ef8a8a2be6b",
+    "athb_roots_v1.json": "8d6af0cdde2719758662e954a641766d10a8ddae3e5e44ccbee46d425b845db6"
+  },
+  "fixture_counts": {
+    "dense_forward": 180,
+    "named_forward": 20,
+    "quantization_boundary_forward": 3,
+    "root_scenarios": 21,
+    "seeded_forward": 48,
+    "total_forward": 248
+  },
+  "formulation_id": "athb_2022_ptc_4_4_2",
+  "generated_at_utc": "2026-09-11T08:03:24Z",
+  "generation_command": "python tools/oracle/generate_athb_fixtures.py --output-dir tests/fixtures/numerical --generated-at 2026-09-11T08:03:24Z",
+  "generator_sha256": "004ba352a8dc9ff6a599d0dfb3f42f89c04de2fe6eb317eaf572e891260a8af8",
+  "isolation": {
+    "imports_production_core": false,
+    "normal_tests_regenerate": false,
+    "oracle_only_dependencies": [
+      "numpy",
+      "scipy",
+      "numba",
+      "llvmlite"
+    ],
+    "python": "3.14.4",
+    "runtime": "macOS-15.6-arm64-arm-64bit-Mach-O"
+  },
+  "numerical_contract_version": 1,
+  "package_versions": {
+    "llvmlite": "0.49.0",
+    "numba": "0.67.0",
+    "numpy": "2.2.6",
+    "pythermalcomfort": "4.4.2",
+    "scipy": "1.18.1",
+    "setuptools": "84.0.0"
+  },
+  "repository_revisions": {
+    "pythermalcomfort": "2597e88fed10fec2f40d49759ed9b74e10ce9f89",
+    "research_analysis": "8cb4e7eabe25bc6dbbafa554a045ceacd56a865b"
+  },
+  "requirements_lock_sha256": "38c0ebe66ae1bb21f5471dd717908822ec6b758585bfe5eeec3c8086f934445f",
+  "schema_version": 1,
+  "source_hashes": {
+    "_pmv_ppd_optimized.py": "dd3c1f3d7ffacea65978cb080a1b676dbadc143eeb8121196dfa6b9b8a9d2518",
+    "pmv_athb.py": "6ea3044b9ab0a229e3f47603d64c3070b707fb31271a9a92ff4fff0c92ec5c9d"
+  }
+}

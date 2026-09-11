@@ -1,0 +1,23 @@
+# Isolated ATHB fixture-oracle lock.
+#
+# Resolution platform used for the reviewed Phase 1 fixtures:
+# CPython 3.14.4, macOS 15 arm64, pip 26.2.1.
+# Every runtime package declared by pythermalcomfort 4.4.2 and every transitive
+# runtime dependency is pinned. Hashes bind the exact artifacts used on this
+# platform; NumPy 2.2.6 is bound to its official source distribution because
+# that release predates CPython 3.14 wheels.
+
+--no-binary numpy
+
+pythermalcomfort==4.4.2 \
+    --hash=sha256:7d9149fa9e39bca2f9b074812569ec8d30e0f2254b945c402bf1248e923ea1e3
+numpy==2.2.6 \
+    --hash=sha256:e29554e2bef54a90aa5cc07da6ce955accb83f21ab5de01a62c8478897b264fd
+scipy==1.18.1 \
+    --hash=sha256:011413b7426b75012840e35649e00fe0a2c3bae89fed433876e3a99251572efc
+numba==0.67.0 \
+    --hash=sha256:f99f880ff25f418a67f9a1d00d0ddfbc63430f627b523e515085a592a7567f4b
+llvmlite==0.49.0 \
+    --hash=sha256:80a84683d04516bb51da1bbeebddaf2c2f558809c93078a8f91807909ae331f8
+setuptools==84.0.0 \
+    --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670
