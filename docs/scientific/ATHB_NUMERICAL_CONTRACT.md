@@ -125,6 +125,29 @@ The internal result retains `S` without rounding for later inverse solving. The 
 
 The inspected `comf::calcATHBstandard` source is not interchangeable with this formulation: it adds a separate `L * m_a` term and repeats the `L * R` term. Those terms are deliberately absent here, matching the selected reference and the research model structure.
 
+## Moisture and radiant candidate semantics
+
+Inverse calculations preserve the starting vapor pressure. A measured RH source remains
+`measured`; an explicitly configured fixed RH remains `declared`. Candidate RH is derived with
+the ASHRAE/PsychroLib saturation-pressure equations and is never held constant. A candidate that
+exceeds saturation by more than `1e-6` percentage point returns
+`moisture_limited_no_solution`; only smaller floating-point overshoot is normalized to 100%.
+Dew/frost point is the bisection inverse of the same water/ice equations. Zero RH returns the
+explicit `dry_limit`, not an invented finite temperature. Optional humidity-ratio diagnostics
+require an explicit total pressure; ATHB does not manufacture an atmospheric-pressure reading.
+
+This physical candidate transformation deliberately differs slightly from the frozen ATHB
+heat-balance kernel's historical vapor-pressure approximation. The kernel formula above remains
+unchanged under numerical contract version 1 so pinned forward conformance is preserved.
+
+Radiant inputs remain physically tagged. The default uniform environment estimates MRT from air
+temperature and moves it with candidate air. A direct measured MRT and a current globe-derived
+MRT are held constant for the snapshot. A surface composite uses effective occupant view factors
+and fourth-power Kelvin combination; measured/modelled surfaces remain fixed while an air
+background moves with the candidate, or an explicit measured background remains fixed. Missing
+surface data falls back visibly to the uniform estimate without redistributing view factor.
+Modelled surfaces retain `estimated` provenance and are never relabelled as air or direct MRT.
+
 ## Engineering envelope
 
 Inputs are rejected before evaluation when outside this closed envelope, except where an open bound is stated:

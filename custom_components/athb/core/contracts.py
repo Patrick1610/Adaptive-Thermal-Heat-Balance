@@ -75,6 +75,40 @@ class RootFailureCode(StrEnum):
     OUTSIDE_ENGINEERING_DOMAIN = "outside_engineering_domain"
 
 
+class MoistureFailureCode(StrEnum):
+    """Typed failures from the physical moisture transformation."""
+
+    BOOLEAN_INPUT = "boolean_input"
+    NON_NUMERIC = "non_numeric"
+    NON_FINITE = "non_finite"
+    OUTSIDE_PSYCHROMETRIC_DOMAIN = "outside_psychrometric_domain"
+    INVALID_RELATIVE_HUMIDITY = "invalid_relative_humidity"
+    BELOW_PSYCHROMETRIC_DOMAIN = "below_psychrometric_domain"
+    MOISTURE_LIMITED_NO_SOLUTION = "moisture_limited_no_solution"
+    INVALID_TOTAL_PRESSURE = "invalid_total_pressure"
+
+
+class DewPointStatus(StrEnum):
+    """Outcome label for the dew/frost-point inverse."""
+
+    SOLVED = "solved"
+    DRY_LIMIT = "dry_limit"
+
+
+class RadiantFailureCode(StrEnum):
+    """Typed failures from radiant calculations."""
+
+    BOOLEAN_INPUT = "boolean_input"
+    NON_NUMERIC = "non_numeric"
+    NON_FINITE = "non_finite"
+    OUTSIDE_SOURCE_DOMAIN = "outside_source_domain"
+    INVALID_GLOBE_CONFIGURATION = "invalid_globe_configuration"
+    INVALID_VIEW_FACTOR = "invalid_view_factor"
+    TOO_MANY_SURFACES = "too_many_surfaces"
+    MISSING_SURFACE_DATA = "missing_surface_data"
+    NONPOSITIVE_RADICAND = "nonpositive_radicand"
+
+
 class ComfortStrategy(StrEnum):
     """Fixed product comfort strategies."""
 
@@ -251,6 +285,98 @@ class Observation:
     provenance: Provenance
     validity: ObservationValidity
     reasons: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class MeasuredAirTemperature:
+    """A measured air temperature; never interchangeable with a surface."""
+
+    value_c: float
+    provenance: Literal[Provenance.MEASURED] = dataclass_field(
+        default=Provenance.MEASURED, init=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MeasuredRelativeHumidity:
+    """A measured starting relative-humidity state."""
+
+    value_pct: float
+    provenance: Literal[Provenance.MEASURED] = dataclass_field(
+        default=Provenance.MEASURED, init=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class DeclaredRelativeHumidity:
+    """An explicit RH declaration, not a fabricated measurement."""
+
+    value_pct: float
+    provenance: Literal[Provenance.DECLARED] = dataclass_field(
+        default=Provenance.DECLARED, init=False
+    )
+
+
+type RelativeHumiditySource = MeasuredRelativeHumidity | DeclaredRelativeHumidity
+
+
+@dataclass(frozen=True, slots=True)
+class MeasuredMeanRadiantTemperature:
+    """A direct measurement of mean radiant temperature."""
+
+    value_c: float
+    provenance: Literal[Provenance.MEASURED] = dataclass_field(
+        default=Provenance.MEASURED, init=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MeasuredGlobeTemperature:
+    """A globe-temperature observation used to derive MRT."""
+
+    value_c: float
+    provenance: Literal[Provenance.MEASURED] = dataclass_field(
+        default=Provenance.MEASURED, init=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MeasuredSurfaceTemperature:
+    """A measured surface temperature."""
+
+    value_c: float | None
+    provenance: Literal[Provenance.MEASURED] = dataclass_field(
+        default=Provenance.MEASURED, init=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ModelledSurfaceTemperature:
+    """A modelled surface estimate, physically distinct from air and MRT."""
+
+    value_c: float | None
+    provenance: Literal[Provenance.ESTIMATED] = dataclass_field(
+        default=Provenance.ESTIMATED, init=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class DerivedMeanRadiantTemperature:
+    """An MRT value derived from other physical observations."""
+
+    value_c: float
+    reasons: tuple[str, ...]
+    provenance: Literal[Provenance.ESTIMATED] = dataclass_field(
+        default=Provenance.ESTIMATED, init=False
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class CriticalAirLocation:
+    """Explicitly typed local-air source for later location policy."""
+
+    location_id: str
+    air_temperature: MeasuredAirTemperature
 
 
 @dataclass(frozen=True, slots=True)

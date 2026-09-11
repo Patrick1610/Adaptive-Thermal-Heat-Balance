@@ -1,4 +1,4 @@
-"""Repository-level checks for the Phase 1 custom-integration package."""
+"""Repository-level checks for the custom-integration package."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ PRODUCTION_ROOT = ROOT / "custom_components" / "athb"
 FORBIDDEN_RUNTIME_PACKAGES = {"numba", "numpy", "scipy"}
 
 
-def test_manifest_has_phase_one_identity_and_no_runtime_requirements() -> None:
+def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
     assert manifest == {
@@ -60,7 +60,7 @@ def test_production_python_imports_are_standard_library_only() -> None:
     assert non_standard_imports == []
 
 
-def test_phase_one_contains_no_future_runtime_or_inverse_modules() -> None:
+def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
     production_files = {
         path.relative_to(PRODUCTION_ROOT).as_posix()
         for path in PRODUCTION_ROOT.rglob("*")
@@ -73,6 +73,8 @@ def test_phase_one_contains_no_future_runtime_or_inverse_modules() -> None:
         "core/athb_engine.py",
         "core/contracts.py",
         "core/pmv_core.py",
+        "core/psychrometrics.py",
+        "core/radiant.py",
         "manifest.json",
     }
 
@@ -87,5 +89,5 @@ def test_implementation_checklist_has_every_task_once_in_order() -> None:
     assert re.findall(r"ATHB-\d{3}", checklist) == expected
     assert identifiers == expected
     rows = [line for line in checklist.splitlines() if line.startswith("| ATHB-")]
-    assert all("| Phase 1: numerical contract | In scope |" in row for row in rows[:5])
-    assert all("| Successor phase |" in row for row in rows[5:])
+    assert all("| Complete |" in row for row in rows[:7])
+    assert all("| Pending |" in row for row in rows[7:])
