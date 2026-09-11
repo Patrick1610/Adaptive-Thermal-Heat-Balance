@@ -10,6 +10,7 @@ import pytest
 from custom_components.athb.core.contracts import (
     AUTOMATIC_CLOTHING,
     AcknowledgementStatus,
+    ActuationDirection,
     ApplicabilityReason,
     AthbInputs,
     AthbSuccess,
@@ -17,6 +18,7 @@ from custom_components.athb.core.contracts import (
     ComfortStrategy,
     CommandOutcome,
     ControlProfile,
+    CriticalEligibilityMode,
     DispatchStatus,
     EnvironmentalSnapshot,
     FixedClothing,
@@ -90,6 +92,17 @@ def test_contract_enums_have_stable_wire_values() -> None:
         "efficient",
         "balanced",
         "comfort",
+    ]
+    assert [direction.value for direction in ActuationDirection] == [
+        "heating_only",
+        "cooling_only",
+        "ranged",
+    ]
+    assert [mode.value for mode in CriticalEligibilityMode] == [
+        "monitoring",
+        "heating",
+        "cooling",
+        "both",
     ]
     assert [profile.value for profile in ControlProfile] == [
         "auto",

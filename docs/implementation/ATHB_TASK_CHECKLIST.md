@@ -11,9 +11,9 @@ This compact checklist preserves the normative implementation order and dependen
 | ATHB-005 | Implement the scalar heat-load kernel and unrounded ATHB transfer function with conformance tests. | 003–004 | Phase 1: numerical contract | Complete |
 | ATHB-006 | Implement saturation pressure, vapor pressure, dew/frost point, and constant-vapor-pressure candidate RH. | 004 | Phase 2: moisture and radiation | Complete |
 | ATHB-007 | Implement uniform, direct, globe, and surface-composite MRT models. | 004, 006 | Phase 2: moisture and radiation | Complete |
-| ATHB-008 | Implement strategy-vote derivation and bounded inverse solving with typed failures and budgets. | 005–007 | Phase 3: inverse and locations | Pending |
-| ATHB-009 | Implement critical-air typing, moisture, filtering, warm-up, mapped roots, and influence protection. | 008 | Phase 3: inverse and locations | Pending |
-| ATHB-010 | Implement calibrated surface estimates and surface-RH diagnostics without helper dependencies. | 006–007 | Phase 3: inverse and locations | Pending |
+| ATHB-008 | Implement strategy-vote derivation and bounded inverse solving with typed failures and budgets. | 005–007 | Phase 3: inverse and locations | Complete |
+| ATHB-009 | Implement critical-air typing, moisture, filtering, warm-up, mapped roots, and influence protection. | 008 | Phase 3: inverse and locations | Complete |
+| ATHB-010 | Implement calibrated surface estimates and surface-RH diagnostics without helper dependencies. | 006–007 | Phase 3: inverse and locations | Complete |
 | ATHB-011 | Implement shared source identity, declarations, conversion, freshness, quarantine, and reference counting. | 004 | Phase 4: environmental history | Pending |
 | ATHB-012 | Implement time-weighted daily summaries, calendar weighting, coverage, and DST behavior. | 004, 011 | Phase 4: environmental history | Pending |
 | ATHB-013 | Implement Recorder bootstrap, persisted history, lineage changes, and corrupt-history recovery. | 012 | Phase 4: environmental history | Pending |

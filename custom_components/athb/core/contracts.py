@@ -47,6 +47,7 @@ class NumericalFailureCode(StrEnum):
     NON_FINITE = "non_finite"
     OUTSIDE_ENGINEERING_DOMAIN = "outside_engineering_domain"
     HEAT_BALANCE_NON_CONVERGENCE = "heat_balance_non_convergence"
+    EVALUATION_BUDGET_EXCEEDED = "evaluation_budget_exceeded"
 
 
 class RootName(StrEnum):
@@ -115,6 +116,23 @@ class ComfortStrategy(StrEnum):
     EFFICIENT = "efficient"
     BALANCED = "balanced"
     COMFORT = "comfort"
+
+
+class ActuationDirection(StrEnum):
+    """Directional roots required by a configured actuator shape."""
+
+    HEATING_ONLY = "heating_only"
+    COOLING_ONLY = "cooling_only"
+    RANGED = "ranged"
+
+
+class CriticalEligibilityMode(StrEnum):
+    """Declared command eligibility for a critical local-air location."""
+
+    MONITORING = "monitoring"
+    HEATING = "heating"
+    COOLING = "cooling"
+    BOTH = "both"
 
 
 class ControlProfile(StrEnum):

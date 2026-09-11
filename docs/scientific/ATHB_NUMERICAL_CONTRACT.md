@@ -148,6 +148,31 @@ background moves with the candidate, or an explicit measured background remains 
 surface data falls back visibly to the uniform estimate without redistributing view factor.
 Modelled surfaces retain `estimated` provenance and are never relabelled as air or direct MRT.
 
+## Inverse and mapped-location contract
+
+The production inverse solves the requested sensation votes directly. Efficient, Balanced and
+Comfort apply fixed inward fractions 0.30, 0.50 and 0.70 to the configured outer votes before
+temperature solving. Thermal neutral remains a separate zero-vote reference. The five roots are
+attempted in stable order with one reused 33-point monotonicity scan, bracketed bisection, a
+0.005 K maximum final bracket width, a 0.002 maximum sensation residual, at most 48 iterations
+per root and one 3,000-ATHB-evaluation budget shared across the zone snapshot. Search intervals
+are intersected with the local-air and constant-vapor-pressure saturation domains. Every root
+retains its own success or typed failure.
+
+Actuation consumes those diagnostics directionally: heating requires the heating-control root,
+cooling requires the cooling-control root, and a range requires both in the required order and
+with its applicable gap. Failure of unrelated outer or neutral roots cannot suppress a valid
+directional decision.
+
+Critical local-air locations preserve primary vapor pressure unless they have an explicit local
+RH source. Their signed room-minus-local delta initializes from the first valid report, uses the
+specified 600-second exponential filter, requires ten minutes and three valid reports for
+control eligibility, rejects raw magnitude above 6 K and bounds the effective mapped delta to
+plus or minus 3 K. Each location solves the same five selected-strategy votes in primary room
+coordinates. Surface calibration separately requires a supplied or measured `f_Rsi`; it produces
+an `estimated` steady-state surface, finite uncapped surface RH diagnostics, a display value
+capped at 100%, and no independent heating demand.
+
 ## Engineering envelope
 
 Inputs are rejected before evaluation when outside this closed envelope, except where an open bound is stated:
