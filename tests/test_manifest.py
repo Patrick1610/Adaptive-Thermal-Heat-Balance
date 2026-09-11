@@ -135,5 +135,7 @@ def test_implementation_checklist_has_every_task_once_in_order() -> None:
     assert re.findall(r"ATHB-\d{3}", checklist) == expected
     assert identifiers == expected
     rows = [line for line in checklist.splitlines() if line.startswith("| ATHB-")]
-    assert all("| Complete |" in row for row in rows[:24])
-    assert all("| Pending |" in row for row in rows[24:])
+    statuses = [row.rsplit("|", 2)[1].strip() for row in rows]
+    assert set(statuses) <= {"Complete", "Pending"}
+    assert statuses[:24] == ["Complete"] * 24
+    assert statuses == sorted(statuses, key={"Complete": 0, "Pending": 1}.__getitem__)

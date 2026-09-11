@@ -72,5 +72,5 @@ def test_hacs_metadata_is_minimal_and_points_to_integration_subdirectory() -> No
     assert hacs == {
         "name": "Adaptive Thermal Heat Balance",
         "content_in_root": False,
-        "render_readme": True,
+        "homeassistant": "2026.9.0",
     }

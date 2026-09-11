@@ -24,7 +24,7 @@ def test_hacs_layout_and_runtime_manifest_are_self_contained() -> None:
     assert hacs == {
         "name": "Adaptive Thermal Heat Balance",
         "content_in_root": False,
-        "render_readme": True,
+        "homeassistant": "2026.9.0",
     }
     assert {
         "domain",
