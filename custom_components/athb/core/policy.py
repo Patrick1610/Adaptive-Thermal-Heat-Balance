@@ -1,0 +1,452 @@
+"""Pure ATHB product policy over immutable raw sensation roots."""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from enum import StrEnum
+
+from .contracts import (
+    ActuationDirection,
+    ControlProfile,
+    CriticalEligibilityMode,
+    RootResult,
+    RootSet,
+    RootSuccess,
+)
+
+MAX_CRITICAL_INFLUENCE_C = 2.0
+DEFAULT_MINIMUM_RANGE_GAP_C = 1.0
+DEFAULT_ECO_SETBACK_C = 2.0
+DEFAULT_BOOST_DELTA_C = 1.0
+DEFAULT_BOOST_DURATION = timedelta(minutes=60)
+OCCUPANCY_UNKNOWN_HOLD = timedelta(minutes=30)
+SLEW_RATE_C_PER_SECOND = 0.5 / 600.0
+DEFAULT_USER_MIN_C = 18.0
+DEFAULT_USER_MAX_C = 26.0
+
+
+class OccupancyState(StrEnum):
+    ABSENT = "absent"
+    ON = "on"
+    OFF = "off"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileResolution:
+    selected: ControlProfile
+    resolved: ControlProfile
+    resolved_at: datetime
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CriticalDemand:
+    location_id: str
+    mode: CriticalEligibilityMode
+    heating_control: RootResult
+    cooling_control: RootResult
+    control_eligible: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class DirectionalContribution:
+    governing_location: str
+    requested_c: float
+    applied_c: float
+
+
+@dataclass(frozen=True, slots=True)
+class CriticalTargets:
+    heating_c: float | None
+    cooling_c: float | None
+    heating_contribution: DirectionalContribution | None
+    cooling_contribution: DirectionalContribution | None
+    limitations: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyTargets:
+    heating_c: float | None
+    cooling_c: float | None
+    pre_profile_heating_c: float | None
+    pre_profile_cooling_c: float | None
+    pre_slew_heating_c: float | None
+    pre_slew_cooling_c: float | None
+    profile: ControlProfile
+    fallback: bool
+    governing_heating: str
+    governing_cooling: str
+    heating_contribution: DirectionalContribution | None
+    cooling_contribution: DirectionalContribution | None
+    limitations: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyFailure:
+    reason: str
+    limitations: tuple[str, ...] = ()
+
+
+type PolicyResult = PolicyTargets | PolicyFailure
+
+
+@dataclass(frozen=True, slots=True)
+class ActuatorBoundResult:
+    requested_room_c: float
+    calibrated_c: float
+    bounded_c: float
+    limitations: tuple[str, ...]
+
+
+def resolve_profile(
+    *,
+    selected: ControlProfile,
+    occupancy: OccupancyState,
+    now: datetime,
+    previous: ProfileResolution | None = None,
+) -> ProfileResolution:
+    """Resolve auto occupancy without implementing a scheduling engine."""
+
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    if selected is not ControlProfile.AUTO:
+        return ProfileResolution(selected, selected, now, ())
+    if occupancy is OccupancyState.ON:
+        return ProfileResolution(selected, ControlProfile.COMFORT, now, ())
+    if occupancy is OccupancyState.OFF:
+        return ProfileResolution(selected, ControlProfile.ECO, now, ())
+    if occupancy is OccupancyState.ABSENT:
+        return ProfileResolution(selected, ControlProfile.COMFORT, now, ())
+    if (
+        previous is not None
+        and previous.resolved in {ControlProfile.COMFORT, ControlProfile.ECO}
+        and timedelta(0) <= now - previous.resolved_at <= OCCUPANCY_UNKNOWN_HOLD
+    ):
+        return ProfileResolution(selected, previous.resolved, previous.resolved_at, ())
+    return ProfileResolution(
+        selected,
+        ControlProfile.COMFORT,
+        now,
+        ("occupancy_unknown",),
+    )
+
+
+def _success(root: RootResult) -> float | None:
+    return root.mapped_room_temperature_c if isinstance(root, RootSuccess) else None
+
+
+def _select_heating(demands: tuple[CriticalDemand, ...], baseline: float) -> tuple[str, float]:
+    eligible = [
+        (item.location_id, value)
+        for item in demands
+        if item.control_eligible
+        and item.mode in {CriticalEligibilityMode.HEATING, CriticalEligibilityMode.BOTH}
+        and (value := _success(item.heating_control)) is not None
+        and value > baseline
+    ]
+    return (
+        min(eligible, key=lambda item: (-item[1], item[0])) if eligible else ("primary", baseline)
+    )
+
+
+def _select_cooling(demands: tuple[CriticalDemand, ...], baseline: float) -> tuple[str, float]:
+    eligible = [
+        (item.location_id, value)
+        for item in demands
+        if item.control_eligible
+        and item.mode in {CriticalEligibilityMode.COOLING, CriticalEligibilityMode.BOTH}
+        and (value := _success(item.cooling_control)) is not None
+        and value < baseline
+    ]
+    return min(eligible, key=lambda item: (item[1], item[0])) if eligible else ("primary", baseline)
+
+
+def apply_critical_demands(
+    *,
+    roots: RootSet,
+    demands: tuple[CriticalDemand, ...],
+    direction: ActuationDirection,
+    minimum_range_gap_c: float = DEFAULT_MINIMUM_RANGE_GAP_C,
+) -> CriticalTargets | PolicyFailure:
+    """Select worst directional demand, cap once, and coordinate a range."""
+
+    heating_baseline = _success(roots.heating_control)
+    cooling_baseline = _success(roots.cooling_control)
+    needs_heating = direction in {ActuationDirection.HEATING_ONLY, ActuationDirection.RANGED}
+    needs_cooling = direction in {ActuationDirection.COOLING_ONLY, ActuationDirection.RANGED}
+    if needs_heating and heating_baseline is None:
+        return PolicyFailure("missing_required_root:heating_control")
+    if needs_cooling and cooling_baseline is None:
+        return PolicyFailure("missing_required_root:cooling_control")
+    gap = max(DEFAULT_MINIMUM_RANGE_GAP_C, minimum_range_gap_c)
+    if (
+        direction is ActuationDirection.RANGED
+        and heating_baseline is not None
+        and cooling_baseline is not None
+        and cooling_baseline - heating_baseline < gap
+    ):
+        return PolicyFailure("control_band_too_narrow")
+
+    limitations: list[str] = []
+    heating = heating_baseline if needs_heating else None
+    cooling = cooling_baseline if needs_cooling else None
+    heating_contribution = None
+    cooling_contribution = None
+    lower = _success(roots.lower_comfort)
+    upper = _success(roots.upper_comfort)
+    outer_available = lower is not None and upper is not None and upper > lower
+
+    if heating is not None:
+        location_id, requested = _select_heating(demands, heating)
+        if location_id != "primary":
+            if not outer_available:
+                limitations.append("critical_constraints_unavailable")
+            else:
+                assert upper is not None
+                assert lower is not None
+                edge_guard = min(0.25, (upper - lower) / 4.0)
+                cap = max(heating, min(heating + MAX_CRITICAL_INFLUENCE_C, upper - edge_guard))
+                if cap == heating and requested > heating:
+                    limitations.append("critical_constraints_inconsistent")
+                applied_target = min(max(heating, requested), cap)
+                heating_contribution = DirectionalContribution(
+                    location_id, requested - heating, applied_target - heating
+                )
+                heating = applied_target
+                if applied_target < requested:
+                    limitations.append("critical_demand_limited")
+
+    if cooling is not None:
+        location_id, requested = _select_cooling(demands, cooling)
+        if location_id != "primary":
+            if not outer_available:
+                limitations.append("critical_constraints_unavailable")
+            else:
+                assert upper is not None
+                assert lower is not None
+                edge_guard = min(0.25, (upper - lower) / 4.0)
+                floor = min(cooling, max(cooling - MAX_CRITICAL_INFLUENCE_C, lower + edge_guard))
+                if floor == cooling and requested < cooling:
+                    limitations.append("critical_constraints_inconsistent")
+                applied_target = max(min(cooling, requested), floor)
+                cooling_contribution = DirectionalContribution(
+                    location_id, requested - cooling, applied_target - cooling
+                )
+                cooling = applied_target
+                if applied_target > requested:
+                    limitations.append("critical_demand_limited")
+
+    if (
+        direction is ActuationDirection.RANGED
+        and heating is not None
+        and cooling is not None
+        and cooling - heating < gap
+    ):
+        limitations.append("critical_locations_conflict")
+        heating = heating_baseline
+        cooling = cooling_baseline
+        heating_contribution = None
+        cooling_contribution = None
+    return CriticalTargets(
+        heating,
+        cooling,
+        heating_contribution,
+        cooling_contribution,
+        tuple(dict.fromkeys(limitations)),
+    )
+
+
+def _profile_transform(
+    *,
+    heating: float | None,
+    cooling: float | None,
+    profile: ControlProfile,
+    minimum_range_gap_c: float,
+    eco_heating_setback_c: float,
+    eco_cooling_setback_c: float,
+    boost_delta_c: float,
+) -> tuple[float | None, float | None, tuple[str, ...]]:
+    limitations: list[str] = []
+    if profile is ControlProfile.ECO:
+        return (
+            heating - eco_heating_setback_c if heating is not None else None,
+            cooling + eco_cooling_setback_c if cooling is not None else None,
+            ("eco_policy",),
+        )
+    if profile is not ControlProfile.BOOST:
+        return heating, cooling, ()
+    if heating is not None and cooling is not None:
+        available = max(0.0, (cooling - heating - minimum_range_gap_c) / 2.0)
+        applied = min(max(0.0, boost_delta_c), available)
+        if applied < boost_delta_c:
+            limitations.append("boost_limited")
+        return heating + applied, cooling - applied, tuple(limitations)
+    return (
+        heating + boost_delta_c if heating is not None else None,
+        cooling - boost_delta_c if cooling is not None else None,
+        (),
+    )
+
+
+def _slew(value: float | None, previous: float | None, elapsed_seconds: float) -> float | None:
+    if value is None or previous is None:
+        return value
+    allowance = max(0.0, elapsed_seconds) * SLEW_RATE_C_PER_SECOND
+    return min(max(value, previous - allowance), previous + allowance)
+
+
+def build_adaptive_policy(
+    *,
+    roots: RootSet,
+    critical_demands: tuple[CriticalDemand, ...],
+    direction: ActuationDirection,
+    profile: ControlProfile,
+    minimum_range_gap_c: float = DEFAULT_MINIMUM_RANGE_GAP_C,
+    eco_heating_setback_c: float = DEFAULT_ECO_SETBACK_C,
+    eco_cooling_setback_c: float = DEFAULT_ECO_SETBACK_C,
+    boost_delta_c: float = DEFAULT_BOOST_DELTA_C,
+    previous_requested: tuple[float | None, float | None] = (None, None),
+    elapsed_since_previous_seconds: float = 0.0,
+    explicit_transition: bool = False,
+) -> PolicyResult:
+    """Apply critical, profile, and ordinary environmental-slew policy in order."""
+
+    numeric = (
+        minimum_range_gap_c,
+        eco_heating_setback_c,
+        eco_cooling_setback_c,
+        boost_delta_c,
+        elapsed_since_previous_seconds,
+    )
+    if any(isinstance(value, bool) or not math.isfinite(float(value)) for value in numeric):
+        return PolicyFailure("invalid_policy_configuration")
+    if (
+        minimum_range_gap_c < 1.0
+        or eco_heating_setback_c < 0.0
+        or eco_cooling_setback_c < 0.0
+        or boost_delta_c < 0.0
+    ):
+        return PolicyFailure("invalid_policy_configuration")
+    critical = apply_critical_demands(
+        roots=roots,
+        demands=critical_demands,
+        direction=direction,
+        minimum_range_gap_c=minimum_range_gap_c,
+    )
+    if isinstance(critical, PolicyFailure):
+        return critical
+    transformed_heating, transformed_cooling, profile_limits = _profile_transform(
+        heating=critical.heating_c,
+        cooling=critical.cooling_c,
+        profile=profile,
+        minimum_range_gap_c=minimum_range_gap_c,
+        eco_heating_setback_c=eco_heating_setback_c,
+        eco_cooling_setback_c=eco_cooling_setback_c,
+        boost_delta_c=boost_delta_c,
+    )
+    if explicit_transition:
+        requested_heating = transformed_heating
+        requested_cooling = transformed_cooling
+    else:
+        requested_heating = _slew(
+            transformed_heating, previous_requested[0], elapsed_since_previous_seconds
+        )
+        requested_cooling = _slew(
+            transformed_cooling, previous_requested[1], elapsed_since_previous_seconds
+        )
+    limitations = tuple(dict.fromkeys((*critical.limitations, *profile_limits)))
+    return PolicyTargets(
+        requested_heating,
+        requested_cooling,
+        critical.heating_c,
+        critical.cooling_c,
+        transformed_heating,
+        transformed_cooling,
+        profile,
+        False,
+        (
+            critical.heating_contribution.governing_location
+            if critical.heating_contribution is not None
+            else "primary"
+        ),
+        (
+            critical.cooling_contribution.governing_location
+            if critical.cooling_contribution is not None
+            else "primary"
+        ),
+        critical.heating_contribution,
+        critical.cooling_contribution,
+        limitations,
+    )
+
+
+def build_fixed_fallback(
+    *,
+    direction: ActuationDirection,
+    primary_air_valid: bool,
+    primary_rh_valid: bool,
+    fallback_policy_no_write: bool = False,
+    heating_c: float = DEFAULT_USER_MIN_C,
+    cooling_c: float = DEFAULT_USER_MAX_C,
+    minimum_range_gap_c: float = DEFAULT_MINIMUM_RANGE_GAP_C,
+) -> PolicyResult:
+    """Build a separate fixed fallback without an ATHB result or profile transform."""
+
+    if fallback_policy_no_write:
+        return PolicyFailure("fallback_no_write")
+    if not primary_air_valid:
+        return PolicyFailure("primary_air_invalid")
+    if not primary_rh_valid:
+        return PolicyFailure("primary_rh_invalid")
+    if not all(math.isfinite(value) for value in (heating_c, cooling_c, minimum_range_gap_c)):
+        return PolicyFailure("invalid_fallback_configuration")
+    if direction is ActuationDirection.RANGED and cooling_c - heating_c < max(
+        1.0, minimum_range_gap_c
+    ):
+        return PolicyFailure("control_band_too_narrow")
+    heating = heating_c if direction is not ActuationDirection.COOLING_ONLY else None
+    cooling = cooling_c if direction is not ActuationDirection.HEATING_ONLY else None
+    return PolicyTargets(
+        heating,
+        cooling,
+        heating,
+        cooling,
+        heating,
+        cooling,
+        ControlProfile.COMFORT,
+        True,
+        "fallback",
+        "fallback",
+        None,
+        None,
+        ("fixed_fallback",),
+    )
+
+
+def apply_calibration_and_user_bounds(
+    *, requested_room_c: float, calibration_offset_c: float, user_min_c: float, user_max_c: float
+) -> ActuatorBoundResult | PolicyFailure:
+    """Move to actuator coordinates, then apply explicit user bounds."""
+
+    values = (requested_room_c, calibration_offset_c, user_min_c, user_max_c)
+    if any(isinstance(value, bool) or not math.isfinite(float(value)) for value in values):
+        return PolicyFailure("invalid_bound_configuration")
+    if not -3.0 <= calibration_offset_c <= 3.0 or user_min_c >= user_max_c:
+        return PolicyFailure("invalid_bound_configuration")
+    calibrated = requested_room_c + calibration_offset_c
+    bounded = min(max(calibrated, user_min_c), user_max_c)
+    limitations = ("user_bound_applied",) if bounded != calibrated else ()
+    return ActuatorBoundResult(requested_room_c, calibrated, bounded, limitations)
+
+
+def boost_expiry(
+    *, selected_at: datetime, duration: timedelta = DEFAULT_BOOST_DURATION
+) -> datetime:
+    """Return explicit boost expiry; callers persist it without restart extension."""
+
+    if selected_at.tzinfo is None or selected_at.utcoffset() is None or duration <= timedelta(0):
+        raise ValueError("boost selection and duration must be valid")
+    return selected_at + duration

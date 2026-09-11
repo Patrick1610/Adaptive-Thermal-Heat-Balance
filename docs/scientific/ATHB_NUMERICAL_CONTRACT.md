@@ -193,6 +193,17 @@ records and preserves the corrupt payload for diagnosis. Recorder bootstrap is g
 deadline-bound, limited to eight calendar days plus the hold lookback and 100,000 records, and
 uses the same integration path as live collection.
 
+## Product-policy separation
+
+Raw comfort and control roots are immutable model outputs. Product policy first selects the
+worst eligible same-vote critical demand, applies the single aggregate 2 K/comfort-edge cap and
+discards conflicting ranged contributions back to the primary control band. It then applies the
+resolved comfort/eco/boost profile and, for ordinary environmental updates only, the 0.5 K per
+ten-minute room-target slew. Static actuator calibration and explicit user bounds follow in
+actuator coordinates and are reported as limitations; none of these transformations are
+relabelled as sensation roots. Fixed fallback is a separate typed result with no invented ATHB
+calculation and requires valid primary air and selected RH inputs.
+
 ## Engineering envelope
 
 Inputs are rejected before evaluation when outside this closed envelope, except where an open bound is stated:
