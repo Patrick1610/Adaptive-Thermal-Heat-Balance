@@ -139,9 +139,11 @@ class _OptionsWizardMixin:
         if user_input is not None:
             submitted = dict(user_input)
             self._advanced = bool(submitted.pop("advanced_settings", False))
+            occupancy = submitted.pop("occupancy_entity", None)
             self._pending_options.update(submitted)
-            if "occupancy_entity" not in submitted:
-                self._pending_options.pop("occupancy_entity", None)
+            self._pending_options.pop("occupancy_entity", None)
+            if isinstance(occupancy, str) and (occupancy := occupancy.strip()):
+                self._pending_options["occupancy_entity"] = occupancy
             self._clean_radiant_options(str(self._pending_options["radiant_model"]))
             if self._pending_options["radiant_model"] != "uniform":
                 return await self.async_step_radiant()
@@ -166,7 +168,7 @@ class _OptionsWizardMixin:
         }
         occupancy = defaults.get("occupancy_entity")
         fields[
-            vol.Optional("occupancy_entity", default=occupancy)
+            vol.Optional("occupancy_entity", description={"suggested_value": occupancy})
             if occupancy
             else vol.Optional("occupancy_entity")
         ] = ENTITY

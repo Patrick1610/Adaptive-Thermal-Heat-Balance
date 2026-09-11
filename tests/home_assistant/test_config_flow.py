@@ -250,7 +250,10 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
                 }
             ],
         },
-        options={"comfort_strategy": "balanced"},
+        options={
+            "comfort_strategy": "balanced",
+            "occupancy_entity": "binary_sensor.old_occupancy",
+        },
         unique_id="zone-1",
     )
     entry.add_to_hass(hass)
@@ -294,6 +297,7 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
     assert {"comfort_strategy", "profile", "radiant_model", "advanced_settings"} <= _schema_keys(
         result
     )
+    assert _suggested_value(result, "occupancy_entity") == "binary_sensor.old_occupancy"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
@@ -312,6 +316,7 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
     assert entry.data["rh_declared"] == 45.0
     assert "rh_entity" not in entry.data
     assert entry.options["profile"] == "eco"
+    assert "occupancy_entity" not in entry.options
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
         await hass.config_entries.async_unload(entry.entry_id)
