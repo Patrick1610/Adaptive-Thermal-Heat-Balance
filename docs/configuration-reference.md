@@ -49,10 +49,12 @@ The temperatures are **not** interpolated. Each vote is independently inverse-so
 pressure remains constant. Thermal neutral (vote 0) is a reference, not the normal actuator
 target.
 
-`comfort` uses the solved strategy targets. `eco` subtracts the heating setback and adds the
-cooling setback. `boost` temporarily shifts both sides toward comfort by `boost_delta_c`, bounded
-by policy, and expires after `boost_duration_minutes`. `auto` resolves to Comfort or Eco from the
-optional occupancy source; unknown occupancy is held briefly and then resolves conservatively.
+`comfort` uses the solved strategy targets. `eco` widens those targets using the separately
+selectable Eco intensity. `boost` temporarily shifts both sides toward comfort by
+`boost_delta_c`, bounded by policy, and expires after `boost_duration_minutes`. `auto` resolves to
+Comfort or Eco from the optional occupancy source; unknown occupancy is held briefly and then
+resolves conservatively. Changing strategy, profile, or Eco intensity is a lightweight runtime
+change and does not reload the config entry.
 
 The **Heating control target**, **Thermal neutral**, and **Cooling control target** sensors expose
 the inverse-solved ATHB roots before profile policy. They therefore change with comfort strategy,
@@ -60,7 +62,9 @@ but not with Eco or Boost. A climate-specific **effective temperature** (or effe
 is the final request after profile, critical-location policy, calibration, bounds, and device-grid
 normalization. It is a preview even while control is disabled. The actual climate target changes
 only when adaptive control is enabled and ownership, capability, override, and broker gates allow
-a write.
+a write. Its state attributes distinguish `adaptive`, `fallback`, and `unavailable` mode and give
+the fallback or suppression reason. Consequently a fixed effective target with Input status
+`running_mean_unavailable` is explicit fallback behaviour, not a responsive ATHB result.
 
 ## Radiant and surface models
 
@@ -109,10 +113,24 @@ required directional roots are no longer available.
 
 ## Profile tuning
 
-`eco_heating_setback_c` lowers heating and `eco_cooling_setback_c` raises cooling, each 0–5 °C.
+Eco intensity controls what the Eco profile does after sensation-space inverse solving:
+
+| Eco intensity | Heating policy | Cooling policy | Intended use |
+|---|---|---|---|
+| Mild | solved root − 2 °C | solved root + 2 °C | Short absence or modest savings. |
+| Workday | solved root − 4 °C | solved root + 4 °C | Longer daytime absence. |
+| Deep | configured inactive heating target | configured inactive cooling target | Long absence; no adaptive target is implied. |
+| Custom | root − `eco_heating_setback_c` | root + `eco_cooling_setback_c` | Expert offsets from 0–5 °C. |
+
+Deep targets form the inactive baseline. Any eligible critical local-air location can still add
+its already bounded, directional correction of at most 2 °C. The result is then intersected with
+the configured control bounds and device bounds and rounded inward to the device grid. Existing
+entries created before Eco intensity retain their configured offsets through the Custom mode;
+new entries default to Mild. Only the parameters used by Custom or Deep appear on the advanced
+profile page.
+
 `boost_delta_c` (0–3 °C) shifts in the opposite, comfort-seeking direction. Boost lasts 5–180
-minutes. These policy operations occur after sensation-space inverse solving and before final
-actuator bounds and grid normalization.
+minutes. All profile operations occur before final actuator bounds and grid normalization.
 
 ## Control limits and Auto mapping
 

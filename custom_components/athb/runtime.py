@@ -55,6 +55,7 @@ from .calculation import (
 from .const import (
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
+    CONF_ECO_INTENSITY,
     CONF_PROFILE,
     DEFAULT_PROFILE,
     DEFAULT_STRATEGY,
@@ -105,6 +106,7 @@ class ZoneRuntime:
     strategy: str
     profile: str
     control_enabled: bool
+    eco_intensity: str = "custom"
     configuration_generation: int = 1
     runtime_generation: int = 1
     input_generation: int = 1
@@ -526,7 +528,7 @@ class ZoneRuntime:
             history.quality.value,
             self.strategy,
             (profile_resolution := self._resolve_profile(now)).resolved.value,
-            dict(self.entry.options),
+            {**self.entry.options, CONF_ECO_INTENSITY: self.eco_intensity},
             targets,
             critical,
             self.explicit_transition,
@@ -564,6 +566,7 @@ class ZoneRuntime:
         }
         self.values["strategy"] = self.strategy
         self.values["profile"] = self.profile
+        self.values["eco_intensity"] = self.eco_intensity
         self.values["resolved_profile"] = profile_resolution.resolved.value
         self.values["configuration_generation"] = self.configuration_generation
         self._schedule_freshness_expiries(now, radiant_id)
@@ -1348,6 +1351,27 @@ class ZoneRuntime:
         self._schedule_runtime_persistence()
         self.async_request_snapshot()
 
+    async def async_set_eco_intensity(self, intensity: str) -> None:
+        if intensity == self.eco_intensity:
+            return
+        self.hass.config_entries.async_update_entry(
+            self.entry, options={**self.entry.options, CONF_ECO_INTENSITY: intensity}
+        )
+        self.eco_intensity = intensity
+        self.configuration_generation += 1
+        self.explicit_transition = True
+        if self.controller is not None:
+            self.controller.invalidate()
+            if self.debounce_cancel is not None:
+                self.debounce_cancel()
+                self.debounce_cancel = None
+                self.debounce_started = None
+            if self.broker is not None:
+                for identity in self.ownership:
+                    self.broker.invalidate(identity)
+            self.async_request_snapshot()
+        self.publish({**self.values, "eco_intensity": intensity, "reason": "eco_intensity_changed"})
+
     def _schedule_boost_expiry(self, expiry: datetime | None = None) -> None:
         expiry = expiry or (
             dt_util.utcnow()
@@ -1492,4 +1516,5 @@ def runtime_from_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> ZoneRunti
         str(entry.options.get(CONF_COMFORT_STRATEGY, DEFAULT_STRATEGY)),
         str(entry.options.get(CONF_PROFILE, DEFAULT_PROFILE)),
         bool(entry.options.get(CONF_CONTROL_ENABLED, False)),
+        str(entry.options.get(CONF_ECO_INTENSITY, "custom")),
     )

@@ -24,7 +24,7 @@ from custom_components.athb.binary_sensor import (
 from custom_components.athb.button import ResumeButton
 from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE
 from custom_components.athb.runtime import ZoneRuntime
-from custom_components.athb.select import ProfileSelect, StrategySelect
+from custom_components.athb.select import EcoIntensitySelect, ProfileSelect, StrategySelect
 from custom_components.athb.sensor import DESCRIPTIONS, AthbSensor, TargetSensor
 from custom_components.athb.sensor import async_setup_entry as async_setup_sensor_entry
 from custom_components.athb.switch import AdaptiveControlSwitch
@@ -115,6 +115,7 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
         AdaptiveControlSwitch(runtime),
         StrategySelect(runtime),
         ProfileSelect(runtime),
+        EcoIntensitySelect(runtime),
         ResumeButton(runtime),
     ]
     assert [entity.unique_id for entity in entities] == [
@@ -123,6 +124,7 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
         "zone-1_adaptive_control",
         "zone-1_comfort_strategy",
         "zone-1_profile",
+        "zone-1_eco_intensity",
         "zone-1_resume_control",
     ]
     assert all(entity.__class__.__module__.split(".")[-1] != "climate" for entity in entities)
@@ -148,9 +150,24 @@ def test_surface_values_and_inapplicable_target_endpoints_remain_truthful() -> N
         "registry_identity": "registry-1",
     }
     runtime.publish({"effective_targets": {"target-1": {"temperature": 21.5}}})
-    assert TargetSensor(runtime, target, "temperature").available
+    effective = TargetSensor(runtime, target, "temperature")
+    assert effective.available
     assert not TargetSensor(runtime, target, "target_low").available
     assert not TargetSensor(runtime, target, "target_high").available
+    runtime.publish(
+        {
+            "effective_targets": {"target-1": {"temperature": 18.5}},
+            "effective_target_details": {
+                "target-1": {
+                    "mode": "fallback",
+                    "reason": "running_mean_unavailable",
+                    "fallback": True,
+                }
+            },
+        }
+    )
+    assert effective.extra_state_attributes["mode"] == "fallback"
+    assert effective.extra_state_attributes["reason"] == "running_mean_unavailable"
 
 
 async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolete_entities(
@@ -215,6 +232,22 @@ def test_strategy_select_persists_authoritative_option_without_reload() -> None:
     )
     assert runtime.strategy == "comfort"
     assert runtime.configuration_generation == generation + 1
+    assert not hasattr(runtime.hass.config_entries, "async_reload")
+
+
+def test_eco_intensity_select_is_a_lightweight_runtime_change() -> None:
+    runtime = _runtime()
+    generation = runtime.configuration_generation
+
+    asyncio.run(EcoIntensitySelect(runtime).async_select_option("workday"))
+
+    runtime.hass.config_entries.async_update_entry.assert_called_once_with(
+        runtime.entry,
+        options={"comfort_strategy": "balanced", "eco_intensity": "workday"},
+    )
+    assert runtime.eco_intensity == "workday"
+    assert runtime.configuration_generation == generation + 1
+    assert runtime.explicit_transition
     assert not hasattr(runtime.hass.config_entries, "async_reload")
 
 

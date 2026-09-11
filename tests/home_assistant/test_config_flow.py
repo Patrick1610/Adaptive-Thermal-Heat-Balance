@@ -77,6 +77,7 @@ async def test_config_flow_stores_tagged_declaration_stable_target_identity_and_
     assert stored_target["registry_identity"] == target.id
     assert stored_target["target_uuid"]
     assert result["options"]["comfort_strategy"] == "balanced"
+    assert result["options"]["eco_intensity"] == "mild"
     assert result["options"]["control_enabled"] is False
 
 
@@ -618,3 +619,46 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
     )
     assert result["step_id"] == "air_speed"
     assert _schema_keys(result) == {"air_speed_entity"}
+
+
+async def test_deep_eco_discloses_only_inactive_targets_in_advanced_profile_page(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "zone-deep", "targets": []},
+        options={
+            "comfort_strategy": "balanced",
+            "profile": "eco",
+            "eco_intensity": "deep",
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "comfort_strategy": "balanced",
+            "profile": "eco",
+            "eco_intensity": "deep",
+            "radiant_model": "uniform",
+            "advanced_settings": True,
+        },
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"air_speed_m_s": 0.1}
+    )
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+
+    assert result["step_id"] == "profile_parameters"
+    assert _schema_keys(result) == {
+        "inactive_heating_temperature",
+        "inactive_cooling_temperature",
+        "boost_delta_c",
+        "boost_duration_minutes",
+    }

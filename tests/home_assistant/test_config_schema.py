@@ -124,6 +124,14 @@ def test_target_container_and_all_self_references_fail(targets: object) -> None:
         ({"air_speed_mode": "invented"}, "air_speed_mode"),
         ({"clothing_mode": "invented"}, "clothing_mode"),
         ({"clothing_mode": "fixed", "fixed_clothing_clo": 3.0}, "fixed_clothing_clo"),
+        ({"eco_intensity": "extreme"}, "eco_intensity"),
+        (
+            {
+                "inactive_heating_temperature": 22.0,
+                "inactive_cooling_temperature": 20.0,
+            },
+            "inactive_cooling_temperature",
+        ),
         ({"radiant_model": "surface", "surface_modelled": True}, "surface_f_rsi"),
         (
             {"minimum_control_temperature": 18.0, "maximum_control_temperature": 18.0},

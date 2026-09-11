@@ -18,6 +18,7 @@ from .config_schema import validate_environment, validate_options, validate_targ
 from .const import (
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
+    CONF_ECO_INTENSITY,
     CONF_OUTDOOR_SOURCE,
     CONF_PRIMARY_TEMPERATURE,
     CONF_PROFILE,
@@ -26,6 +27,7 @@ from .const import (
     CONF_RH_MODE,
     CONF_TARGETS,
     CONF_ZONE_UUID,
+    DEFAULT_ECO_INTENSITY,
     DEFAULT_PROFILE,
     DEFAULT_STRATEGY,
     DOMAIN,
@@ -61,6 +63,7 @@ def _number(
 OPTION_DEFAULTS: dict[str, object] = {
     CONF_COMFORT_STRATEGY: DEFAULT_STRATEGY,
     CONF_PROFILE: DEFAULT_PROFILE,
+    CONF_ECO_INTENSITY: DEFAULT_ECO_INTENSITY,
     "radiant_model": "uniform",
     "met": 1.1,
     "clothing_mode": "automatic",
@@ -71,6 +74,8 @@ OPTION_DEFAULTS: dict[str, object] = {
     "running_mean_alpha": 0.8,
     "eco_heating_setback_c": 2.0,
     "eco_cooling_setback_c": 2.0,
+    "inactive_heating_temperature": 18.0,
+    "inactive_cooling_temperature": 26.0,
     "boost_delta_c": 1.0,
     "boost_duration_minutes": 60.0,
     "manual_override_minutes": 120.0,
@@ -113,7 +118,10 @@ class _OptionsWizardMixin:
         targets: list[dict[str, str]],
     ) -> None:
         self._wizard_targets = targets
-        self._pending_options = {**OPTION_DEFAULTS, **existing_options}
+        compatible_existing = dict(existing_options)
+        if compatible_existing and CONF_ECO_INTENSITY not in compatible_existing:
+            compatible_existing[CONF_ECO_INTENSITY] = "custom"
+        self._pending_options = {**OPTION_DEFAULTS, **compatible_existing}
         self._advanced = False
         self._critical_existing = [
             dict(item)
@@ -147,6 +155,9 @@ class _OptionsWizardMixin:
             ),
             vol.Required(CONF_PROFILE, default=defaults[CONF_PROFILE]): _select(
                 ("auto", "comfort", "eco", "boost"), "profile"
+            ),
+            vol.Required(CONF_ECO_INTENSITY, default=defaults[CONF_ECO_INTENSITY]): _select(
+                ("mild", "workday", "deep", "custom"), "eco_intensity"
             ),
             vol.Required("radiant_model", default=defaults["radiant_model"]): _select(
                 ("uniform", "direct_mrt", "globe", "surface"), "radiant_model"
@@ -385,9 +396,10 @@ class _OptionsWizardMixin:
             self._pending_options.update(user_input)
             return await self.async_step_control_limits()
         defaults = self._pending_options
-        return self.async_show_form(
-            step_id="profile_parameters",
-            data_schema=vol.Schema(
+        eco_intensity = str(defaults.get(CONF_ECO_INTENSITY, DEFAULT_ECO_INTENSITY))
+        fields: dict[vol.Marker, object] = {}
+        if eco_intensity == "custom":
+            fields.update(
                 {
                     vol.Required(
                         "eco_heating_setback_c",
@@ -397,15 +409,35 @@ class _OptionsWizardMixin:
                         "eco_cooling_setback_c",
                         default=defaults.get("eco_cooling_setback_c", 2.0),
                     ): _number(0.0, 5.0, 0.1, "°C"),
-                    vol.Required(
-                        "boost_delta_c", default=defaults.get("boost_delta_c", 1.0)
-                    ): _number(0.0, 3.0, 0.1, "°C"),
-                    vol.Required(
-                        "boost_duration_minutes",
-                        default=defaults.get("boost_duration_minutes", 60.0),
-                    ): _number(5.0, 180.0, 5.0, "min"),
                 }
-            ),
+            )
+        elif eco_intensity == "deep":
+            fields.update(
+                {
+                    vol.Required(
+                        "inactive_heating_temperature",
+                        default=defaults.get("inactive_heating_temperature", 18.0),
+                    ): _number(5.0, 35.0, 0.5, "°C"),
+                    vol.Required(
+                        "inactive_cooling_temperature",
+                        default=defaults.get("inactive_cooling_temperature", 26.0),
+                    ): _number(5.0, 35.0, 0.5, "°C"),
+                }
+            )
+        fields.update(
+            {
+                vol.Required("boost_delta_c", default=defaults.get("boost_delta_c", 1.0)): _number(
+                    0.0, 3.0, 0.1, "°C"
+                ),
+                vol.Required(
+                    "boost_duration_minutes",
+                    default=defaults.get("boost_duration_minutes", 60.0),
+                ): _number(5.0, 180.0, 5.0, "min"),
+            }
+        )
+        return self.async_show_form(
+            step_id="profile_parameters",
+            data_schema=vol.Schema(fields),
         )
 
     async def async_step_control_limits(

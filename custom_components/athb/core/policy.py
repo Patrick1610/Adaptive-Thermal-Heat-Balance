@@ -11,6 +11,7 @@ from .contracts import (
     ActuationDirection,
     ControlProfile,
     CriticalEligibilityMode,
+    EcoIntensity,
     RootResult,
     RootSet,
     RootSuccess,
@@ -19,6 +20,7 @@ from .contracts import (
 MAX_CRITICAL_INFLUENCE_C = 2.0
 DEFAULT_MINIMUM_RANGE_GAP_C = 1.0
 DEFAULT_ECO_SETBACK_C = 2.0
+WORKDAY_ECO_SETBACK_C = 4.0
 DEFAULT_BOOST_DELTA_C = 1.0
 DEFAULT_BOOST_DURATION = timedelta(minutes=60)
 OCCUPANCY_UNKNOWN_HOLD = timedelta(minutes=30)
@@ -282,16 +284,39 @@ def _profile_transform(
     heating: float | None,
     cooling: float | None,
     profile: ControlProfile,
+    eco_intensity: EcoIntensity,
     minimum_range_gap_c: float,
     eco_heating_setback_c: float,
     eco_cooling_setback_c: float,
+    inactive_heating_c: float,
+    inactive_cooling_c: float,
     boost_delta_c: float,
 ) -> tuple[float | None, float | None, tuple[str, ...]]:
     limitations: list[str] = []
     if profile is ControlProfile.ECO:
+        if eco_intensity is EcoIntensity.DEEP:
+            return (
+                inactive_heating_c if heating is not None else None,
+                inactive_cooling_c if cooling is not None else None,
+                ("eco_policy", "eco_deep"),
+            )
+        heating_setback = (
+            DEFAULT_ECO_SETBACK_C
+            if eco_intensity is EcoIntensity.MILD
+            else WORKDAY_ECO_SETBACK_C
+            if eco_intensity is EcoIntensity.WORKDAY
+            else eco_heating_setback_c
+        )
+        cooling_setback = (
+            DEFAULT_ECO_SETBACK_C
+            if eco_intensity is EcoIntensity.MILD
+            else WORKDAY_ECO_SETBACK_C
+            if eco_intensity is EcoIntensity.WORKDAY
+            else eco_cooling_setback_c
+        )
         return (
-            heating - eco_heating_setback_c if heating is not None else None,
-            cooling + eco_cooling_setback_c if cooling is not None else None,
+            heating - heating_setback if heating is not None else None,
+            cooling + cooling_setback if cooling is not None else None,
             ("eco_policy",),
         )
     if profile is not ControlProfile.BOOST:
@@ -322,9 +347,12 @@ def build_adaptive_policy(
     critical_demands: tuple[CriticalDemand, ...],
     direction: ActuationDirection,
     profile: ControlProfile,
+    eco_intensity: EcoIntensity = EcoIntensity.CUSTOM,
     minimum_range_gap_c: float = DEFAULT_MINIMUM_RANGE_GAP_C,
     eco_heating_setback_c: float = DEFAULT_ECO_SETBACK_C,
     eco_cooling_setback_c: float = DEFAULT_ECO_SETBACK_C,
+    inactive_heating_c: float = DEFAULT_USER_MIN_C,
+    inactive_cooling_c: float = DEFAULT_USER_MAX_C,
     boost_delta_c: float = DEFAULT_BOOST_DELTA_C,
     previous_requested: tuple[float | None, float | None] = (None, None),
     elapsed_since_previous_seconds: float = 0.0,
@@ -336,6 +364,8 @@ def build_adaptive_policy(
         minimum_range_gap_c,
         eco_heating_setback_c,
         eco_cooling_setback_c,
+        inactive_heating_c,
+        inactive_cooling_c,
         boost_delta_c,
         elapsed_since_previous_seconds,
     )
@@ -346,6 +376,7 @@ def build_adaptive_policy(
         or eco_heating_setback_c < 0.0
         or eco_cooling_setback_c < 0.0
         or boost_delta_c < 0.0
+        or inactive_heating_c >= inactive_cooling_c
     ):
         return PolicyFailure("invalid_policy_configuration")
     critical = apply_critical_demands(
@@ -360,9 +391,22 @@ def build_adaptive_policy(
         heating=critical.heating_c,
         cooling=critical.cooling_c,
         profile=profile,
+        eco_intensity=eco_intensity,
         minimum_range_gap_c=minimum_range_gap_c,
         eco_heating_setback_c=eco_heating_setback_c,
         eco_cooling_setback_c=eco_cooling_setback_c,
+        inactive_heating_c=inactive_heating_c
+        + (
+            critical.heating_contribution.applied_c
+            if critical.heating_contribution is not None
+            else 0.0
+        ),
+        inactive_cooling_c=inactive_cooling_c
+        + (
+            critical.cooling_contribution.applied_c
+            if critical.cooling_contribution is not None
+            else 0.0
+        ),
         boost_delta_c=boost_delta_c,
     )
     if explicit_transition:

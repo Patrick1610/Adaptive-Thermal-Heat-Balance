@@ -14,6 +14,7 @@ from custom_components.athb.core import (
     ClimateCapabilitySnapshot,
     ComfortStrategy,
     ControlProfile,
+    EcoIntensity,
     GridOptions,
     NormalizedRangeTarget,
     NormalizedScalarTarget,
@@ -106,6 +107,37 @@ def test_missing_history_is_explicit_fixed_fallback_not_adaptive_output() -> Non
     assert result.policy.limitations == ("fixed_fallback",)
     assert isinstance(result.normalized, NormalizedScalarTarget)
     assert result.normalized.normalized_ha == 18.0
+    assert result.hold_condition == "running_mean_unavailable"
+
+
+@pytest.mark.parametrize(
+    ("intensity", "expected_heating", "expected_cooling"),
+    [
+        (EcoIntensity.MILD, 17.3611302727, 25.4795271760),
+        (EcoIntensity.WORKDAY, 15.3611302727, 27.4795271760),
+        (EcoIntensity.DEEP, 16.0, 29.0),
+        (EcoIntensity.CUSTOM, 18.3611302727, 24.4795271760),
+    ],
+)
+def test_eco_intensity_uses_post_solve_policy_for_both_directions(
+    intensity: EcoIntensity, expected_heating: float, expected_cooling: float
+) -> None:
+    result = calculate_zone(
+        replace(
+            _input(direction=ActuationDirection.RANGED, hvac_mode="heat_cool", features=2),
+            profile=ControlProfile.ECO,
+            eco_intensity=intensity,
+            eco_heating_setback_c=1.0,
+            eco_cooling_setback_c=1.0,
+            inactive_heating_c=16.0,
+            inactive_cooling_c=29.0,
+            grid=GridOptions(10.0, 30.0),
+        )
+    )
+
+    assert result.policy is not None
+    assert result.policy.heating_c == pytest.approx(expected_heating, abs=0.01)
+    assert result.policy.cooling_c == pytest.approx(expected_cooling, abs=0.01)
 
 
 def test_strategy_order_is_in_sensation_roots_not_temperature_midpoints() -> None:

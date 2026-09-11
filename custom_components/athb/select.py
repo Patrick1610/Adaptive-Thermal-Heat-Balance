@@ -1,4 +1,4 @@
-"""Lightweight strategy and profile selects."""
+"""Lightweight strategy, profile, and Eco intensity selects."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .runtime import AthbConfigEntry, ZoneRuntime
 
 
 class StrategySelect(AthbEntity, SelectEntity):
-    _attr_name = "Comfort strategy"
+    _attr_translation_key = "comfort_strategy"
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "comfort_strategy")
@@ -26,7 +26,7 @@ class StrategySelect(AthbEntity, SelectEntity):
 
 
 class ProfileSelect(AthbEntity, SelectEntity):
-    _attr_name = "Profile"
+    _attr_translation_key = "profile"
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "profile")
@@ -40,6 +40,21 @@ class ProfileSelect(AthbEntity, SelectEntity):
         await self.runtime.async_set_profile(option)
 
 
+class EcoIntensitySelect(AthbEntity, SelectEntity):
+    _attr_translation_key = "eco_intensity"
+
+    def __init__(self, runtime: ZoneRuntime) -> None:
+        super().__init__(runtime, "eco_intensity")
+        self._attr_options = ["mild", "workday", "deep", "custom"]
+
+    @property
+    def current_option(self) -> str:
+        return self.runtime.eco_intensity
+
+    async def async_select_option(self, option: str) -> None:
+        await self.runtime.async_set_eco_intensity(option)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AthbConfigEntry,
@@ -47,4 +62,6 @@ async def async_setup_entry(
 ) -> None:
     del hass
     runtime = entry.runtime_data
-    async_add_entities([StrategySelect(runtime), ProfileSelect(runtime)])
+    async_add_entities(
+        [StrategySelect(runtime), ProfileSelect(runtime), EcoIntensitySelect(runtime)]
+    )

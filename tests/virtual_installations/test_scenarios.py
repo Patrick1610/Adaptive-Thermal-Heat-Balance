@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from tests.virtual_installations.runner import run_scenario
+from custom_components.athb.calculation import calculate_runtime_snapshot
+from tests.virtual_installations.runner import _broker_run, _captured, run_scenario
 from tests.virtual_installations.schema import FIXTURES, load_scenarios
 
 SCENARIOS = load_scenarios()
@@ -37,3 +38,25 @@ async def test_virtual_installation(
     assert result.passed
     assert result.failed_assertions == ()
     athb_report_results.append(result)
+
+
+async def test_deep_eco_runs_through_snapshot_policy_normalization_and_broker() -> None:
+    scenario = json.loads(json.dumps(SCENARIOS[0]))
+    scenario["zone_configuration"].update(
+        {
+            "profile": "eco",
+            "eco_intensity": "deep",
+            "inactive_heating_temperature": 16.0,
+            "inactive_cooling_temperature": 29.0,
+            "user_min_c": 10.0,
+            "user_max_c": 30.0,
+        }
+    )
+
+    calculation = calculate_runtime_snapshot(_captured(scenario))
+    calls, reason, acknowledgement, ownership = await _broker_run(scenario, calculation)
+
+    assert calls == [{"entity_id": "climate.living_room", "temperature": 16.0}]
+    assert reason == "own_context_match"
+    assert acknowledgement == "acknowledged"
+    assert ownership == "owned"

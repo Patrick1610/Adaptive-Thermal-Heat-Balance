@@ -240,6 +240,59 @@ def test_snapshot_applies_configured_profile_values_and_environmental_slew() -> 
     assert policy.heating_c == pytest.approx(18.5)
 
 
+def test_snapshot_applies_deep_eco_and_reports_fixed_fallback_truthfully() -> None:
+    adaptive = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            NOW,
+            _state("sensor.room", "20", "°C"),
+            None,
+            50.0,
+            _state("sensor.outdoor", "5", "°C"),
+            None,
+            5.0,
+            "complete_history",
+            "balanced",
+            "eco",
+            {
+                "eco_intensity": "deep",
+                "inactive_heating_temperature": 16.0,
+                "inactive_cooling_temperature": 29.0,
+                "minimum_control_temperature": 10.0,
+                "maximum_control_temperature": 30.0,
+            },
+            (_target(),),
+            explicit_transition=True,
+        )
+    )
+    assert result_values(adaptive)["effective_targets"]["target-1"]["temperature"] == 16.0
+
+    fallback = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            NOW,
+            _state("sensor.room", "20", "°C"),
+            None,
+            50.0,
+            _state("sensor.outdoor", "5", "°C"),
+            None,
+            None,
+            "unavailable",
+            "balanced",
+            "comfort",
+            {"fallback_heating_c": 18.1},
+            (_target(),),
+            explicit_transition=True,
+        )
+    )
+    values = result_values(fallback)
+    assert values["input_status"] == "running_mean_unavailable"
+    assert values["effective_targets"]["target-1"]["temperature"] == 18.5
+    assert values["effective_target_details"]["target-1"] == {
+        "mode": "fallback",
+        "reason": "running_mean_unavailable",
+        "fallback": True,
+    }
+
+
 def test_runtime_source_state_requires_two_reports_after_invalid_primary() -> None:
     def calculate(
         now: datetime,

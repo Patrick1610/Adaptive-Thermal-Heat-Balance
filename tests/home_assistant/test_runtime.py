@@ -1127,3 +1127,17 @@ async def test_strategy_and_profile_changes_invalidate_active_runtime_without_re
     assert runtime.profile == "auto"
     assert runtime.previous_non_boost_profile == "auto"
     assert "boost" not in runtime.timers
+
+    broker = MagicMock()
+    runtime.broker = broker
+    runtime.ownership = {"registry-1": cast(Any, object())}
+    runtime.debounce_cancel = lambda: cancelled.append(True)
+    runtime.debounce_started = hass.loop.time()
+    await runtime.async_set_eco_intensity("workday")
+    assert runtime.eco_intensity == "workday"
+    assert runtime.configuration_generation == 3
+    assert cancelled == [True, True]
+    broker.invalidate.assert_called_once_with("registry-1")
+    unchanged_generation = runtime.configuration_generation
+    await runtime.async_set_eco_intensity("workday")
+    assert runtime.configuration_generation == unchanged_generation

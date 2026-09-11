@@ -10,6 +10,7 @@ from custom_components.athb.core.contracts import (
     ActuationDirection,
     ControlProfile,
     CriticalEligibilityMode,
+    EcoIntensity,
     RootFailure,
     RootFailureCode,
     RootName,
@@ -241,6 +242,51 @@ def test_eco_and_boost_transform_after_critical_policy_without_changing_roots() 
     assert (eco.heating_c, eco.cooling_c) == (17.0, 25.0)
     assert (eco.pre_profile_heating_c, eco.pre_profile_cooling_c) == (19.0, 23.0)
     assert roots.heating_control.mapped_room_temperature_c == 19.0
+    workday = build_adaptive_policy(
+        roots=roots,
+        critical_demands=(),
+        direction=ActuationDirection.RANGED,
+        profile=ControlProfile.ECO,
+        eco_intensity=EcoIntensity.WORKDAY,
+        explicit_transition=True,
+    )
+    assert isinstance(workday, PolicyTargets)
+    assert (workday.heating_c, workday.cooling_c) == (15.0, 27.0)
+    deep = build_adaptive_policy(
+        roots=roots,
+        critical_demands=(),
+        direction=ActuationDirection.RANGED,
+        profile=ControlProfile.ECO,
+        eco_intensity=EcoIntensity.DEEP,
+        inactive_heating_c=16.0,
+        inactive_cooling_c=28.0,
+        explicit_transition=True,
+    )
+    assert isinstance(deep, PolicyTargets)
+    assert (deep.heating_c, deep.cooling_c) == (16.0, 28.0)
+    assert "eco_deep" in deep.limitations
+    guarded_deep = build_adaptive_policy(
+        roots=roots,
+        critical_demands=(
+            CriticalDemand(
+                "cold_seat",
+                CriticalEligibilityMode.HEATING,
+                _root(RootName.HEATING_CONTROL, -0.25, 20.5),
+                _root(RootName.COOLING_CONTROL, 0.25, 23.0),
+                True,
+            ),
+        ),
+        direction=ActuationDirection.HEATING_ONLY,
+        profile=ControlProfile.ECO,
+        eco_intensity=EcoIntensity.DEEP,
+        inactive_heating_c=16.0,
+        inactive_cooling_c=28.0,
+        explicit_transition=True,
+    )
+    assert isinstance(guarded_deep, PolicyTargets)
+    assert guarded_deep.heating_c == 17.5
+    assert guarded_deep.heating_contribution is not None
+    assert guarded_deep.heating_contribution.applied_c == 1.5
     boost = build_adaptive_policy(
         roots=roots,
         critical_demands=(),

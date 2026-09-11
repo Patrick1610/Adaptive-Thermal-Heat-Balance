@@ -20,6 +20,7 @@ from custom_components.athb.core.contracts import (
     ControlProfile,
     CriticalEligibilityMode,
     DispatchStatus,
+    EcoIntensity,
     EnvironmentalSnapshot,
     FixedClothing,
     HeatBalanceSuccess,
@@ -109,6 +110,12 @@ def test_contract_enums_have_stable_wire_values() -> None:
         "comfort",
         "eco",
         "boost",
+    ]
+    assert [intensity.value for intensity in EcoIntensity] == [
+        "mild",
+        "workday",
+        "deep",
+        "custom",
     ]
     assert [status.value for status in NumericalStatus] == ["success", "failure"]
 

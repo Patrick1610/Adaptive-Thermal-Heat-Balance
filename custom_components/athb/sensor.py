@@ -98,6 +98,20 @@ class TargetSensor(AthbEntity, SensorEntity):
     def available(self) -> bool:
         return self.native_value is not None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        targets = self.runtime.values.get("effective_target_details", {})
+        detail = targets.get(self.target["target_uuid"], {})
+        return {
+            "mode": detail.get("mode", "unavailable"),
+            "reason": detail.get("reason"),
+            "fallback": detail.get("fallback", False),
+            "comfort_strategy": self.runtime.strategy,
+            "profile": self.runtime.profile,
+            "resolved_profile": self.runtime.values.get("resolved_profile"),
+            "eco_intensity": self.runtime.eco_intensity,
+        }
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

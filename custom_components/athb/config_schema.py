@@ -78,6 +78,8 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         "upper_comfort_vote": (0.05, 1.0),
         "eco_heating_setback_c": (0.0, 5.0),
         "eco_cooling_setback_c": (0.0, 5.0),
+        "inactive_heating_temperature": (5.0, 35.0),
+        "inactive_cooling_temperature": (5.0, 35.0),
         "boost_delta_c": (0.0, 3.0),
         "boost_duration_minutes": (5.0, 180.0),
         "manual_override_minutes": (15.0, 1440.0),
@@ -97,6 +99,8 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
     for name, value in data.items():
         if name.startswith("calibration_") and not _finite_in_range(value, -3.0, 3.0):
             errors[name] = "invalid_option"
+    if data.get("eco_intensity", "custom") not in {"mild", "workday", "deep", "custom"}:
+        errors["eco_intensity"] = "invalid_option"
     air_speed_mode = data.get("air_speed_mode", "fixed")
     if air_speed_mode == "measured":
         if not data.get("air_speed_entity"):
@@ -124,6 +128,14 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         or float(minimum) >= float(maximum)
     ):
         errors["control_bounds"] = "invalid_control_bounds"
+    inactive_heating = data.get("inactive_heating_temperature", 18.0)
+    inactive_cooling = data.get("inactive_cooling_temperature", 26.0)
+    if (
+        "inactive_heating_temperature" not in errors
+        and "inactive_cooling_temperature" not in errors
+        and float(inactive_heating) >= float(inactive_cooling)
+    ):
+        errors["inactive_cooling_temperature"] = "invalid_option"
     if data.get("fallback_mode", "fixed") not in {"fixed", "no_write"}:
         errors["fallback_mode"] = "invalid_option"
     if data.get("fallback_mode", "fixed") == "fixed" and "control_bounds" not in errors:

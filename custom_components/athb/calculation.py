@@ -27,6 +27,7 @@ from .core.contracts import (
     ControlProfile,
     CriticalEligibilityMode,
     DeclaredRelativeHumidity,
+    EcoIntensity,
     FixedClothing,
     MeasuredAirTemperature,
     MeasuredGlobeTemperature,
@@ -525,6 +526,13 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 eco_cooling_setback_c=_finite_option(
                     snapshot.options, "eco_cooling_setback_c", 2.0
                 ),
+                eco_intensity=EcoIntensity(str(snapshot.options.get("eco_intensity", "custom"))),
+                inactive_heating_c=_finite_option(
+                    snapshot.options, "inactive_heating_temperature", 18.0
+                ),
+                inactive_cooling_c=_finite_option(
+                    snapshot.options, "inactive_cooling_temperature", 26.0
+                ),
                 boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 1.0),
                 previous_requested=snapshot.previous_requested,
                 elapsed_since_previous_seconds=snapshot.elapsed_since_previous_seconds,
@@ -649,10 +657,18 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         return root.mapped_room_temperature_c if isinstance(root, RootSuccess) else None
 
     effective: dict[str, dict[str, float]] = {}
+    effective_details: dict[str, dict[str, str | bool | None]] = {}
     for target in result.targets:
-        normalized = target.result.normalized if target.result is not None else None
-        if normalized is None:
+        calculation = target.result
+        if calculation is None or calculation.normalized is None:
             continue
+        normalized = calculation.normalized
+        fallback = bool(calculation.policy and calculation.policy.fallback)
+        effective_details[target.target_uuid] = {
+            "mode": "fallback" if fallback else "adaptive",
+            "reason": calculation.hold_condition or target.suppression_reason,
+            "fallback": fallback,
+        }
         if isinstance(normalized, NormalizedScalarTarget):
             effective[target.target_uuid] = {"temperature": normalized.normalized_actuator_c}
         elif isinstance(normalized, NormalizedRangeTarget):
@@ -681,6 +697,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         "control_status": "suppressed" if result.suppression_reason else "ready",
         "outdoor_running_mean": result.running_mean_c,
         "effective_targets": effective,
+        "effective_target_details": effective_details,
         "quality_reasons": result.quality_reasons,
         "suppression_reason": result.suppression_reason,
         "rh_provenance": result.relative_humidity_provenance,

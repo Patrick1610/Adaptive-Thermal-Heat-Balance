@@ -144,6 +144,15 @@ class ControlProfile(StrEnum):
     BOOST = "boost"
 
 
+class EcoIntensity(StrEnum):
+    """Post-solve widening applied while the resolved profile is Eco."""
+
+    MILD = "mild"
+    WORKDAY = "workday"
+    DEEP = "deep"
+    CUSTOM = "custom"
+
+
 class TargetShape(StrEnum):
     """Shape of a normalized climate intent."""
 

@@ -25,6 +25,7 @@ from .contracts import (
     ControlProfile,
     CriticalEligibilityMode,
     DeclaredRelativeHumidity,
+    EcoIntensity,
     MeasuredRelativeHumidity,
     NumericalFailure,
     RootName,
@@ -80,6 +81,9 @@ class ZoneCalculationInput:
     reject_extrapolation: bool = False
     eco_heating_setback_c: float = 2.0
     eco_cooling_setback_c: float = 2.0
+    eco_intensity: EcoIntensity = EcoIntensity.CUSTOM
+    inactive_heating_c: float = 18.0
+    inactive_cooling_c: float = 26.0
     boost_delta_c: float = 1.0
     previous_requested: tuple[float | None, float | None] = (None, None)
     elapsed_since_previous_seconds: float = 0.0
@@ -163,7 +167,9 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
     moisture = moisture_state(inputs.air_temperature_c, rh_source)
     if isinstance(moisture, MoistureFailure):
         return ZoneCalculationResult(None, None, None, None, moisture.code.value, 0)
-    if inputs.running_mean_c is None or inputs.fixed_fallback_reason is not None:
+    if inputs.running_mean_c is None:
+        return _fixed_fallback(inputs, hold_condition="running_mean_unavailable")
+    if inputs.fixed_fallback_reason is not None:
         return _fixed_fallback(inputs, hold_condition=inputs.fixed_fallback_reason)
     if inputs.air_speed_m_s is None:
         return ZoneCalculationResult(None, None, None, None, "air_speed_invalid", 0)
@@ -273,9 +279,12 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         critical_demands=critical_demands,
         direction=inputs.direction,
         profile=inputs.profile,
+        eco_intensity=inputs.eco_intensity,
         minimum_range_gap_c=inputs.grid.minimum_range_gap_c,
         eco_heating_setback_c=inputs.eco_heating_setback_c,
         eco_cooling_setback_c=inputs.eco_cooling_setback_c,
+        inactive_heating_c=inputs.inactive_heating_c,
+        inactive_cooling_c=inputs.inactive_cooling_c,
         boost_delta_c=inputs.boost_delta_c,
         previous_requested=inputs.previous_requested,
         elapsed_since_previous_seconds=inputs.elapsed_since_previous_seconds,

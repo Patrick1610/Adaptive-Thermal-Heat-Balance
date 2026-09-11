@@ -12,6 +12,8 @@ environment is used only to generate and audit independent development goldens.
 
 - Strategies are **Efficient**, **Balanced** (default) and **Comfort**. Each solves its own
   sensation-space roots; targets are not interpolated between temperatures.
+- Eco strength is independently selectable as **Mild**, **Workday**, **Deep**, or **Custom**;
+  profile policy is applied only after the adaptive roots have been solved.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's
   heating/cooling control roots.
 - ATHB calls only `climate.set_temperature`. It never turns equipment on or off and never changes
