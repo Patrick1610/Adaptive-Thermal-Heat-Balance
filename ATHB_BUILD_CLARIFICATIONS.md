@@ -182,3 +182,52 @@ These clarifications do not introduce any live Home Assistant or physical-device
 Software completion remains proven through the repository-defined numerical, policy/state-machine, Virtual Installation Validation, Home Assistant API-contract, storage/race, packaging and quality suites.
 
 No build task depends on access to the repository owner's Home Assistant installation or heating equipment.
+
+---
+
+## 6. Comfort level, occupancy setback and Boost are separate controls
+
+This section replaces the three-strategy and `auto`/`comfort`/`eco`/`boost` profile wording in
+the architecture plan. There is no public Profile control.
+
+The one public comfort-level select is ordered from lowest expected conditioning demand to
+greatest comfort. Its fixed inward fractions and default-boundary votes are:
+
+| Comfort level | Stable key | Inward fraction | Heating vote | Cooling vote |
+|---|---|---:|---:|---:|
+| Eco | `eco` | 0.10 | -0.45 | +0.45 |
+| Efficient | `efficient` | 0.30 | -0.35 | +0.35 |
+| Balanced | `balanced` | 0.50 | -0.25 | +0.25 |
+| Comfort | `comfort` | 0.70 | -0.15 | +0.15 |
+| Near neutral | `near_neutral` | 0.85 | -0.075 | +0.075 |
+
+Balanced remains the default. Every vote is calculated from the configured outer comfort
+boundary and independently inverse-solved in ATHB sensation space. No temperature interpolation
+or user-editable fraction is introduced.
+
+An optional Home Assistant binary occupancy or schedule entity controls setback at every comfort
+level. `on` means no setback; `off` applies the selected Setback; no configured source means no
+setback. For `unknown` or unavailable input, retain the last resolved state for 30 minutes and
+then assume occupied/no setback with `occupancy_unknown`. The Setback configuration and entity are
+shown only when an occupancy source is configured. The choices remain ordered Max, Eco - 4 °C,
+Comfort - 2 °C, and Custom.
+
+Boost is a separate temporary select with `off`, `adaptive`, and `rapid`:
+
+- `off`: comfort level and occupancy setback are authoritative;
+- `adaptive`: bypass occupancy setback and request the solved directional target shifted by
+  `boost_delta_c` toward, but not past, thermal neutral;
+- `rapid`: for a scalar heating target, request the configured maximum command temperature until
+  the adaptive Boost target is reached, then hold that Boost target; scalar cooling uses the
+  configured minimum analogously. For an atomic ranged target or a zone with separate heating
+  and cooling scalar targets, Rapid explicitly falls back to Adaptive because opposing
+  maximum-drive requests cannot be expressed safely.
+
+Boost expiry is persisted and returns the select to `off`; reselecting an active non-off mode
+restarts the configured duration. Restart never extends an existing expiry. Boost does not change
+the selected comfort level, never changes HVAC mode, and remains subject to ownership,
+normalization, user/device bounds and the sole `CommandBroker` write path.
+
+Config-entry version 1 migrates to version 2. Legacy `eco` Profile maps to the Eco comfort level;
+legacy `boost` maps to Adaptive Boost; other legacy Profiles preserve the selected comfort level
+and Boost Off. The obsolete Profile entity is removed.

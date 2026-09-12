@@ -198,7 +198,7 @@ uses the same integration path as live collection.
 Raw comfort and control roots are immutable model outputs. Product policy first selects the
 worst eligible same-vote critical demand, applies the single aggregate 2 K/comfort-edge cap and
 discards conflicting ranged contributions back to the primary control band. It then applies the
-resolved comfort/eco/boost profile and, for ordinary environmental updates only, the 0.5 K per
+resolved occupancy setback and independent Boost mode and, for ordinary environmental updates only, the 0.5 K per
 ten-minute room-target slew. Static actuator calibration and explicit user bounds follow in
 actuator coordinates and are reported as limitations; none of these transformations are
 relabelled as sensation roots. Fixed fallback is a separate typed result with no invented ATHB

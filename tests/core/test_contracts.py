@@ -90,9 +90,11 @@ def test_contract_enums_have_stable_wire_values() -> None:
         "outside_engineering_domain",
     }
     assert [strategy.value for strategy in ComfortStrategy] == [
+        "eco",
         "efficient",
         "balanced",
         "comfort",
+        "near_neutral",
     ]
     assert [direction.value for direction in ActuationDirection] == [
         "heating_only",

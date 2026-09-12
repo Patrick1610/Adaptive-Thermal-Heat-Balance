@@ -61,6 +61,8 @@ class ControlStoreState:
     selected_profile: str = "comfort"
     previous_non_boost_profile: str = "comfort"
     boost_expiry_utc: str | None = None
+    boost_mode: str = "off"
+    rapid_boost_reached: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +192,8 @@ def serialize_control_state(state: ControlStoreState) -> str:
         or not isinstance(state.control_enabled_intent, bool)
         or not state.selected_profile
         or not state.previous_non_boost_profile
+        or state.boost_mode not in {"off", "adaptive", "rapid"}
+        or not isinstance(state.rapid_boost_reached, bool)
     ):
         raise ValueError("invalid control state version or generation")
     if state.boost_expiry_utc is not None:
@@ -230,6 +234,11 @@ def load_control_state(serialized: str | None) -> ControlLoadResult:
             selected_profile=raw.get("selected_profile", "comfort"),
             previous_non_boost_profile=raw.get("previous_non_boost_profile", "comfort"),
             boost_expiry_utc=raw.get("boost_expiry_utc"),
+            boost_mode=raw.get(
+                "boost_mode",
+                "adaptive" if raw.get("selected_profile") == "boost" else "off",
+            ),
+            rapid_boost_reached=raw.get("rapid_boost_reached", False),
         )
         serialize_control_state(state)
     except KeyError, TypeError, ValueError, json.JSONDecodeError:
@@ -276,7 +285,7 @@ class ZoneCommandPersistence:
         strategy: str,
         target_identities: tuple[str, ...],
         control_enabled: bool = False,
-        selected_profile: str = "comfort",
+        boost_mode: str = "off",
     ) -> None:
         self._backend = backend
         self._verified = VerifiedControlStore(backend)
@@ -285,7 +294,7 @@ class ZoneCommandPersistence:
         self._strategy = strategy
         self._target_identities = target_identities
         self._control_enabled = control_enabled
-        self._selected_profile = selected_profile
+        self._boost_mode = boost_mode
         self._lock = asyncio.Lock()
         self.state: ControlStoreState | None = None
         self.requires_resume = False
@@ -325,7 +334,9 @@ class ZoneCommandPersistence:
                 recovery.state,
                 actuators=actuators,
                 control_enabled_intent=self._control_enabled,
-                selected_profile=self._selected_profile,
+                selected_profile="comfort",
+                previous_non_boost_profile="comfort",
+                boost_mode=self._boost_mode,
             )
             self.requires_resume = recovery.requires_resume
             self.startup_reason = recovery.reason
@@ -401,8 +412,8 @@ class ZoneCommandPersistence:
         self,
         *,
         control_enabled: bool,
-        selected_profile: str,
-        previous_non_boost_profile: str,
+        boost_mode: str,
+        rapid_boost_reached: bool,
         boost_expiry_utc: str | None,
     ) -> bool:
         """Persist authoritative non-command runtime intent."""
@@ -414,9 +425,11 @@ class ZoneCommandPersistence:
                 self.state,
                 storage_generation=self.state.storage_generation + 1,
                 control_enabled_intent=control_enabled,
-                selected_profile=selected_profile,
-                previous_non_boost_profile=previous_non_boost_profile,
+                selected_profile="comfort",
+                previous_non_boost_profile="comfort",
                 boost_expiry_utc=boost_expiry_utc,
+                boost_mode=boost_mode,
+                rapid_boost_reached=rapid_boost_reached,
             )
             return (await self._verified.async_write_critical(self.state)).verified
 
@@ -519,6 +532,8 @@ def prepare_startup_recovery(
         selected_profile=prior.selected_profile,
         previous_non_boost_profile=prior.previous_non_boost_profile,
         boost_expiry_utc=prior.boost_expiry_utc,
+        boost_mode=prior.boost_mode,
+        rapid_boost_reached=prior.rapid_boost_reached,
     )
     return StartupRecovery(state, requires_resume, reason)
 

@@ -57,7 +57,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
                 f"- RH provenance: `{result['input_summary']['rh_provenance']}`",
                 f"- Numerical golden: `{result['numerical']['golden_key']}`; current sensation: `{result['numerical']['current_sensation']}`",
                 f"- Roots: `{json.dumps(result['numerical']['roots'], sort_keys=True)}`",
-                f"- Strategy/profile: `{result['policy']['strategy']}` / `{result['policy']['profile']}`; fallback: `{result['policy']['fallback']}`",
+                f"- Comfort/occupancy/Boost: `{result['policy']['strategy']}` / `{result['policy']['occupancy_state']}` / `{result['policy']['boost_mode']}`; fallback: `{result['policy']['fallback']}`",
                 f"- Requested heating/cooling: `{result['policy']['requested_heating_c']}` / `{result['policy']['requested_cooling_c']}` °C",
                 f"- Normalized target: `{json.dumps(result['policy']['normalized'], sort_keys=True)}`",
                 f"- Command(s): `{json.dumps(result['broker']['calls'], sort_keys=True)}`",

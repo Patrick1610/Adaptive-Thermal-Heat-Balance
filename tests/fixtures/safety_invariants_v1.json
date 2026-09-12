@@ -26,6 +26,6 @@
     {"id":"SI-23","requirement":"Selected strategy roots, not neutral or comfort boundaries, are commanded.","tests":["tests/core/test_policy.py::test_primary_control_band_is_distinct_from_comfort_band","tests/core/test_pipeline.py::test_adaptive_heating_runs_real_numerical_policy_and_grid_path"]},
     {"id":"SI-24","requirement":"Strategy votes use sensation-space fractions, never temperature interpolation.","tests":["tests/core/test_inverse.py::test_strategy_votes_are_solved_in_sensation_space_not_temperature_midpoints","tests/core/test_inverse.py::test_asymmetric_boundaries_change_votes_before_solving"]},
     {"id":"SI-25","requirement":"External HVAC-mode changes do not create manual target overrides.","tests":["tests/core/test_ownership.py::test_external_hvac_mode_never_creates_manual_override","tests/home_assistant/test_runtime.py::test_target_feedback_rejection_repair_and_hvac_mode_reconciliation"]},
-    {"id":"SI-26","requirement":"Comfort-strategy changes use the lightweight runtime path.","tests":["tests/home_assistant/test_runtime.py::test_strategy_and_profile_changes_invalidate_active_runtime_without_reload","tests/home_assistant/test_runtime.py::test_runtime_callbacks_profile_resume_and_lightweight_strategy"]}
+    {"id":"SI-26","requirement":"Comfort-level and Boost changes use the lightweight runtime path.","tests":["tests/home_assistant/test_runtime.py::test_strategy_and_boost_changes_invalidate_active_runtime_without_reload","tests/home_assistant/test_runtime.py::test_runtime_callbacks_boost_resume_and_lightweight_strategy"]}
   ]
 }

@@ -44,6 +44,24 @@ def _target(*, mode: str = "heat", features: int = 1) -> CapturedTarget:
     )
 
 
+def _named_target(target_id: str, *, mode: str) -> CapturedTarget:
+    return CapturedTarget(
+        target_id,
+        f"registry-{target_id}",
+        f"climate.{target_id}",
+        ClimateCapabilitySnapshot(
+            mode,
+            ("off", "heat", "cool"),
+            1,
+            16.0,
+            30.0,
+            0.5,
+            TemperatureUnit.CELSIUS,
+            scalar_target_ha=20.0,
+        ),
+    )
+
+
 def test_registry_identity_change_starts_a_new_source_lineage() -> None:
     old = StateValue("sensor.room", "20", "°C", NOW, True, {}, None, None, "old-registry")
     observation, state = validate_state_value(old, kind=SourceKind.PRIMARY_AIR, now=NOW)
@@ -377,7 +395,42 @@ def test_snapshot_applies_max_setback_from_command_bounds_and_reports_fallback_t
         "mode": "fallback",
         "reason": "running_mean_unavailable",
         "fallback": True,
+        "boost_mode": "off",
+        "boost_phase": "fallback",
+        "boost_target_heating": None,
+        "boost_target_cooling": None,
     }
+
+
+def test_rapid_boost_with_separate_heating_and_cooling_targets_falls_back_to_adaptive() -> None:
+    result = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            NOW,
+            _state("sensor.room", "20", "°C"),
+            None,
+            50.0,
+            _state("sensor.outdoor", "5", "°C"),
+            None,
+            5.0,
+            "complete_history",
+            "balanced",
+            "comfort",
+            {"minimum_control_temperature": 16.0, "maximum_control_temperature": 30.0},
+            (
+                _named_target("heater", mode="heat"),
+                _named_target("cooler", mode="cool"),
+            ),
+            explicit_transition=True,
+            boost_mode="rapid",
+        )
+    )
+
+    assert "rapid_boost_mixed_adaptive" in result.quality_reasons
+    for target in result.targets:
+        assert target.result is not None
+        assert target.result.policy is not None
+        assert target.result.policy.boost_mode.value == "adaptive"
+        assert target.result.policy.boost_phase == "adaptive"
 
 
 def test_runtime_source_state_requires_two_reports_after_invalid_primary() -> None:

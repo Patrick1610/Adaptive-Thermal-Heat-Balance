@@ -177,9 +177,11 @@ def test_strategy_votes_are_solved_in_sensation_space_not_temperature_midpoints(
 @pytest.mark.parametrize(
     ("strategy", "fraction", "heating", "cooling"),
     [
+        (ComfortStrategy.ECO, 0.1, -0.45, 0.45),
         (ComfortStrategy.EFFICIENT, 0.3, -0.35, 0.35),
         (ComfortStrategy.BALANCED, 0.5, -0.25, 0.25),
         (ComfortStrategy.COMFORT, 0.7, -0.15, 0.15),
+        (ComfortStrategy.NEAR_NEUTRAL, 0.85, -0.075, 0.075),
     ],
 )
 def test_strategy_vote_fractions(

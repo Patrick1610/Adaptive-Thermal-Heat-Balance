@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 
 from .adapters.storage import HomeAssistantControlStorageBackend
-from .const import DOMAIN, PLATFORMS
+from .const import CONF_BOOST_MODE, CONF_COMFORT_STRATEGY, DOMAIN, PLATFORMS
 from .runtime import AthbConfigEntry, runtime_from_entry
 
 
@@ -23,8 +23,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> boo
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> bool:
-    del hass
-    return entry.version == 1
+    """Migrate legacy Profile choices to comfort level, occupancy setback and Boost."""
+
+    if entry.version == 2:
+        return True
+    if entry.version != 1:
+        return False
+    options = dict(entry.options)
+    legacy_profile = str(options.pop("profile", "comfort"))
+    if legacy_profile == "eco":
+        options[CONF_COMFORT_STRATEGY] = "eco"
+    options[CONF_BOOST_MODE] = "adaptive" if legacy_profile == "boost" else "off"
+    hass.config_entries.async_update_entry(entry, options=options, version=2)
+    return True
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> None:

@@ -70,6 +70,16 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
     """Validate complete runtime tuning without exposing numerical-kernel constants."""
 
     errors: dict[str, str] = {}
+    if data.get("comfort_strategy", "balanced") not in {
+        "eco",
+        "efficient",
+        "balanced",
+        "comfort",
+        "near_neutral",
+    }:
+        errors["comfort_strategy"] = "invalid_option"
+    if data.get("boost_mode", "off") not in {"off", "adaptive", "rapid"}:
+        errors["boost_mode"] = "invalid_option"
     ranges = {
         "met": (0.8, 2.0),
         "air_speed_m_s": (0.0, 2.0),

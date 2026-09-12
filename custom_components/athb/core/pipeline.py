@@ -20,6 +20,7 @@ from .contracts import (
     ApplicabilityReason,
     AthbResult,
     AthbSuccess,
+    BoostMode,
     Clothing,
     ComfortStrategy,
     ControlProfile,
@@ -85,6 +86,8 @@ class ZoneCalculationInput:
     inactive_heating_c: float = 18.0
     inactive_cooling_c: float = 26.0
     boost_delta_c: float = 1.0
+    boost_mode: BoostMode = BoostMode.OFF
+    rapid_boost_reached: bool = False
     previous_requested: tuple[float | None, float | None] = (None, None)
     elapsed_since_previous_seconds: float = 0.0
     explicit_transition: bool = False
@@ -279,6 +282,9 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         critical_demands=critical_demands,
         direction=inputs.direction,
         profile=inputs.profile,
+        boost_mode=inputs.boost_mode,
+        current_air_temperature_c=inputs.air_temperature_c,
+        rapid_boost_reached=inputs.rapid_boost_reached,
         eco_intensity=inputs.eco_intensity,
         minimum_range_gap_c=inputs.grid.minimum_range_gap_c,
         eco_heating_setback_c=inputs.eco_heating_setback_c,

@@ -50,17 +50,17 @@ def _runtime(*, entry_id: str = "entry-1", target_identity: str = "registry-1") 
         options={"comfort_strategy": "balanced", "control_enabled": False},
     )
     hass = SimpleNamespace(data={}, config_entries=SimpleNamespace(async_update_entry=MagicMock()))
-    return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "comfort", False)
+    return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "off", False)
 
 
-def test_runtime_callbacks_profile_resume_and_lightweight_strategy() -> None:
+def test_runtime_callbacks_boost_resume_and_lightweight_strategy() -> None:
     runtime = _runtime()
     updates: list[dict[str, Any]] = []
     remove = runtime.subscribe(lambda: updates.append(dict(runtime.values)))
     runtime.publish({"thermal_sensation": 0.1})
     assert updates[-1]["thermal_sensation"] == 0.1
-    asyncio.run(runtime.async_set_profile("eco"))
-    assert runtime.profile == "eco"
+    asyncio.run(runtime.async_set_boost_mode("adaptive"))
+    assert runtime.boost_mode == "adaptive"
     asyncio.run(runtime.async_resume())
     assert runtime.values["resume_requested"] is True
     asyncio.run(runtime.async_set_strategy("comfort"))
@@ -263,7 +263,7 @@ async def test_runtime_tracks_reports_debounces_and_captures_coherent_snapshot(
         },
         options={"comfort_strategy": "balanced"},
     )
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-1", "balanced", "comfort", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-1", "balanced", "off", False)
     await runtime.async_start()
     assert runtime.controller is not None
     await runtime.controller.async_wait_idle()
@@ -329,7 +329,7 @@ async def test_runtime_uses_pipeline_and_broker_for_exact_target_only_service(
             "maximum_control_temperature": 26.0,
         },
     )
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-command", "balanced", "comfort", True)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-command", "balanced", "off", True)
 
     await runtime.async_start()
     assert runtime.controller is not None
@@ -363,7 +363,7 @@ async def test_manual_override_and_boost_deadlines_expire_without_polling(
         options={"manual_override_minutes": 15.0, "boost_duration_minutes": 5.0},
     )
     entry.add_to_hass(hass)
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-timers", "balanced", "comfort", True)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-timers", "balanced", "off", True)
     runtime.ownership["registry-1"] = OwnershipState(
         "registry-1",
         Ownership.OWNED,
@@ -380,13 +380,13 @@ async def test_manual_override_and_boost_deadlines_expire_without_polling(
     )
     assert runtime.ownership["registry-1"].ownership is Ownership.RECONCILING
 
-    await runtime.async_set_profile("boost")
+    await runtime.async_set_boost_mode("adaptive")
     boost_expiry = cast(datetime, runtime.values["boost_expiry"])
-    assert runtime.profile == "boost"
+    assert runtime.boost_mode == "adaptive"
     assert boost_expiry > expiry - timedelta(minutes=15)
     runtime.timers.pop("boost")()
-    await runtime.async_set_profile("comfort")
-    assert runtime.profile == "comfort"
+    await runtime.async_set_boost_mode("off")
+    assert runtime.boost_mode == "off"
 
 
 async def test_failure_hold_uses_event_timer_and_elapses_after_fifteen_minutes(
@@ -424,7 +424,7 @@ async def test_failure_hold_uses_event_timer_and_elapses_after_fifteen_minutes(
     assert runtime.timers == {}
 
 
-def test_auto_profile_holds_last_known_occupancy_then_reports_unknown(
+def test_occupancy_setback_holds_last_known_state_then_reports_unknown(
     hass: HomeAssistant,
 ) -> None:
     entry = MockConfigEntry(
@@ -432,7 +432,7 @@ def test_auto_profile_holds_last_known_occupancy_then_reports_unknown(
         data={"zone_uuid": "zone-auto", "targets": []},
         options={"occupancy_entity": "binary_sensor.occupied"},
     )
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-auto", "balanced", "auto", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-auto", "balanced", "off", False)
     now = datetime(2026, 9, 10, 10, tzinfo=UTC)
     hass.states.async_set("binary_sensor.occupied", "off")
     assert runtime._resolve_profile(now).resolved.value == "eco"
@@ -449,7 +449,7 @@ def test_outdoor_history_sample_converts_fahrenheit_exactly_once(hass: HomeAssis
         data={"zone_uuid": "zone-unit", "outdoor_source": "sensor.outdoor", "targets": []},
         options={},
     )
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-unit", "balanced", "comfort", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-unit", "balanced", "off", False)
     hass.states.async_set("sensor.outdoor", "50", {"unit_of_measurement": "°F"})
     sample = runtime._outdoor_sample(datetime(2026, 9, 10, 10, tzinfo=UTC))
     assert sample is not None
@@ -538,7 +538,7 @@ def test_runtime_tracks_all_progressive_sources_and_critical_freshness(
             ],
         },
     )
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-sources", "balanced", "comfort", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-sources", "balanced", "off", False)
     for entity_id, value, unit in (
         ("sensor.room", "20", "°C"),
         ("sensor.outdoor", "5", "°C"),
@@ -664,7 +664,7 @@ def test_registry_rename_preserves_target_identity_and_updates_live_tracking(
         options={"comfort_strategy": "balanced", "control_enabled": False},
     )
     entry.add_to_hass(hass)
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-rename", "balanced", "comfort", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-rename", "balanced", "off", False)
     repair_calls: list[tuple[str, bool]] = []
     runtime.repair_manager = cast(
         Any, SimpleNamespace(update=lambda name, active: repair_calls.append((name, active)))
@@ -728,7 +728,7 @@ def test_registry_rename_updates_every_configured_source_kind(hass: HomeAssistan
         },
     )
     entry.add_to_hass(hass)
-    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-rename-all", "balanced", "comfort", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-rename-all", "balanced", "off", False)
     renamed_history: list[str] = []
     runtime.history_collector = cast(Any, SimpleNamespace(update_entity_id=renamed_history.append))
     runtime.repair_manager = cast(Any, SimpleNamespace(update=lambda *_args: None))
@@ -1025,7 +1025,7 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             self.state = SimpleNamespace(
                 boost_expiry_utc=self.expiry,
-                previous_non_boost_profile="eco",
+                rapid_boost_reached=False,
                 actuators=(),
             )
             self.requires_resume = False
@@ -1041,12 +1041,12 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
         domain="athb",
         entry_id="startup-paths",
         data={"zone_uuid": "startup-paths", "targets": []},
-        options={"profile": "boost", "control_enabled": False},
+        options={"boost_mode": "adaptive", "control_enabled": False},
     )
     entry.add_to_hass(hass)
-    runtime = ZoneRuntime(hass, cast(Any, entry), "startup-paths", "balanced", "boost", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "startup-paths", "balanced", "adaptive", False)
     await runtime.async_start()
-    assert runtime.profile == "eco"
+    assert runtime.boost_mode == "off"
     assert runtime.values["control_status"] == "storage_fault"
     assert runtime.controller is not None
     await runtime.controller.async_wait_idle()
@@ -1058,15 +1058,14 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
         domain="athb",
         entry_id="startup-future-boost",
         data={"zone_uuid": "startup-future-boost", "targets": []},
-        options={"profile": "boost", "control_enabled": False},
+        options={"boost_mode": "adaptive", "control_enabled": False},
     )
     future_entry.add_to_hass(hass)
     future = ZoneRuntime(
-        hass, cast(Any, future_entry), "startup-future-boost", "balanced", "boost", False
+        hass, cast(Any, future_entry), "startup-future-boost", "balanced", "adaptive", False
     )
     await future.async_start()
-    assert future.profile == "boost"
-    assert future.previous_non_boost_profile == "eco"
+    assert future.boost_mode == "adaptive"
     assert "boost" in future.timers
     assert future.controller is not None
     await future.controller.async_wait_idle()
@@ -1115,14 +1114,14 @@ async def test_delayed_repair_activates_once_and_recovers(
     assert updates[-1] == ("missing_history_24h", False)
 
 
-async def test_strategy_and_profile_changes_invalidate_active_runtime_without_reload(
+async def test_strategy_and_boost_changes_invalidate_active_runtime_without_reload(
     hass: HomeAssistant,
 ) -> None:
     entry = MockConfigEntry(
         domain="athb",
         entry_id="runtime-changes",
         data={"zone_uuid": "runtime-changes", "targets": []},
-        options={"comfort_strategy": "balanced", "profile": "eco"},
+        options={"comfort_strategy": "balanced", "boost_mode": "off"},
     )
     entry.add_to_hass(hass)
     requested: list[Any] = []
@@ -1134,7 +1133,7 @@ async def test_strategy_and_profile_changes_invalidate_active_runtime_without_re
         def request(self, snapshot: Any) -> None:
             requested.append(snapshot)
 
-    runtime = ZoneRuntime(hass, cast(Any, entry), "runtime-changes", "balanced", "eco", False)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "runtime-changes", "balanced", "off", False)
     runtime.controller = cast(Any, Controller())
     cancelled: list[bool] = []
     runtime.debounce_cancel = lambda: cancelled.append(True)
@@ -1146,12 +1145,11 @@ async def test_strategy_and_profile_changes_invalidate_active_runtime_without_re
     assert runtime.strategy == "comfort"
     assert entry.options["comfort_strategy"] == "comfort"
 
-    await runtime.async_set_profile("boost")
-    assert runtime.previous_non_boost_profile == "eco"
+    await runtime.async_set_boost_mode("rapid")
+    assert runtime.boost_mode == "rapid"
     assert "boost" in runtime.timers
-    await runtime.async_set_profile("auto")
-    assert runtime.profile == "auto"
-    assert runtime.previous_non_boost_profile == "auto"
+    await runtime.async_set_boost_mode("off")
+    assert runtime.boost_mode == "off"
     assert "boost" not in runtime.timers
 
     broker = MagicMock()

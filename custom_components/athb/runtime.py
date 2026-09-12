@@ -53,12 +53,12 @@ from .calculation import (
     result_values,
 )
 from .const import (
+    CONF_BOOST_MODE,
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
     CONF_ECO_INTENSITY,
     CONF_MOLD_INDICATOR_ENTITY,
-    CONF_PROFILE,
-    DEFAULT_PROFILE,
+    DEFAULT_BOOST_MODE,
     DEFAULT_STRATEGY,
     DOMAIN,
     MOLD_INDICATOR_CRITICAL_TEMP_ATTRIBUTE,
@@ -72,7 +72,7 @@ from .core.climate import (
     ha_to_celsius,
     resolve_capability,
 )
-from .core.contracts import AcknowledgementStatus, ControlProfile, TargetShape
+from .core.contracts import AcknowledgementStatus, BoostMode, TargetShape
 from .core.history import HistoryQuality, OutdoorSample
 from .core.locations import CriticalDeltaState, update_critical_delta
 from .core.ownership import (
@@ -91,7 +91,7 @@ from .core.policy import (
     OpposingTarget,
     ProfileResolution,
     check_cross_actuator_coordination,
-    resolve_profile,
+    resolve_occupancy_profile,
 )
 from .core.sources import SourceKind, SourceState, convert_source_value
 from .core.trace import DecisionTraceRing
@@ -106,7 +106,7 @@ class ZoneRuntime:
     entry: ConfigEntry[ZoneRuntime]
     zone_uuid: str
     strategy: str
-    profile: str
+    boost_mode: str
     control_enabled: bool
     eco_intensity: str = "custom"
     configuration_generation: int = 1
@@ -134,7 +134,7 @@ class ZoneRuntime:
     transition_logger: TransitionLogger = field(default_factory=lambda: TransitionLogger(_LOGGER))
     timers: dict[str, Callable[[], None]] = field(default_factory=dict)
     profile_resolution: ProfileResolution | None = None
-    previous_non_boost_profile: str = DEFAULT_PROFILE
+    rapid_boost_reached: bool = False
     previous_requested: tuple[float | None, float | None] = (None, None)
     previous_requested_at: datetime | None = None
     source_states: dict[str, SourceState] = field(default_factory=dict)
@@ -157,7 +157,7 @@ class ZoneRuntime:
             strategy=self.strategy,
             target_identities=identities,
             control_enabled=self.control_enabled,
-            selected_profile=self.profile,
+            boost_mode=self.boost_mode,
         )
         self.repair_manager = RepairManager(self.hass, self.entry.entry_id)
         if not await self.persistence.async_start():
@@ -165,16 +165,19 @@ class ZoneRuntime:
                 {"control_status": "storage_fault", "suppression_reason": "storage_io_failed"}
             )
             self.repair_manager.update("corrupt_control_storage", True)
-        if self.profile == "boost" and self.persistence.state is not None:
+        if self.boost_mode != "off" and self.persistence.state is not None:
             stored_expiry = self.persistence.state.boost_expiry_utc
             expiry = datetime.fromisoformat(stored_expiry) if stored_expiry is not None else None
             if expiry is None or expiry <= dt_util.utcnow():
-                self.profile = self.persistence.state.previous_non_boost_profile
+                self.boost_mode = BoostMode.OFF.value
+                self.rapid_boost_reached = False
                 self.hass.config_entries.async_update_entry(
-                    self.entry, options={**self.entry.options, CONF_PROFILE: self.profile}
+                    self.entry, options={**self.entry.options, CONF_BOOST_MODE: self.boost_mode}
                 )
             else:
-                self.previous_non_boost_profile = self.persistence.state.previous_non_boost_profile
+                self.rapid_boost_reached = bool(
+                    getattr(self.persistence.state, "rapid_boost_reached", False)
+                )
                 self._schedule_boost_expiry(expiry)
         self.broker = CommandBroker(
             service=HomeAssistantClimateService(self.hass),
@@ -553,6 +556,8 @@ class ZoneRuntime:
                 self.hass.states.get(str(self.entry.options.get("air_speed_entity", "")))
             ),
             self.failure_hold_elapsed,
+            self.boost_mode,
+            self.rapid_boost_reached,
         )
         self.values["source_states"] = {
             entity_id: (
@@ -574,9 +579,11 @@ class ZoneRuntime:
             if entity_id
         }
         self.values["strategy"] = self.strategy
-        self.values["profile"] = self.profile
+        self.values["comfort_level"] = self.strategy
+        self.values["boost_mode"] = self.boost_mode
         self.values["eco_intensity"] = self.eco_intensity
-        self.values["resolved_profile"] = profile_resolution.resolved.value
+        self.values["occupancy_status"] = profile_resolution.resolved.value
+        self.values["setback_active"] = profile_resolution.resolved.value == "eco"
         self.values["configuration_generation"] = self.configuration_generation
         self._schedule_freshness_expiries(now, radiant_id)
         self.explicit_transition = False
@@ -673,7 +680,7 @@ class ZoneRuntime:
             generation=generation,
             payload={
                 "strategy": self.strategy,
-                "profile": self.profile,
+                "boost_mode": self.boost_mode,
                 "history_quality": result.history_quality,
                 "running_mean_c": result.running_mean_c,
                 "relative_humidity_provenance": result.relative_humidity_provenance,
@@ -715,6 +722,13 @@ class ZoneRuntime:
 
         numerical = next((item.result for item in result.targets if item.result is not None), None)
         if numerical is not None and numerical.policy is not None:
+            if (
+                self.boost_mode == BoostMode.RAPID.value
+                and numerical.policy.rapid_boost_reached
+                and not self.rapid_boost_reached
+            ):
+                self.rapid_boost_reached = True
+                self._schedule_runtime_persistence()
             self.previous_requested = (
                 numerical.policy.heating_c,
                 numerical.policy.cooling_c,
@@ -975,7 +989,7 @@ class ZoneRuntime:
             generation=int(self.values.get("calculation_generation", 0)),
             payload={
                 "strategy": self.strategy,
-                "profile": self.profile,
+                "boost_mode": self.boost_mode,
                 "command_outcomes": outcomes,
                 "suppression_reason": result.suppression_reason,
                 "ownership": {
@@ -1202,8 +1216,8 @@ class ZoneRuntime:
         self._create_task(
             self.persistence.async_update_runtime(
                 control_enabled=self.control_enabled,
-                selected_profile=self.profile,
-                previous_non_boost_profile=self.previous_non_boost_profile,
+                boost_mode=self.boost_mode,
+                rapid_boost_reached=self.rapid_boost_reached,
                 boost_expiry_utc=(boost_expiry.isoformat() if boost_expiry is not None else None),
             )
         )
@@ -1212,36 +1226,24 @@ class ZoneRuntime:
         return cast(datetime | None, self.values.get(f"{key}_expiry"))
 
     def _resolve_profile(self, now: datetime) -> ProfileResolution:
-        if self.profile != "auto":
-            resolution = resolve_profile(
-                selected=self._profile_value(self.profile),
-                occupancy=OccupancyState.ABSENT,
-                now=now,
-            )
-        else:
-            occupancy_id = str(self.entry.options.get("occupancy_entity", ""))
-            state = self.hass.states.get(occupancy_id) if occupancy_id else None
-            occupancy = (
-                OccupancyState.ABSENT
-                if not occupancy_id
-                else OccupancyState.ON
-                if state is not None and state.state == "on"
-                else OccupancyState.OFF
-                if state is not None and state.state == "off"
-                else OccupancyState.UNKNOWN
-            )
-            resolution = resolve_profile(
-                selected=self._profile_value(self.profile),
-                occupancy=occupancy,
-                now=now,
-                previous=self.profile_resolution,
-            )
+        occupancy_id = str(self.entry.options.get("occupancy_entity", ""))
+        state = self.hass.states.get(occupancy_id) if occupancy_id else None
+        occupancy = (
+            OccupancyState.ABSENT
+            if not occupancy_id
+            else OccupancyState.ON
+            if state is not None and state.state == "on"
+            else OccupancyState.OFF
+            if state is not None and state.state == "off"
+            else OccupancyState.UNKNOWN
+        )
+        resolution = resolve_occupancy_profile(
+            occupancy=occupancy,
+            now=now,
+            previous=self.profile_resolution,
+        )
         self.profile_resolution = resolution
         return resolution
-
-    @staticmethod
-    def _profile_value(profile: str) -> ControlProfile:
-        return ControlProfile(profile)
 
     def _schedule_override_expiry(self, identity: str, expiry: datetime | None) -> None:
         key = f"override:{identity}"
@@ -1365,24 +1367,22 @@ class ZoneRuntime:
         self.publish({**self.values, "strategy": strategy, "reason": "strategy_changed"})
         self._schedule_runtime_persistence()
 
-    async def async_set_profile(self, profile: str) -> None:
-        if profile == self.profile:
+    async def async_set_boost_mode(self, boost_mode: str) -> None:
+        BoostMode(boost_mode)
+        same_active_mode = boost_mode == self.boost_mode and boost_mode != BoostMode.OFF.value
+        if boost_mode == self.boost_mode and not same_active_mode:
             return
-        if profile == "boost":
-            if self.profile != "boost":
-                self.previous_non_boost_profile = self.profile
+        if boost_mode == BoostMode.OFF.value:
+            if (timer := self.timers.pop("boost", None)) is not None:
+                timer()
+            self.values["boost_expiry"] = None
+        else:
             self._schedule_boost_expiry()
-        elif (timer := self.timers.pop("boost", None)) is not None:
-            timer()
-            self.previous_non_boost_profile = profile
-            self.values["boost_expiry"] = None
-        elif profile != "boost":
-            self.values["boost_expiry"] = None
-            self.previous_non_boost_profile = profile
-        self.profile = profile
+        self.boost_mode = boost_mode
+        self.rapid_boost_reached = False
         self.explicit_transition = True
         self.hass.config_entries.async_update_entry(
-            self.entry, options={**self.entry.options, CONF_PROFILE: profile}
+            self.entry, options={**self.entry.options, CONF_BOOST_MODE: boost_mode}
         )
         self._schedule_runtime_persistence()
         self.async_request_snapshot()
@@ -1418,7 +1418,7 @@ class ZoneRuntime:
         @callback
         def expire(_now: Any) -> None:
             self.timers.pop("boost", None)
-            self._create_task(self.async_set_profile(self.previous_non_boost_profile))
+            self._create_task(self.async_set_boost_mode(BoostMode.OFF.value))
 
         if (old := self.timers.pop("boost", None)) is not None:
             old()
@@ -1550,7 +1550,7 @@ def runtime_from_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> ZoneRunti
         entry,
         str(entry.data["zone_uuid"]),
         str(entry.options.get(CONF_COMFORT_STRATEGY, DEFAULT_STRATEGY)),
-        str(entry.options.get(CONF_PROFILE, DEFAULT_PROFILE)),
+        str(entry.options.get(CONF_BOOST_MODE, DEFAULT_BOOST_MODE)),
         bool(entry.options.get(CONF_CONTROL_ENABLED, False)),
         str(entry.options.get(CONF_ECO_INTENSITY, "custom")),
     )

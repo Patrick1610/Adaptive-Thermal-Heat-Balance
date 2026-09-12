@@ -8,7 +8,7 @@ and only the newest queued snapshot survives an event burst.
 
 Entity state stays compact. Downloaded diagnostics contain the latest coherent decision and at
 most 20 material traces: source provenance and validity, history quality, radiant assumptions,
-strategy votes, attempted roots, profile/critical transforms, normalized target, ownership and
+comfort-level votes, attempted roots, occupancy/Boost and critical transforms, normalized target, ownership and
 the command or exact suppression reason. Household identifiers are consistently pseudonymized;
 user/context identity, coordinates, URLs, arbitrary attributes and raw occupancy history are
 removed.

@@ -10,6 +10,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.athb import async_migrate_entry
 from custom_components.athb.config_flow import AthbOptionsFlow
 from custom_components.athb.const import DOMAIN, PLATFORMS
 
@@ -21,6 +22,35 @@ def _schema_keys(result: config_entries.ConfigFlowResult) -> set[str]:
 def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
     marker = next(item for item in result["data_schema"].schema if str(item.schema) == key)
     return marker.description["suggested_value"]
+
+
+async def test_version_one_profiles_migrate_to_the_new_single_control_model(
+    hass: HomeAssistant,
+) -> None:
+    eco = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "eco", "targets": []},
+        options={"comfort_strategy": "comfort", "profile": "eco"},
+        version=1,
+    )
+    eco.add_to_hass(hass)
+    assert await async_migrate_entry(hass, eco)
+    assert eco.version == 2
+    assert eco.options["comfort_strategy"] == "eco"
+    assert eco.options["boost_mode"] == "off"
+    assert "profile" not in eco.options
+
+    boost = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "boost", "targets": []},
+        options={"comfort_strategy": "balanced", "profile": "boost"},
+        version=1,
+    )
+    boost.add_to_hass(hass)
+    assert await async_migrate_entry(hass, boost)
+    assert boost.version == 2
+    assert boost.options["comfort_strategy"] == "balanced"
+    assert boost.options["boost_mode"] == "adaptive"
 
 
 async def _submit_everyday_controls(
@@ -80,7 +110,6 @@ async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult
         result["flow_id"],
         {
             "comfort_strategy": "balanced",
-            "profile": "comfort",
             "radiant_model": "uniform",
             "advanced_settings": False,
         },
@@ -108,7 +137,8 @@ async def test_config_flow_stores_tagged_declaration_stable_target_identity_and_
     assert stored_target["registry_identity"] == target.id
     assert stored_target["target_uuid"]
     assert result["options"]["comfort_strategy"] == "balanced"
-    assert result["options"]["eco_intensity"] == "mild"
+    assert "eco_intensity" not in result["options"]
+    assert result["options"]["boost_mode"] == "off"
     assert result["options"]["control_enabled"] is False
 
 
@@ -141,7 +171,6 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
         result["flow_id"],
         {
             "comfort_strategy": "balanced",
-            "profile": "comfort",
             "radiant_model": "uniform",
             "advanced_settings": True,
         },
@@ -170,7 +199,7 @@ async def test_setup_forwards_five_native_platforms_and_unloads_cleanly(
         title="Living room",
         data={"zone_uuid": "zone-1", "targets": []},
         options={"comfort_strategy": "balanced", "control_enabled": False},
-        version=1,
+        version=2,
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -194,7 +223,7 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"zone_uuid": "zone-1", "targets": []},
-        options={"comfort_strategy": "balanced", "profile": "comfort"},
+        options={"comfort_strategy": "balanced"},
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -203,7 +232,6 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
         result["flow_id"],
         {
             "comfort_strategy": "comfort",
-            "profile": "eco",
             "radiant_model": "uniform",
             "advanced_settings": False,
         },
@@ -218,7 +246,6 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
         result["flow_id"],
         {
             "comfort_strategy": "balanced",
-            "profile": "comfort",
             "radiant_model": "mold_indicator",
             "advanced_settings": False,
         },
@@ -310,15 +337,12 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
         result["flow_id"], {"targets": [target.entity_id]}
     )
     assert result["step_id"] == "preferences"
-    assert {"comfort_strategy", "profile", "radiant_model", "advanced_settings"} <= _schema_keys(
-        result
-    )
+    assert {"comfort_strategy", "radiant_model", "advanced_settings"} <= _schema_keys(result)
     assert _suggested_value(result, "occupancy_entity") == "binary_sensor.old_occupancy"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
             "comfort_strategy": "comfort",
-            "profile": "eco",
             "radiant_model": "uniform",
             "advanced_settings": False,
         },
@@ -332,7 +356,7 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
     assert entry.data["primary_temperature"] == "sensor.new"
     assert entry.data["rh_declared"] == 45.0
     assert "rh_entity" not in entry.data
-    assert entry.options["profile"] == "eco"
+    assert entry.options["comfort_strategy"] == "comfort"
     assert "occupancy_entity" not in entry.options
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
@@ -355,7 +379,7 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
                 }
             ],
         },
-        options={"comfort_strategy": "balanced", "profile": "comfort"},
+        options={"comfort_strategy": "balanced"},
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -363,8 +387,6 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
         result["flow_id"],
         {
             "comfort_strategy": "balanced",
-            "profile": "comfort",
-            "eco_intensity": "custom",
             "radiant_model": "mold_indicator",
             "advanced_settings": True,
         },
@@ -392,14 +414,6 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
             "upper_comfort_vote": 0.5,
             "running_mean_alpha": 0.8,
             "reject_extrapolation": False,
-        },
-    )
-    assert result["step_id"] == "profile_parameters"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "eco_heating_setback_c": 2.0,
-            "eco_cooling_setback_c": 2.0,
         },
     )
     assert result["step_id"] == "command_behavior"
@@ -539,7 +553,7 @@ async def test_room_model_only_offers_standard_and_mold_indicator(
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"zone_uuid": "zone-radiant", "targets": []},
-        options={"comfort_strategy": "balanced", "profile": "comfort"},
+        options={"comfort_strategy": "balanced"},
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -549,11 +563,15 @@ async def test_room_model_only_offers_standard_and_mold_indicator(
     assert model_selector.config["options"] == ["uniform", "mold_indicator"]
 
     strategy_marker = next(marker for marker in schema if str(marker.schema) == "comfort_strategy")
-    profile_marker = next(marker for marker in schema if str(marker.schema) == "profile")
-    setback_marker = next(marker for marker in schema if str(marker.schema) == "eco_intensity")
-    assert schema[strategy_marker].config["options"] == ["efficient", "balanced", "comfort"]
-    assert schema[profile_marker].config["options"] == ["eco", "auto", "comfort", "boost"]
-    assert schema[setback_marker].config["options"] == ["deep", "workday", "mild", "custom"]
+    assert schema[strategy_marker].config["options"] == [
+        "eco",
+        "efficient",
+        "balanced",
+        "comfort",
+        "near_neutral",
+    ]
+    assert "profile" not in _schema_keys(result)
+    assert "eco_intensity" not in _schema_keys(result)
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
         await hass.config_entries.async_unload(entry.entry_id)
@@ -566,7 +584,7 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"zone_uuid": "zone-invalid-advanced", "targets": []},
-        options={"comfort_strategy": "balanced", "profile": "comfort"},
+        options={"comfort_strategy": "balanced"},
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -574,7 +592,6 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
         result["flow_id"],
         {
             "comfort_strategy": "balanced",
-            "profile": "comfort",
             "radiant_model": "uniform",
             "advanced_settings": True,
         },
@@ -627,8 +644,8 @@ async def test_max_setback_uses_command_limits_without_duplicate_fields(
         data={"zone_uuid": "zone-deep", "targets": []},
         options={
             "comfort_strategy": "balanced",
-            "profile": "eco",
             "eco_intensity": "deep",
+            "occupancy_entity": "binary_sensor.occupancy",
         },
     )
     entry.add_to_hass(hass)
@@ -637,11 +654,14 @@ async def test_max_setback_uses_command_limits_without_duplicate_fields(
         result["flow_id"],
         {
             "comfort_strategy": "balanced",
-            "profile": "eco",
-            "eco_intensity": "deep",
             "radiant_model": "uniform",
             "advanced_settings": True,
+            "occupancy_entity": "binary_sensor.occupancy",
         },
+    )
+    assert result["step_id"] == "setback"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"eco_intensity": "deep"}
     )
     assert result["step_id"] == "control_limits"
     assert _schema_keys(result) == {
@@ -662,3 +682,39 @@ async def test_max_setback_uses_command_limits_without_duplicate_fields(
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
 
     assert result["step_id"] == "command_behavior"
+
+
+async def test_custom_setback_is_conditionally_collected_before_everyday_controls(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "zone-custom-setback", "targets": []},
+        options={
+            "comfort_strategy": "balanced",
+            "eco_intensity": "custom",
+            "occupancy_entity": "schedule.office",
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "comfort_strategy": "balanced",
+            "radiant_model": "uniform",
+            "advanced_settings": False,
+            "occupancy_entity": "schedule.office",
+        },
+    )
+    assert result["step_id"] == "setback"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"eco_intensity": "custom"}
+    )
+    assert result["step_id"] == "setback_parameters"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"eco_heating_setback_c": 3.5, "eco_cooling_setback_c": 4.0},
+    )
+    assert result["step_id"] == "control_limits"

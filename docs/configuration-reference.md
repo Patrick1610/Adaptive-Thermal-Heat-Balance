@@ -34,32 +34,41 @@ External target-temperature intervention starts a manual override. An external H
 does not. All production writes pass through the sole `CommandBroker` to
 `climate.set_temperature`.
 
-## Comfort strategy and profile
+## Comfort level, occupancy and Boost
 
 The comfort band is defined by `lower_comfort_vote` and `upper_comfort_vote`, default -0.5 and
 +0.5 ATHB sensation. Strategy targets are solved directly in sensation space:
 
-| Strategy | Inward fraction | Default heating vote | Default cooling vote | Meaning |
+| Comfort level | Inward fraction | Default heating vote | Default cooling vote | Meaning |
 |---|---:|---:|---:|---|
+| Eco | 0.10 | -0.45 | +0.45 | Greatest efficiency; roots remain closest to the outer comfort boundaries. |
 | Efficient | 0.30 | -0.35 | +0.35 | More of the comfort band remains available. |
 | Balanced | 0.50 | -0.25 | +0.25 | Recommended energy/comfort compromise. |
 | Comfort | 0.70 | -0.15 | +0.15 | Targets remain closer to thermal neutral. |
+| Near neutral | 0.85 | -0.075 | +0.075 | Greatest normal comfort without making neutral the target. |
 
 The temperatures are **not** interpolated. Each vote is independently inverse-solved while vapour
 pressure remains constant. Thermal neutral (vote 0) is a reference, not the normal actuator
 target.
 
-`comfort` uses the solved strategy targets. `eco` widens those targets using the separately
-selectable Setback. `boost` temporarily shifts both sides toward comfort by
-`boost_delta_c`, bounded by policy, and expires after `boost_duration_minutes`. `auto` resolves to
-Comfort or Eco from the optional occupancy source; unknown occupancy is held briefly and then
-resolves conservatively. Changing strategy, profile, or Setback is a lightweight runtime change
-and does not reload the config entry.
+An optional binary occupancy or schedule source applies Setback at every comfort level: `on`
+uses the solved roots unchanged and `off` widens them using the selected Setback. Without a source,
+no setback is applied. Unknown input retains the last state for 30 minutes and then assumes
+occupied/no setback with `occupancy_unknown`. The Setback page and entity exist only when a source
+is configured.
+
+Boost is an independent runtime select. **Off** follows comfort level and occupancy. **Adaptive**
+bypasses setback and shifts the directional target by `boost_delta_c` toward, but not past,
+thermal neutral. **Rapid** requests the maximum command temperature for scalar heating (minimum
+for scalar cooling) until the calculated Adaptive Boost target is reached, then holds that target.
+Rapid falls back explicitly to Adaptive for an atomic range or a zone with separate heating and
+cooling targets. Boost expires to Off. Comfort-level, Setback and Boost changes are lightweight
+and do not reload the config entry.
 
 The **Heating control target**, **Thermal neutral**, and **Cooling control target** sensors expose
-the inverse-solved ATHB roots before profile policy. They therefore change with comfort strategy,
-but not with Eco or Boost. A climate-specific **effective temperature** (or effective low/high)
-is the final request after profile, critical-location policy, calibration, bounds, and device-grid
+the inverse-solved ATHB roots before occupancy or Boost policy. They therefore change with comfort
+level, but not with Setback or Boost. A climate-specific **effective temperature** (or effective low/high)
+is the final request after occupancy/Boost, critical-location policy, calibration, bounds, and device-grid
 normalization. It is a preview even while control is disabled. The actual climate target changes
 only when adaptive control is enabled and ownership, capability, override, and broker gates allow
 a write. Its state attributes distinguish `adaptive`, `fallback`, and `unavailable` mode and give
@@ -134,7 +143,7 @@ required directional roots are no longer available.
 
 ## Setback tuning
 
-Setback controls what the Eco profile does after sensation-space inverse solving. The wizard and
+Setback controls what absence does after sensation-space inverse solving. The wizard and
 entity present the choices from maximum saving to greatest comfort, with Custom last:
 
 | Setback | Heating policy | Cooling policy | Intended use |
@@ -149,7 +158,8 @@ local-air location can still add
 its already bounded, directional correction of at most 2 °C. The result is then intersected with
 the configured control bounds and device bounds and rounded inward to the device grid. Existing
 entries created before Setback retain their configured offsets through the Custom mode; new entries
-default to Comfort — 2 °C. Only the two offsets used by Custom appear on the advanced profile page.
+default to Comfort — 2 °C. Only the two offsets used by Custom appear, and only when an occupancy
+source is configured.
 
 ## Everyday control settings
 
@@ -157,10 +167,13 @@ default to Comfort — 2 °C. Only the two offsets used by Custom appear on the 
 and must be ordered. They are intersected with each climate entity's own limits. They also directly
 form the heating and cooling requests for Max setback. `manual_override_minutes` is 15–1440 minutes.
 
-`boost_delta_c` (0–3 °C) shifts solved targets in the comfort-seeking direction. Boost lasts
-5–180 minutes according to `boost_duration_minutes`, then returns to the previous profile. These
-five everyday values are shown in normal Setup, Reconfigure and Options, not hidden behind
-Advanced. Profile operations occur before final actuator bounds and grid normalization.
+`boost_delta_c` (0–3 °C) defines the calculated Boost target in the comfort-seeking direction,
+capped at thermal neutral. Boost lasts 5–180 minutes according to `boost_duration_minutes`, then
+returns to Off. Adaptive requests that target. Rapid first uses the heating maximum or cooling
+minimum command bound to create a larger control delta, then holds the same calculated Boost
+target after the room reaches it. These five everyday values are shown in normal Setup,
+Reconfigure and Options, not hidden behind Advanced. Boost operations occur before final actuator
+bounds and grid normalization.
 
 ATHB never changes HVAC mode. For a target already in `auto`, it derives the mapping from public
 Home Assistant capabilities:

@@ -10,10 +10,13 @@ environment is used only to generate and audit independent development goldens.
 
 ## Product boundaries
 
-- Strategies are **Efficient**, **Balanced** (default) and **Comfort**. Each solves its own
+- The comfort levels are **Eco**, **Efficient**, **Balanced** (default), **Comfort** and
+  **Near neutral**, ordered from greatest efficiency to greatest comfort. Each solves its own
   sensation-space roots; targets are not interpolated between temperatures.
-- **Setback** is independently selectable as **Max**, **Eco — 4 °C**, **Comfort — 2 °C**,
-  or **Custom**; profile policy is applied only after the adaptive roots have been solved.
+- An optional occupancy or schedule entity applies **Setback** whenever it is off, at every
+  comfort level. Setback is **Max**, **Eco — 4 °C**, **Comfort — 2 °C**, or **Custom**.
+- **Boost** is separate: Adaptive moves to a bounded calculated Boost target; Rapid uses the
+  command limit until that target is reached and then holds it. Expiry returns Boost to Off.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's
   heating/cooling control roots.
 - ATHB calls only `climate.set_temperature`. It never turns equipment on or off and never changes

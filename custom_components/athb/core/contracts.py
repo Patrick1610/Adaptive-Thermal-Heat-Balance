@@ -111,11 +111,21 @@ class RadiantFailureCode(StrEnum):
 
 
 class ComfortStrategy(StrEnum):
-    """Fixed product comfort strategies."""
+    """Fixed product comfort levels, ordered from efficiency to comfort."""
 
+    ECO = "eco"
     EFFICIENT = "efficient"
     BALANCED = "balanced"
     COMFORT = "comfort"
+    NEAR_NEUTRAL = "near_neutral"
+
+
+class BoostMode(StrEnum):
+    """Independent temporary Boost delivery modes."""
+
+    OFF = "off"
+    ADAPTIVE = "adaptive"
+    RAPID = "rapid"
 
 
 class ActuationDirection(StrEnum):
@@ -136,7 +146,7 @@ class CriticalEligibilityMode(StrEnum):
 
 
 class ControlProfile(StrEnum):
-    """Policy profiles used by later phases."""
+    """Internal resolved occupancy policy plus legacy wire values."""
 
     AUTO = "auto"
     COMFORT = "comfort"

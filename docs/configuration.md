@@ -6,8 +6,15 @@ Create one ATHB config entry per zone. Every entry creates one Home Assistant de
 the zone's ATHB entities. Select a primary air-temperature entity, an outdoor temperature source,
 one indoor-RH mode and one to eight registered climate targets. Measured RH is recommended; fixed
 RH may instead be entered directly as a finite 0–100% declaration and needs no helper entity.
-Only the field for the selected RH mode is shown. Balanced is the default strategy. New entries
+Only the field for the selected RH mode is shown. Balanced is the default comfort level. New entries
 save with adaptive control disabled.
+
+The comfort-level select runs from Eco through Near neutral. An optional binary occupancy or
+schedule source applies the separately selected Setback whenever it is off; without that source,
+Setback is not shown or applied. Boost is a separate runtime select with Off, Adaptive and Rapid.
+Adaptive bypasses setback and targets extra comfort. Rapid temporarily drives a scalar heat-only
+target at the configured maximum (or cooling at the minimum) until the calculated Boost target is
+reached, then holds that target. It never changes HVAC mode.
 
 The normal setup explains each input. Its **Everyday control settings** page always shows command
 minimum/maximum, manual-override duration and Boost shift/duration. Numerical comfort assumptions,

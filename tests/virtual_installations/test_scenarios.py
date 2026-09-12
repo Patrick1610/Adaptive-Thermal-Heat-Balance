@@ -44,7 +44,7 @@ async def test_max_setback_uses_command_minimum_through_full_broker_path() -> No
     scenario = json.loads(json.dumps(SCENARIOS[0]))
     scenario["zone_configuration"].update(
         {
-            "profile": "eco",
+            "occupancy_state": "off",
             "eco_intensity": "deep",
             "inactive_heating_temperature": 16.0,
             "inactive_cooling_temperature": 29.0,
@@ -57,6 +57,32 @@ async def test_max_setback_uses_command_minimum_through_full_broker_path() -> No
     calls, reason, acknowledgement, ownership = await _broker_run(scenario, calculation)
 
     assert calls == [{"entity_id": "climate.living_room", "temperature": 17.0}]
+    assert reason == "own_context_match"
+    assert acknowledgement == "acknowledged"
+    assert ownership == "owned"
+
+
+@pytest.mark.parametrize(
+    ("boost_mode", "expected_temperature", "expected_phase"),
+    [("adaptive", 20.5, "adaptive"), ("rapid", 26.0, "rapid")],
+)
+async def test_boost_modes_use_full_numerical_policy_and_broker_path(
+    boost_mode: str, expected_temperature: float, expected_phase: str
+) -> None:
+    scenario = json.loads(json.dumps(SCENARIOS[0]))
+    scenario["zone_configuration"]["occupancy_state"] = "off"
+    scenario["zone_configuration"]["boost_mode"] = boost_mode
+
+    calculation = calculate_runtime_snapshot(_captured(scenario))
+    policy = calculation.targets[0].result
+    assert policy is not None
+    assert policy.policy is not None
+    assert policy.policy.profile.value == "eco"
+    assert policy.policy.boost_phase == expected_phase
+    assert "occupancy_setback" not in policy.policy.limitations
+
+    calls, reason, acknowledgement, ownership = await _broker_run(scenario, calculation)
+    assert calls == [{"entity_id": "climate.living_room", "temperature": expected_temperature}]
     assert reason == "own_context_match"
     assert acknowledgement == "acknowledged"
     assert ownership == "owned"

@@ -27,6 +27,7 @@ from .core.contracts import (
     AUTOMATIC_CLOTHING,
     ActuationDirection,
     AthbSuccess,
+    BoostMode,
     ComfortStrategy,
     ControlProfile,
     CriticalEligibilityMode,
@@ -104,6 +105,8 @@ class CapturedZoneSnapshot:
     source_states: tuple[tuple[str, SourceState], ...] = ()
     air_speed: StateValue | None = None
     failure_hold_elapsed: bool = False
+    boost_mode: str = "off"
+    rapid_boost_reached: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -435,6 +438,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
     )
     strategy = ComfortStrategy(snapshot.strategy)
     profile = ControlProfile(snapshot.profile)
+    boost_mode = BoostMode(snapshot.boost_mode)
     critical = []
     met = _finite_option(snapshot.options, "met", 1.1)
     clothing = (
@@ -491,19 +495,31 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             )
             if not isinstance(prepared, CriticalLocationFailure):
                 critical.append(prepared)
+    resolved_mappings: dict[str, CapabilityMapping] = {}
+    for target in snapshot.targets:
+        resolved = resolve_capability(target.capability)
+        if isinstance(resolved, CapabilityMapping):
+            resolved_mappings[target.target_uuid] = resolved
+    mapped_directions = {resolved.direction for resolved in resolved_mappings.values()}
+    mixed_scalar_rapid = boost_mode is BoostMode.RAPID and {
+        ActuationDirection.HEATING_ONLY,
+        ActuationDirection.COOLING_ONLY,
+    }.issubset(mapped_directions)
+    effective_boost_mode = BoostMode.ADAPTIVE if mixed_scalar_rapid else boost_mode
     target_results: list[TargetCalculation] = []
     for target in snapshot.targets:
-        capability_result = resolve_capability(target.capability)
+        control_mapping = resolved_mappings.get(target.target_uuid)
+        capability_result: CapabilityMapping | ClimateFailure
+        if control_mapping is None:
+            capability_result = resolve_capability(target.capability)
+        else:
+            capability_result = control_mapping
         capability_reason = (
             capability_result.reason if isinstance(capability_result, ClimateFailure) else None
         )
-        control_mapping = (
-            None if isinstance(capability_result, ClimateFailure) else capability_result
-        )
-        calculation_mapping = (
-            capability_result
-            if not isinstance(capability_result, ClimateFailure)
-            else CapabilityMapping(
+        calculation_mapping: CapabilityMapping
+        if isinstance(capability_result, ClimateFailure):
+            calculation_mapping = CapabilityMapping(
                 ActuationDirection.RANGED
                 if target.capability.supported_features & 2
                 else ActuationDirection.COOLING_ONLY
@@ -513,7 +529,8 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 if target.capability.supported_features & 2
                 else TargetShape.SCALAR,
             )
-        )
+        else:
+            calculation_mapping = capability_result
         grid = GridOptions(
             _finite_option(snapshot.options, "minimum_control_temperature", 18.0),
             _finite_option(snapshot.options, "maximum_control_temperature", 26.0),
@@ -552,6 +569,8 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 inactive_heating_c=grid.user_min_c,
                 inactive_cooling_c=grid.user_max_c,
                 boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 1.0),
+                boost_mode=effective_boost_mode,
+                rapid_boost_reached=snapshot.rapid_boost_reached,
                 previous_requested=snapshot.previous_requested,
                 elapsed_since_previous_seconds=snapshot.elapsed_since_previous_seconds,
                 explicit_transition=snapshot.explicit_transition,
@@ -573,9 +592,9 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
     coordinated: list[TargetCalculation] = []
     for target_result in target_results:
         calculated = target_result.result
-        mapping = target_result.mapping
+        active_mapping = target_result.mapping
         normalized = calculated.normalized if calculated is not None else None
-        if mapping is None or not isinstance(normalized, NormalizedScalarTarget):
+        if active_mapping is None or not isinstance(normalized, NormalizedScalarTarget):
             coordinated.append(target_result)
             continue
         opposing: list[OpposingTarget] = []
@@ -607,7 +626,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 )
             )
         coordination = check_cross_actuator_coordination(
-            direction=mapping.direction,
+            direction=active_mapping.direction,
             proposed_room_c=normalized.normalized_room_c,
             opposing_targets=tuple(opposing),
             minimum_range_gap_c=_finite_option(snapshot.options, "minimum_range_gap", 1.0),
@@ -644,7 +663,16 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         snapshot.running_mean_c,
         snapshot.history_quality,
         tuple(target_results),
-        tuple(dict.fromkeys((*snapshot.context_reasons, *radiant_reasons, *scientific_reasons))),
+        tuple(
+            dict.fromkeys(
+                (
+                    *snapshot.context_reasons,
+                    *radiant_reasons,
+                    *scientific_reasons,
+                    *(("rapid_boost_mixed_adaptive",) if mixed_scalar_rapid else ()),
+                )
+            )
+        ),
         suppression,
         snapshot.explicit_transition,
         surface_temperature_c,
@@ -675,7 +703,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         return root.mapped_room_temperature_c if isinstance(root, RootSuccess) else None
 
     effective: dict[str, dict[str, float]] = {}
-    effective_details: dict[str, dict[str, str | bool | None]] = {}
+    effective_details: dict[str, dict[str, str | bool | float | None]] = {}
     for target in result.targets:
         calculation = target.result
         if calculation is None or calculation.normalized is None:
@@ -686,6 +714,14 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             "mode": "fallback" if fallback else "adaptive",
             "reason": calculation.hold_condition or target.suppression_reason,
             "fallback": fallback,
+            "boost_mode": calculation.policy.boost_mode.value if calculation.policy else "off",
+            "boost_phase": calculation.policy.boost_phase if calculation.policy else "off",
+            "boost_target_heating": (
+                calculation.policy.boost_target_heating_c if calculation.policy else None
+            ),
+            "boost_target_cooling": (
+                calculation.policy.boost_target_cooling_c if calculation.policy else None
+            ),
         }
         if isinstance(normalized, NormalizedScalarTarget):
             effective[target.target_uuid] = {"temperature": normalized.normalized_actuator_c}

@@ -70,6 +70,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -95,7 +97,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -173,6 +175,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -198,7 +202,7 @@
         "normalized_room_c": 19.0,
         "requested_room_c": 18.532199748411774
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 18.532199748411774,
       "strategy": "efficient"
@@ -276,6 +280,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -301,7 +307,7 @@
         "normalized_room_c": 20.5,
         "requested_room_c": 20.190060796931384
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 20.190060796931384,
       "strategy": "comfort"
@@ -374,6 +380,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -399,7 +407,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.360890697506253
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.360890697506253,
       "strategy": "balanced"
@@ -477,6 +485,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -502,7 +512,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361325007565316
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361325007565316,
       "strategy": "balanced"
@@ -580,6 +590,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "cold_seat",
@@ -605,7 +617,7 @@
         "normalized_room_c": 21.0,
         "requested_room_c": 20.861120950075797
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 20.861120950075797,
       "strategy": "balanced"
@@ -683,6 +695,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "cold_seat",
@@ -710,7 +724,7 @@
         "normalized_room_c": 21.5,
         "requested_room_c": 21.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 21.361130272671577,
       "strategy": "balanced"
@@ -788,6 +802,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -813,7 +829,7 @@
         "normalized_room_c": 20.0,
         "requested_room_c": 19.799975844338537
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.799975844338537,
       "strategy": "balanced"
@@ -891,6 +907,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -916,7 +934,7 @@
         "normalized_room_c": 20.5,
         "requested_room_c": 20.05128057341277
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 20.05128057341277,
       "strategy": "balanced"
@@ -994,6 +1012,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1019,7 +1039,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -1097,6 +1117,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1122,7 +1144,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -1202,12 +1224,14 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": null,
       "governing_heating": null,
       "limitations": [],
       "normalized": null,
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": null,
       "strategy": "balanced"
@@ -1287,12 +1311,14 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": null,
       "governing_heating": null,
       "limitations": [],
       "normalized": null,
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": null,
       "strategy": "balanced"
@@ -1373,6 +1399,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1398,7 +1426,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -1480,6 +1508,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1505,7 +1535,7 @@
         "normalized_room_c": 18.0,
         "requested_room_c": 15.94413612063229
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 15.94413612063229,
       "strategy": "balanced"
@@ -1586,6 +1616,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1611,7 +1643,7 @@
         "normalized_room_c": 25.5,
         "requested_room_c": 25.6606139216423
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": 25.6606139216423,
       "requested_heating_c": null,
       "strategy": "balanced"
@@ -1697,6 +1729,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1722,7 +1756,7 @@
         "normalized_room_c": 23.0,
         "requested_room_c": 23.479527176007633
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": 23.479527176007633,
       "requested_heating_c": null,
       "strategy": "balanced"
@@ -1801,6 +1835,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1854,7 +1890,7 @@
         "requested_cooling_room_c": 23.479527176007633,
         "requested_heating_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": 23.479527176007633,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -1903,7 +1939,7 @@
       "rh_provenance": "measured",
       "running_mean_c": 5.0
     },
-    "name": "Explicit mapped auto range",
+    "name": "Automatically inferred auto range",
     "numerical": {
       "current_sensation": -0.17308845704988404,
       "evaluation_count": 79,
@@ -1933,6 +1969,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -1986,7 +2024,7 @@
         "requested_cooling_room_c": 23.479527176007633,
         "requested_heating_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": 23.479527176007633,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2059,6 +2097,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2084,7 +2124,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2157,6 +2197,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2182,7 +2224,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2260,6 +2302,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2285,7 +2329,7 @@
         "normalized_room_c": 19.444444444444443,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2368,6 +2412,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2393,7 +2439,7 @@
         "normalized_room_c": 20.0,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2466,6 +2512,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2491,7 +2539,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2572,6 +2620,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2597,7 +2647,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2670,6 +2720,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2695,7 +2747,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2772,6 +2824,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2797,7 +2851,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2873,6 +2927,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -2898,7 +2954,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -2983,6 +3039,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -3008,7 +3066,7 @@
         "normalized_room_c": 19.5,
         "requested_room_c": 19.361130272671577
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 19.361130272671577,
       "strategy": "balanced"
@@ -3089,6 +3147,8 @@
     },
     "passed": true,
     "policy": {
+      "boost_mode": "off",
+      "boost_phase": "off",
       "fallback": false,
       "governing_cooling": "primary",
       "governing_heating": "primary",
@@ -3114,7 +3174,7 @@
         "normalized_room_c": 20.5,
         "requested_room_c": 20.190060796931384
       },
-      "profile": "comfort",
+      "occupancy_state": "absent",
       "requested_cooling_c": null,
       "requested_heating_c": 20.190060796931384,
       "strategy": "comfort"

@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from .contracts import (
     ActuationDirection,
+    BoostMode,
     ControlProfile,
     CriticalEligibilityMode,
     EcoIntensity,
@@ -84,6 +85,11 @@ class PolicyTargets:
     heating_contribution: DirectionalContribution | None
     cooling_contribution: DirectionalContribution | None
     limitations: tuple[str, ...]
+    boost_mode: BoostMode = BoostMode.OFF
+    boost_phase: str = "off"
+    rapid_boost_reached: bool = False
+    boost_target_heating_c: float | None = None
+    boost_target_cooling_c: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +157,22 @@ def resolve_profile(
         ControlProfile.COMFORT,
         now,
         ("occupancy_unknown",),
+    )
+
+
+def resolve_occupancy_profile(
+    *,
+    occupancy: OccupancyState,
+    now: datetime,
+    previous: ProfileResolution | None = None,
+) -> ProfileResolution:
+    """Resolve occupancy to the internal setback state without a public profile."""
+
+    return resolve_profile(
+        selected=ControlProfile.AUTO,
+        occupancy=occupancy,
+        now=now,
+        previous=previous,
     )
 
 
@@ -279,26 +301,49 @@ def apply_critical_demands(
     )
 
 
-def _profile_transform(
+@dataclass(frozen=True, slots=True)
+class _PolicyTransform:
+    heating_c: float | None
+    cooling_c: float | None
+    limitations: tuple[str, ...]
+    boost_phase: str
+    rapid_boost_reached: bool
+    boost_target_heating_c: float | None
+    boost_target_cooling_c: float | None
+
+
+def _policy_transform(
     *,
     heating: float | None,
     cooling: float | None,
     profile: ControlProfile,
+    boost_mode: BoostMode,
+    direction: ActuationDirection,
+    current_air_temperature_c: float,
+    rapid_boost_reached: bool,
+    neutral_heating_c: float | None,
+    neutral_cooling_c: float | None,
     eco_intensity: EcoIntensity,
     minimum_range_gap_c: float,
     eco_heating_setback_c: float,
     eco_cooling_setback_c: float,
     inactive_heating_c: float,
     inactive_cooling_c: float,
+    rapid_heating_c: float,
+    rapid_cooling_c: float,
     boost_delta_c: float,
-) -> tuple[float | None, float | None, tuple[str, ...]]:
+) -> _PolicyTransform:
     limitations: list[str] = []
-    if profile is ControlProfile.ECO:
+    if boost_mode is BoostMode.OFF and profile is ControlProfile.ECO:
         if eco_intensity is EcoIntensity.DEEP:
-            return (
+            return _PolicyTransform(
                 inactive_heating_c if heating is not None else None,
                 inactive_cooling_c if cooling is not None else None,
-                ("eco_policy", "eco_deep"),
+                ("occupancy_setback", "setback_max"),
+                "off",
+                False,
+                None,
+                None,
             )
         heating_setback = (
             DEFAULT_ECO_SETBACK_C
@@ -314,23 +359,98 @@ def _profile_transform(
             if eco_intensity is EcoIntensity.WORKDAY
             else eco_cooling_setback_c
         )
-        return (
+        return _PolicyTransform(
             heating - heating_setback if heating is not None else None,
             cooling + cooling_setback if cooling is not None else None,
-            ("eco_policy",),
+            ("occupancy_setback",),
+            "off",
+            False,
+            None,
+            None,
         )
-    if profile is not ControlProfile.BOOST:
-        return heating, cooling, ()
+    if boost_mode is BoostMode.OFF:
+        return _PolicyTransform(heating, cooling, (), "off", False, None, None)
+
+    boost_heating = heating
+    boost_cooling = cooling
     if heating is not None and cooling is not None:
         available = max(0.0, (cooling - heating - minimum_range_gap_c) / 2.0)
         applied = min(max(0.0, boost_delta_c), available)
         if applied < boost_delta_c:
             limitations.append("boost_limited")
-        return heating + applied, cooling - applied, tuple(limitations)
-    return (
-        heating + boost_delta_c if heating is not None else None,
-        cooling - boost_delta_c if cooling is not None else None,
-        (),
+        boost_heating = heating + applied
+        boost_cooling = cooling - applied
+    else:
+        if heating is not None:
+            boost_heating = heating + boost_delta_c
+            if neutral_heating_c is not None:
+                boost_heating = min(boost_heating, neutral_heating_c)
+            else:
+                limitations.append("boost_neutral_unavailable")
+            if boost_heating < heating + boost_delta_c:
+                limitations.append("boost_limited")
+        if cooling is not None:
+            boost_cooling = cooling - boost_delta_c
+            if neutral_cooling_c is not None:
+                boost_cooling = max(boost_cooling, neutral_cooling_c)
+            else:
+                limitations.append("boost_neutral_unavailable")
+            if boost_cooling > cooling - boost_delta_c:
+                limitations.append("boost_limited")
+
+    if boost_mode is BoostMode.ADAPTIVE:
+        return _PolicyTransform(
+            boost_heating,
+            boost_cooling,
+            tuple(dict.fromkeys(limitations)),
+            "adaptive",
+            False,
+            boost_heating,
+            boost_cooling,
+        )
+    if direction is ActuationDirection.RANGED:
+        limitations.append("rapid_boost_range_adaptive")
+        return _PolicyTransform(
+            boost_heating,
+            boost_cooling,
+            tuple(dict.fromkeys(limitations)),
+            "adaptive",
+            False,
+            boost_heating,
+            boost_cooling,
+        )
+
+    reached = rapid_boost_reached
+    if direction is ActuationDirection.HEATING_ONLY and boost_heating is not None:
+        reached = reached or current_air_temperature_c >= boost_heating
+        return _PolicyTransform(
+            boost_heating if reached else rapid_heating_c,
+            None,
+            tuple(dict.fromkeys(limitations)),
+            "hold" if reached else "rapid",
+            reached,
+            boost_heating,
+            None,
+        )
+    if direction is ActuationDirection.COOLING_ONLY and boost_cooling is not None:
+        reached = reached or current_air_temperature_c <= boost_cooling
+        return _PolicyTransform(
+            None,
+            boost_cooling if reached else rapid_cooling_c,
+            tuple(dict.fromkeys(limitations)),
+            "hold" if reached else "rapid",
+            reached,
+            None,
+            boost_cooling,
+        )
+    return _PolicyTransform(
+        boost_heating,
+        boost_cooling,
+        tuple(dict.fromkeys((*limitations, "rapid_boost_unavailable"))),
+        "adaptive",
+        False,
+        boost_heating,
+        boost_cooling,
     )
 
 
@@ -347,6 +467,9 @@ def build_adaptive_policy(
     critical_demands: tuple[CriticalDemand, ...],
     direction: ActuationDirection,
     profile: ControlProfile,
+    boost_mode: BoostMode = BoostMode.OFF,
+    current_air_temperature_c: float = 20.0,
+    rapid_boost_reached: bool = False,
     eco_intensity: EcoIntensity = EcoIntensity.CUSTOM,
     minimum_range_gap_c: float = DEFAULT_MINIMUM_RANGE_GAP_C,
     eco_heating_setback_c: float = DEFAULT_ECO_SETBACK_C,
@@ -367,6 +490,7 @@ def build_adaptive_policy(
         inactive_heating_c,
         inactive_cooling_c,
         boost_delta_c,
+        current_air_temperature_c,
         elapsed_since_previous_seconds,
     )
     if any(isinstance(value, bool) or not math.isfinite(float(value)) for value in numeric):
@@ -387,10 +511,17 @@ def build_adaptive_policy(
     )
     if isinstance(critical, PolicyFailure):
         return critical
-    transformed_heating, transformed_cooling, profile_limits = _profile_transform(
+    neutral = _success(roots.thermal_neutral)
+    transformed = _policy_transform(
         heating=critical.heating_c,
         cooling=critical.cooling_c,
         profile=profile,
+        boost_mode=boost_mode,
+        direction=direction,
+        current_air_temperature_c=current_air_temperature_c,
+        rapid_boost_reached=rapid_boost_reached,
+        neutral_heating_c=neutral,
+        neutral_cooling_c=neutral,
         eco_intensity=eco_intensity,
         minimum_range_gap_c=minimum_range_gap_c,
         eco_heating_setback_c=eco_heating_setback_c,
@@ -407,26 +538,36 @@ def build_adaptive_policy(
             if critical.cooling_contribution is not None
             else 0.0
         ),
+        rapid_heating_c=inactive_cooling_c,
+        rapid_cooling_c=inactive_heating_c,
         boost_delta_c=boost_delta_c,
     )
     if explicit_transition:
-        requested_heating = transformed_heating
-        requested_cooling = transformed_cooling
+        requested_heating = transformed.heating_c
+        requested_cooling = transformed.cooling_c
     else:
+        boost_reached_now = (
+            boost_mode is BoostMode.RAPID
+            and transformed.rapid_boost_reached
+            and not rapid_boost_reached
+        )
         requested_heating = _slew(
-            transformed_heating, previous_requested[0], elapsed_since_previous_seconds
+            transformed.heating_c, previous_requested[0], elapsed_since_previous_seconds
         )
         requested_cooling = _slew(
-            transformed_cooling, previous_requested[1], elapsed_since_previous_seconds
+            transformed.cooling_c, previous_requested[1], elapsed_since_previous_seconds
         )
-    limitations = tuple(dict.fromkeys((*critical.limitations, *profile_limits)))
+        if boost_reached_now:
+            requested_heating = transformed.heating_c
+            requested_cooling = transformed.cooling_c
+    limitations = tuple(dict.fromkeys((*critical.limitations, *transformed.limitations)))
     return PolicyTargets(
         requested_heating,
         requested_cooling,
         critical.heating_c,
         critical.cooling_c,
-        transformed_heating,
-        transformed_cooling,
+        transformed.heating_c,
+        transformed.cooling_c,
         profile,
         False,
         (
@@ -442,6 +583,11 @@ def build_adaptive_policy(
         critical.heating_contribution,
         critical.cooling_contribution,
         limitations,
+        boost_mode,
+        transformed.boost_phase,
+        transformed.rapid_boost_reached,
+        transformed.boost_target_heating_c,
+        transformed.boost_target_cooling_c,
     )
 
 
@@ -485,6 +631,8 @@ def build_fixed_fallback(
         None,
         None,
         ("fixed_fallback",),
+        BoostMode.OFF,
+        "fallback",
     )
 
 

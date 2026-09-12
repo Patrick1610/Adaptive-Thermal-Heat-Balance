@@ -26,7 +26,7 @@ from custom_components.athb.binary_sensor import async_setup_entry as async_setu
 from custom_components.athb.button import ResumeButton
 from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE
 from custom_components.athb.runtime import ZoneRuntime
-from custom_components.athb.select import EcoIntensitySelect, ProfileSelect, StrategySelect
+from custom_components.athb.select import BoostModeSelect, EcoIntensitySelect, StrategySelect
 from custom_components.athb.sensor import DESCRIPTIONS, AthbSensor, TargetSensor
 from custom_components.athb.sensor import async_setup_entry as async_setup_sensor_entry
 from custom_components.athb.switch import AdaptiveControlSwitch
@@ -43,7 +43,7 @@ def _runtime() -> ZoneRuntime:
         data={},
         config_entries=SimpleNamespace(async_update_entry=MagicMock()),
     )
-    return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "comfort", False)
+    return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "off", False)
 
 
 def test_feature_bits_match_pinned_home_assistant_baseline() -> None:
@@ -51,10 +51,10 @@ def test_feature_bits_match_pinned_home_assistant_baseline() -> None:
     assert int(ClimateEntityFeature.TARGET_TEMPERATURE_RANGE) == TARGET_TEMPERATURE_RANGE == 2
 
 
-def test_config_entry_schema_accepts_v1_and_rejects_unknown_future_version() -> None:
-    assert asyncio.run(async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=1))))
+def test_config_entry_schema_accepts_v2_and_rejects_unknown_future_version() -> None:
+    assert asyncio.run(async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=2))))
     assert not asyncio.run(
-        async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=2)))
+        async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=3)))
     )
 
 
@@ -116,7 +116,7 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
         ControlEligibleBinarySensor(runtime),
         AdaptiveControlSwitch(runtime),
         StrategySelect(runtime),
-        ProfileSelect(runtime),
+        BoostModeSelect(runtime),
         EcoIntensitySelect(runtime),
         ResumeButton(runtime),
     ]
@@ -125,7 +125,7 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
         "zone-1_control_eligible",
         "zone-1_adaptive_control",
         "zone-1_comfort_strategy",
-        "zone-1_profile",
+        "zone-1_boost_mode",
         "zone-1_eco_intensity",
         "zone-1_resume_control",
     ]
@@ -157,8 +157,9 @@ async def test_full_entry_setup_registers_eco_intensity_select(
         },
         options={
             "comfort_strategy": "balanced",
-            "profile": "comfort",
+            "boost_mode": "off",
             "eco_intensity": "workday",
+            "occupancy_entity": "binary_sensor.occupancy",
         },
     )
     entry.add_to_hass(hass)
@@ -174,7 +175,7 @@ async def test_full_entry_setup_registers_eco_intensity_select(
     }
     assert set(registered) == {
         "zone-select-platform_comfort_strategy",
-        "zone-select-platform_profile",
+        "zone-select-platform_boost_mode",
         "zone-select-platform_eco_intensity",
     }
     eco_state = hass.states.get(registered["zone-select-platform_eco_intensity"])
@@ -330,11 +331,11 @@ def test_native_entity_actions_and_values_delegate_to_one_runtime() -> None:
     sensation = AthbSensor(runtime, DESCRIPTIONS[0])
     assert sensation.native_value == 0.25
     assert sensation.available
-    assert sensation.extra_state_attributes["comfort_strategy"] == "balanced"
+    assert sensation.extra_state_attributes["comfort_level"] == "balanced"
     assert sensation.extra_state_attributes["suppression_reason"] is None
     assert ControlEligibleBinarySensor(runtime).is_on
-    asyncio.run(ProfileSelect(runtime).async_select_option("boost"))
-    assert runtime.profile == "boost"
+    asyncio.run(BoostModeSelect(runtime).async_select_option("rapid"))
+    assert runtime.boost_mode == "rapid"
     asyncio.run(ResumeButton(runtime).async_press())
     assert runtime.values["resume_requested"] is True
     switch = AdaptiveControlSwitch(runtime)

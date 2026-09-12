@@ -126,6 +126,8 @@ def test_loaded_control_types_and_command_identity_are_validated_strictly() -> N
         replace(_state(), control_enabled_intent=cast(bool, 1)),
         replace(_state(), selected_profile=""),
         replace(_state(), previous_non_boost_profile=""),
+        replace(_state(), boost_mode="turbo"),
+        replace(_state(), rapid_boost_reached=cast(bool, 1)),
         replace(_state(), run_id=""),
         replace(_state(), boost_expiry_utc="2026-09-11T13:00:00"),
         replace(_state(), actuators=(_actuator(), _actuator())),
@@ -255,13 +257,13 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
         strategy="balanced",
         target_identities=("registry-1",),
         control_enabled=True,
-        selected_profile="comfort",
+        boost_mode="off",
     )
     assert await persistence.async_start()
     assert await persistence.async_update_runtime(
         control_enabled=True,
-        selected_profile="boost",
-        previous_non_boost_profile="eco",
+        boost_mode="rapid",
+        rapid_boost_reached=True,
         boost_expiry_utc="2026-09-11T13:00:00+00:00",
     )
     assert await persistence.async_update_actuator(
@@ -276,8 +278,8 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
     loaded = load_control_state(backend.value)
     assert loaded.state is not None
     assert loaded.state.control_enabled_intent is True
-    assert loaded.state.selected_profile == "boost"
-    assert loaded.state.previous_non_boost_profile == "eco"
+    assert loaded.state.boost_mode == "rapid"
+    assert loaded.state.rapid_boost_reached is True
     assert loaded.state.boost_expiry_utc == "2026-09-11T13:00:00+00:00"
     assert loaded.state.actuators[0].ownership == "manual_override"
     assert loaded.state.actuators[0].external_revision == 2
@@ -298,8 +300,8 @@ async def test_unstarted_or_unknown_persistence_operations_fail_closed() -> None
     assert not await persistence.async_resolve(cast(Any, None), "resolved")
     assert not await persistence.async_update_runtime(
         control_enabled=False,
-        selected_profile="comfort",
-        previous_non_boost_profile="comfort",
+        boost_mode="off",
+        rapid_boost_reached=False,
         boost_expiry_utc=None,
     )
     assert not await persistence.async_update_actuator(

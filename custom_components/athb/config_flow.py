@@ -16,20 +16,20 @@ from homeassistant.helpers import selector
 
 from .config_schema import validate_environment, validate_options, validate_targets
 from .const import (
+    CONF_BOOST_MODE,
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
     CONF_ECO_INTENSITY,
     CONF_MOLD_INDICATOR_ENTITY,
     CONF_OUTDOOR_SOURCE,
     CONF_PRIMARY_TEMPERATURE,
-    CONF_PROFILE,
     CONF_RH_DECLARED,
     CONF_RH_ENTITY,
     CONF_RH_MODE,
     CONF_TARGETS,
     CONF_ZONE_UUID,
+    DEFAULT_BOOST_MODE,
     DEFAULT_ECO_INTENSITY,
-    DEFAULT_PROFILE,
     DEFAULT_STRATEGY,
     DOMAIN,
 )
@@ -66,7 +66,7 @@ def _number(
 
 OPTION_DEFAULTS: dict[str, object] = {
     CONF_COMFORT_STRATEGY: DEFAULT_STRATEGY,
-    CONF_PROFILE: DEFAULT_PROFILE,
+    CONF_BOOST_MODE: DEFAULT_BOOST_MODE,
     CONF_ECO_INTENSITY: DEFAULT_ECO_INTENSITY,
     "radiant_model": "uniform",
     "met": 1.1,
@@ -131,6 +131,7 @@ class _OptionsWizardMixin:
         compatible_existing.pop("auto_mapping", None)
         compatible_existing.pop("inactive_heating_temperature", None)
         compatible_existing.pop("inactive_cooling_temperature", None)
+        compatible_existing.pop("profile", None)
         if compatible_existing and CONF_ECO_INTENSITY not in compatible_existing:
             compatible_existing[CONF_ECO_INTENSITY] = "custom"
         if compatible_existing.get("radiant_model", "uniform") not in {
@@ -164,20 +165,22 @@ class _OptionsWizardMixin:
             self._pending_options.pop("occupancy_entity", None)
             if isinstance(occupancy, str) and (occupancy := occupancy.strip()):
                 self._pending_options["occupancy_entity"] = occupancy
+            else:
+                for key in (
+                    CONF_ECO_INTENSITY,
+                    "eco_heating_setback_c",
+                    "eco_cooling_setback_c",
+                ):
+                    self._pending_options.pop(key, None)
             self._clean_radiant_options(str(self._pending_options["radiant_model"]))
-            if self._pending_options["radiant_model"] != "uniform":
-                return await self.async_step_radiant()
-            return await self.async_step_control_limits()
+            if self._pending_options.get("occupancy_entity"):
+                return await self.async_step_setback()
+            return await self._after_setback()
         defaults = self._pending_options
         fields: dict[vol.Marker, object] = {
             vol.Required(CONF_COMFORT_STRATEGY, default=defaults[CONF_COMFORT_STRATEGY]): _select(
-                ("efficient", "balanced", "comfort"), "comfort_strategy"
-            ),
-            vol.Required(CONF_PROFILE, default=defaults[CONF_PROFILE]): _select(
-                ("eco", "auto", "comfort", "boost"), "profile"
-            ),
-            vol.Required(CONF_ECO_INTENSITY, default=defaults[CONF_ECO_INTENSITY]): _select(
-                ("deep", "workday", "mild", "custom"), "eco_intensity"
+                ("eco", "efficient", "balanced", "comfort", "near_neutral"),
+                "comfort_strategy",
             ),
             vol.Required("radiant_model", default=defaults["radiant_model"]): _select(
                 ("uniform", "mold_indicator"), "radiant_model"
@@ -191,6 +194,61 @@ class _OptionsWizardMixin:
             else vol.Optional("occupancy_entity")
         ] = ENTITY
         return self.async_show_form(step_id=step_id, data_schema=vol.Schema(fields))
+
+    async def async_step_setback(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure the setback that is applied only while unoccupied."""
+
+        if user_input is not None:
+            self._pending_options.update(user_input)
+            if self._pending_options[CONF_ECO_INTENSITY] == "custom":
+                return await self.async_step_setback_parameters()
+            self._pending_options.pop("eco_heating_setback_c", None)
+            self._pending_options.pop("eco_cooling_setback_c", None)
+            return await self._after_setback()
+        return self.async_show_form(
+            step_id="setback",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ECO_INTENSITY,
+                        default=self._pending_options.get(
+                            CONF_ECO_INTENSITY, DEFAULT_ECO_INTENSITY
+                        ),
+                    ): _select(("deep", "workday", "mild", "custom"), "eco_intensity")
+                }
+            ),
+        )
+
+    async def async_step_setback_parameters(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure custom heating and cooling setback offsets."""
+
+        if user_input is not None:
+            self._pending_options.update(user_input)
+            return await self._after_setback()
+        return self.async_show_form(
+            step_id="setback_parameters",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "eco_heating_setback_c",
+                        default=self._pending_options.get("eco_heating_setback_c", 2.0),
+                    ): _number(0.0, 5.0, 0.1, "°C"),
+                    vol.Required(
+                        "eco_cooling_setback_c",
+                        default=self._pending_options.get("eco_cooling_setback_c", 2.0),
+                    ): _number(0.0, 5.0, 0.1, "°C"),
+                }
+            ),
+        )
+
+    async def _after_setback(self) -> ConfigFlowResult:
+        if self._pending_options["radiant_model"] != "uniform":
+            return await self.async_step_radiant()
+        return await self.async_step_control_limits()
 
     def _clean_radiant_options(self, model: str) -> None:
         old_and_current_keys = {
@@ -316,7 +374,7 @@ class _OptionsWizardMixin:
             }
             if not relevant:
                 self._pending_options = pending
-                return await self.async_step_profile_parameters()
+                return await self.async_step_command_behavior()
             return self.async_show_form(
                 step_id="comfort_parameters",
                 data_schema=self._comfort_parameters_schema(),
@@ -343,34 +401,6 @@ class _OptionsWizardMixin:
                     "reject_extrapolation", default=defaults.get("reject_extrapolation", False)
                 ): bool,
             }
-        )
-
-    async def async_step_profile_parameters(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        if user_input is not None:
-            self._pending_options.update(user_input)
-            return await self.async_step_command_behavior()
-        defaults = self._pending_options
-        eco_intensity = str(defaults.get(CONF_ECO_INTENSITY, DEFAULT_ECO_INTENSITY))
-        if eco_intensity != "custom":
-            return await self.async_step_command_behavior()
-        fields: dict[vol.Marker, object] = {}
-        fields.update(
-            {
-                vol.Required(
-                    "eco_heating_setback_c",
-                    default=defaults.get("eco_heating_setback_c", 2.0),
-                ): _number(0.0, 5.0, 0.1, "°C"),
-                vol.Required(
-                    "eco_cooling_setback_c",
-                    default=defaults.get("eco_cooling_setback_c", 2.0),
-                ): _number(0.0, 5.0, 0.1, "°C"),
-            }
-        )
-        return self.async_show_form(
-            step_id="profile_parameters",
-            data_schema=vol.Schema(fields),
         )
 
     async def async_step_control_limits(
@@ -687,7 +717,7 @@ class _OptionsWizardMixin:
 class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMAIN):
     """Create and fully reconfigure one thermal-zone device."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}

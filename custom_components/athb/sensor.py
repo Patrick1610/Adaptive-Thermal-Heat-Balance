@@ -70,8 +70,10 @@ class AthbSensor(AthbEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
-            "comfort_strategy": self.runtime.strategy,
-            "profile": self.runtime.profile,
+            "comfort_level": self.runtime.strategy,
+            "boost_mode": self.runtime.boost_mode,
+            "occupancy_status": self.runtime.values.get("occupancy_status"),
+            "setback_active": self.runtime.values.get("setback_active", False),
             "quality_reasons": self.runtime.values.get("quality_reasons", ()),
             "suppression_reason": self.runtime.values.get("suppression_reason"),
             "ownership": self.runtime.values.get("ownership", {}),
@@ -107,10 +109,12 @@ class TargetSensor(AthbEntity, SensorEntity):
             "mode": detail.get("mode", "unavailable"),
             "reason": detail.get("reason"),
             "fallback": detail.get("fallback", False),
-            "comfort_strategy": self.runtime.strategy,
-            "profile": self.runtime.profile,
-            "resolved_profile": self.runtime.values.get("resolved_profile"),
-            "eco_intensity": self.runtime.eco_intensity,
+            "comfort_level": self.runtime.strategy,
+            "boost_mode": self.runtime.boost_mode,
+            "boost_phase": detail.get("boost_phase"),
+            "occupancy_status": self.runtime.values.get("occupancy_status"),
+            "setback_active": self.runtime.values.get("setback_active", False),
+            "setback": self.runtime.eco_intensity,
         }
 
 

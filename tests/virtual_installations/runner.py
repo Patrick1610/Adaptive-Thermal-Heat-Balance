@@ -239,7 +239,7 @@ def _captured(scenario: dict[str, Any], *, history_days: int | None = None) -> C
         running,
         quality,
         config["strategy"],
-        config["profile"],
+        "eco" if config["occupancy_state"] == "off" else "comfort",
         options,
         (
             CapturedTarget(
@@ -248,6 +248,7 @@ def _captured(scenario: dict[str, Any], *, history_days: int | None = None) -> C
         ),
         tuple(critical),
         True,
+        boost_mode=config["boost_mode"],
     )
 
 
@@ -558,7 +559,9 @@ async def run_scenario(scenario: dict[str, Any]) -> ScenarioResult:
         numerical,
         {
             "strategy": scenario["zone_configuration"]["strategy"],
-            "profile": scenario["zone_configuration"]["profile"],
+            "occupancy_state": scenario["zone_configuration"]["occupancy_state"],
+            "boost_mode": policy.boost_mode.value if policy is not None else "off",
+            "boost_phase": policy.boost_phase if policy is not None else "off",
             "fallback": policy.fallback if policy is not None else False,
             "governing_heating": policy.governing_heating if policy is not None else None,
             "governing_cooling": policy.governing_cooling if policy is not None else None,

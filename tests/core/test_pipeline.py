@@ -11,6 +11,7 @@ from custom_components.athb.core import (
     ActuationDirection,
     ApplicabilityReason,
     AthbSuccess,
+    BoostMode,
     ClimateCapabilitySnapshot,
     ComfortStrategy,
     ControlProfile,
@@ -153,9 +154,64 @@ def test_strategy_order_is_in_sensation_roots_not_temperature_midpoints() -> Non
         )
 
     assert roots[ComfortStrategy.EFFICIENT][0] < roots[ComfortStrategy.BALANCED][0]
+    assert roots[ComfortStrategy.ECO][0] < roots[ComfortStrategy.EFFICIENT][0]
     assert roots[ComfortStrategy.BALANCED][0] < roots[ComfortStrategy.COMFORT][0]
     assert roots[ComfortStrategy.COMFORT][1] < roots[ComfortStrategy.BALANCED][1]
     assert roots[ComfortStrategy.BALANCED][1] < roots[ComfortStrategy.EFFICIENT][1]
+    assert roots[ComfortStrategy.COMFORT][0] < roots[ComfortStrategy.NEAR_NEUTRAL][0]
+    assert roots[ComfortStrategy.NEAR_NEUTRAL][1] < roots[ComfortStrategy.COMFORT][1]
+
+
+def test_rapid_boost_uses_command_limit_then_holds_adaptive_boost_target() -> None:
+    active = calculate_zone(
+        replace(
+            _input(),
+            boost_mode=BoostMode.RAPID,
+            boost_delta_c=1.0,
+            inactive_cooling_c=26.0,
+        )
+    )
+    assert active.policy is not None
+    assert active.policy.boost_phase == "rapid"
+    assert active.policy.boost_target_heating_c == pytest.approx(20.3627, abs=0.005)
+    assert isinstance(active.normalized, NormalizedScalarTarget)
+    assert active.normalized.normalized_room_c == 26.0
+
+    reached = calculate_zone(
+        replace(
+            _input(),
+            air_temperature_c=21.0,
+            boost_mode=BoostMode.RAPID,
+            boost_delta_c=1.0,
+            inactive_cooling_c=26.0,
+        )
+    )
+    assert reached.policy is not None
+    assert reached.policy.boost_phase == "hold"
+    assert reached.policy.rapid_boost_reached
+    assert isinstance(reached.normalized, NormalizedScalarTarget)
+    assert reached.normalized.normalized_room_c < 26.0
+
+
+def test_boost_bypasses_occupancy_setback_without_mutating_raw_roots() -> None:
+    occupied = calculate_zone(_input())
+    unoccupied = calculate_zone(
+        replace(_input(), profile=ControlProfile.ECO, eco_intensity=EcoIntensity.MILD)
+    )
+    boosted = calculate_zone(
+        replace(
+            _input(),
+            profile=ControlProfile.ECO,
+            eco_intensity=EcoIntensity.MILD,
+            boost_mode=BoostMode.ADAPTIVE,
+        )
+    )
+    assert occupied.roots == unoccupied.roots == boosted.roots
+    assert occupied.policy is not None
+    assert unoccupied.policy is not None
+    assert boosted.policy is not None
+    assert unoccupied.policy.heating_c == pytest.approx(occupied.policy.heating_c - 2.0)
+    assert boosted.policy.heating_c > occupied.policy.heating_c
 
 
 def test_invalid_moisture_speed_and_strategy_fail_before_actuation() -> None:

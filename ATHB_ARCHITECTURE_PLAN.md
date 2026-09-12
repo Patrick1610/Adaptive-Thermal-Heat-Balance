@@ -33,7 +33,7 @@ The canonical repository is **[Patrick1610/Adaptive-Thermal-Heat-Balance](https:
 
 This document is the single technical implementation specification and supersedes the supplied architecture plan. The whitepaper and old Adaptive Climate blueprint remain reference material. Where their instructions differ, the requirements in this plan govern implementation.
 
-The initial product has three comfort strategies: **Efficient**, **Balanced** (default), and **Comfort**. Each solves heating and cooling targets inward from the relevant comfort boundary in sensation space. Thermal neutral remains the zero-vote reference. The normal ranged request is the control band between the two strategy roots.
+The product has five ordered comfort levels: **Eco**, **Efficient**, **Balanced** (default), **Comfort**, and **Near neutral**. Each solves heating and cooling targets inward from the relevant comfort boundary in sensation space. Thermal neutral remains the zero-vote reference. The normal ranged request is the control band between the two selected roots.
 
 Software completion is proven entirely by repository-based numerical, policy/state-machine, Virtual Installation Validation, and Home Assistant API-contract tests. All production target-writing paths must be implemented and exercised through controlled service doubles. No external HA deployment, physical equipment, or owner-performed test is a completion dependency. Passing the complete Definition of Done permits the status **`SOFTWARE_COMPLETE`**.
 
@@ -727,7 +727,7 @@ For each valid location, solve these **five** roots for the selected comfort str
 | Cooling control target | `cooling_control` | `upper_vote + f × (0 − upper_vote)` |
 | Upper comfort boundary | `upper_comfort` | `comfort_vote_upper`, default +0.50 |
 
-The **comfort band** spans the lower and upper comfort boundaries. The **control band** spans the heating and cooling control targets. These terms describe the raw solved bands; subsequent profile, critical-location, bound, calibration and grid effects are identified separately.
+The **comfort band** spans the lower and upper comfort boundaries. The **control band** spans the heating and cooling control targets. These terms describe the raw solved bands; subsequent occupancy-setback, Boost, critical-location, bound, calibration and grid effects are identified separately.
 
 The outer sensation boundaries are product policy, not universal scientific ATHB comfort limits, satisfaction percentages or standards categories. Thermal neutral is a model reference and is not the default heating or cooling target.
 
@@ -807,15 +807,17 @@ Rules:
 
 ## 7. Product policy
 
-### 7.1 Comfort strategy, profiles and precedence
+### 7.1 Comfort level, occupancy setback, Boost and precedence
 
-Comfort strategy and profile are independent controls. **Comfort** is a strategy label; `comfort` is the occupied profile that applies the selected strategy without eco setback or boost.
+The public policy controls are one comfort-level select, an optional occupancy setback and an independent temporary Boost select. There is no public profile select or scheduling engine. This section incorporates and is governed by `ATHB_BUILD_CLARIFICATIONS.md` §6.
 
-| Comfort strategy | Stable key | Inward fraction `f` | Default heating vote | Default cooling vote | User explanation |
+| Comfort level | Stable key | Inward fraction `f` | Default heating vote | Default cooling vote | User explanation |
 | --- | --- | ---: | ---: | ---: | --- |
+| Eco | `eco` | 0.10 | −0.45 | +0.45 | Greatest efficiency; controls nearest the outer comfort boundary. |
 | Efficient | `efficient` | 0.30 | −0.35 | +0.35 | Controls closer to the comfort boundary and prioritizes reduced conditioning. |
 | Balanced | `balanced` | 0.50 | −0.25 | +0.25 | Controls halfway between the comfort boundary and thermal neutral in sensation space. |
 | Comfort | `comfort` | 0.70 | −0.15 | +0.15 | Controls closer to thermal neutral and provides more comfort reserve. |
+| Near neutral | `near_neutral` | 0.85 | −0.075 | +0.075 | Greatest normal comfort reserve while retaining thermal neutral as a reference. |
 
 **Balanced is the default.** Fractions are product-defined presets, not editable tuning parameters. For advanced outer boundaries `l < 0 < u`:
 
@@ -827,25 +829,24 @@ The default numerical votes in the table are examples of these formulas, not har
 
 Strategy expresses desired thermal-comfort position. It is independent of heating-system or emitter type, thermal inertia, expected overshoot, PID/TPI, modulation and minimum runtime. No such strategy selector or dynamic compensation is included. ATHB does not deliberately target thermal neutral in anticipation of equipment overshoot.
 
-Provide profiles `auto`, `comfort`, `eco`, and `boost`.
-
 Priority:
 
 1. Disabled control or ownership inhibition.
 2. Invalid mandatory actuation data.
 3. Manual override.
 4. Fallback when adaptive calculation is unavailable.
-5. Explicit profile.
-6. `auto` occupancy resolution.
+5. Selected comfort level.
+6. Occupancy setback, if configured and currently off.
+7. Temporary Boost mode.
 
-`auto` resolves as follows:
+Occupancy resolves as follows:
 
-- Configured occupancy/schedule entity `on` → `comfort`.
-- `off` → `eco`.
-- No entity → `comfort`.
-- Unknown/unavailable → retain the last resolved profile for 30 minutes, then `comfort` with `occupancy_unknown`.
+- Configured occupancy/schedule entity `on` → no setback.
+- `off` → apply the selected setback independently of comfort level.
+- No entity → no setback control or setback entity.
+- Unknown/unavailable → retain the last resolved occupancy state for 30 minutes, then assume occupied/no setback with `occupancy_unknown`.
 
-Schedules remain Home Assistant schedule helpers or automations. ATHB does not implement a scheduling engine. No dedicated legacy boost input is included; normal HA automations can select the native boost profile. Profile changes never change the selected comfort strategy or its sensation votes.
+Schedules remain Home Assistant schedule helpers or automations. ATHB does not implement a scheduling engine. The setback presets are Max (command limits), Eco (4 K), Comfort (2 K), and Custom. Occupancy and setback never change the selected sensation votes.
 
 ### 7.2 Directional baseline and critical-location targets
 
@@ -863,7 +864,7 @@ H_0=\operatorname{root}_{primary}(q_H),\qquad
 C_0=\operatorname{root}_{primary}(q_C)
 \]
 
-Heating-only `comfort` target:
+Heating-only comfort-level target:
 
 \[
 H_{cap}=\max(H_0,\min(H_0+I,U-m_b))
@@ -873,7 +874,7 @@ H_{cap}=\max(H_0,\min(H_0+I,U-m_b))
 H=\min\left(\max(H_0,\max_{i\in heating}H_i),H_{cap}\right)
 \]
 
-Cooling-only `comfort` target:
+Cooling-only comfort-level target:
 
 \[
 C_{floor}=\min(C_0,\max(C_0-I,L+m_b))
@@ -897,7 +898,7 @@ Use the `H` and `C` from §7.2 when eligible critical locations contribute. Requ
 
 If even the primary control band cannot meet `g`, suspend ranged/coordinated adaptive writes with `control_band_too_narrow`. Do not widen to the comfort boundaries or substitute thermal neutral. Later bounds and inward grid normalization must also preserve the gap; otherwise return `no_legal_range`. A scalar actuator in a zone without an opposing/ranged actuator need not satisfy a two-endpoint gap.
 
-### 7.4 Eco
+### 7.4 Occupancy setback
 
 Defaults: heating setback 2 K; cooling setback 2 K.
 
@@ -907,7 +908,7 @@ cooling: C + cooling_setback
 range: [H − heating_setback, C + cooling_setback]
 ```
 
-Eco transforms the selected strategy's critical-adjusted targets and can deliberately leave the comfort band. Label it as policy; raw sensation roots remain unchanged.
+The setback transforms the selected comfort level's critical-adjusted targets and can deliberately leave the comfort band. Label it as policy; raw sensation roots remain unchanged. It is applied only while the optional occupancy source is resolved off and only while Boost is off.
 
 ### 7.5 Boost
 
@@ -921,7 +922,7 @@ range: [H + b, C − b], where b = min(boost_delta, (C − H − g)/2)
 
 The base range must already be valid. Limit `b` to a nonnegative value. If narrowing is limited or impossible, report `boost_limited` and retain the largest valid narrowing. Bounds and grid feasibility still apply afterward.
 
-Boost is an explicit temporary profile transformation, not inferred equipment overshoot. Expiry restores the previous non-boost profile. Re-selecting boost restarts its duration; restart does not extend expiry. The selected comfort strategy stays unchanged.
+Boost is an explicit temporary control independent of occupancy and comfort level. `off` follows the ordinary comfort/setback target. `adaptive` ignores setback and shifts the active root by the configured delta toward, but never beyond, thermal neutral. `rapid` ignores setback and drives a scalar heating target at the maximum command temperature, or scalar cooling at the minimum command temperature, until the adaptive Boost target is reached; it then holds that target. Ranged climates and mixed separate heating/cooling scalar zones use Adaptive semantics for Rapid because opposing extremes are not a safe range request. Expiry returns Boost to Off. Re-selecting an active Boost mode restarts its duration; restart preserves rather than extends the persisted expiry. The selected comfort level stays unchanged.
 
 ### 7.6 Bounds and calibration
 
@@ -939,7 +940,7 @@ Order:
 1. Calculate the five requested sensation votes and solve the five raw roots.
 2. Select the directional strategy root(s).
 3. Apply bounded critical-location contributions and coordinated-range conflict handling.
-4. Apply profile transformation.
+4. Apply occupancy setback or Boost transformation.
 5. Apply environmental slew limits.
 6. Add per-actuator fixed calibration offset.
 7. Apply user command bounds.
@@ -1148,7 +1149,7 @@ Use directional release hysteresis compatible with §8.5. For an ordinary enviro
 
 After normalization, an unchanged acknowledged request produces `target_unchanged` and no write. A smaller-than-meaningful change produces `below_minimum_change`; a failed release test produces `quantization_hysteresis`; a rate-limited current intent produces `command_interval` while the one-slot latest queue waits. Evaluate these reasons in this order after eligibility checks. Startup has no acknowledged target to supply hysteresis/slew history; never treat the observed setpoint as a persisted ATHB command.
 
-Explicit enable/resume/profile/**comfort-strategy** transitions bypass environmental slew, release hysteresis and the ordinary interval, but retain the hard interval, grid validity, meaningful-change suppression and all ownership checks. Strategy changes create a new configuration/input generation and invalidate old roots and queued intents immediately. Disabling and external manual intervention inhibit dispatch immediately without debounce.
+Explicit enable/resume/**comfort-level**/setback/Boost transitions bypass environmental slew, release hysteresis and the ordinary interval, but retain the hard interval, grid validity, meaningful-change suppression and all ownership checks. Comfort-level changes create a new configuration/input generation and invalidate old roots and queued intents immediately. Disabling and external manual intervention inhibit dispatch immediately without debounce.
 
 ---
 
@@ -1324,7 +1325,7 @@ A quarantined change requires three mutually consistent reports spanning at leas
 | Globe/surface radiant derivation invalid | Same declared approximation | Never relabel as measured MRT |
 | Optional local critical source invalid | Remove its control eligibility | Re-entry requires the eligibility warm-up |
 | Configured air-speed sensor invalid | Do not silently replace with fixed speed | Hold, then fixed fallback |
-| Occupancy unavailable | Retain resolved profile for 30 minutes | Then comfort with explicit reason |
+| Occupancy unavailable | Retain resolved setback state for 30 minutes | Then assume occupied/no setback with explicit reason |
 | Primary inverse solver fails | No new adaptive write; hold for 15 minutes | Fixed fallback if eligible, subject to directional-root clarification |
 | Extrapolation rejected by policy | Same | Fixed fallback |
 | Target unavailable | No writes; cancel queued intent | Reconcile on return |
@@ -1467,7 +1468,7 @@ This is a proposed structure, not scaffolding to generate during planning.
 | `LocationAssembler` | Primary/critical environments and eligibility |
 | `AthbEngine` | Selected forward formulation only |
 | `InverseSolver` | Deterministic roots and typed failures |
-| `ComfortPolicy` | Profiles, governing location, bounds and coordination |
+| `ComfortPolicy` | Comfort level, occupancy setback, Boost, governing location, bounds and coordination |
 | `ClimateAdapter` | HA capability and unit contract |
 | `OwnershipReducer` | Pure ownership transitions |
 | `CommandBroker` | Sole climate-writing path |
@@ -1498,8 +1499,8 @@ LocationResult
   location_id, current_vote, RootSet, applicability, eligibility
 
 PolicyDecision
-  snapshot_generation, comfort_strategy, inward_fraction, heating_control_vote,
-  cooling_control_vote, profile, governing_locations,
+  snapshot_generation, comfort_level, inward_fraction, heating_control_vote,
+  cooling_control_vote, occupancy_setback_state, boost_mode, governing_locations,
   primary_five_roots, critical_adjusted_targets, transformed_targets, limitations
 
 NormalizedIntent
@@ -1547,7 +1548,7 @@ Use the canonical repository identity in §1 for project metadata. Packaging doe
 | Zone | Name; optional area | Generate immutable zone UUID |
 | Environment | Primary temperature; RH source mode; measured RH entity **or direct fixed RH value**; outdoor source | Recommend measured RH; explain declarations and units |
 | Climate targets | One or more climates | Show discovered modes, target types, bounds and step |
-| Comfort | Activity preset; **Comfort strategy**: Efficient, Balanced, Comfort | Balanced selected by default; explain position in sensation space |
+| Comfort | **Comfort level**: Eco, Efficient, Balanced, Comfort, Near neutral; optional occupancy source | Balanced selected by default; explain position in sensation space and show setback only when occupancy is configured |
 | Control | Occupancy source, command limits, fallback values | Explain target-only ownership |
 | Review | Input quality, all five votes and solved temperatures, target capability summary | Save with control disabled |
 
@@ -1568,12 +1569,13 @@ Temporarily unavailable entities may be saved for monitoring, but activation enf
 | Clothing | Automatic | Fixed declared alternative 0.1–2.0 clo |
 | Ambient air speed | Fixed 0.1 m/s | Declared directly; 0–2 m/s; measured alternative supported |
 | Relative-speed mode | Off | Explicit advanced declaration |
-| Comfort strategy | Balanced | Exactly `efficient`, `balanced`, `comfort`; fixed fractions 0.30/0.50/0.70 |
+| Comfort level | Balanced | Exactly `eco`, `efficient`, `balanced`, `comfort`, `near_neutral`; fixed fractions 0.10/0.30/0.50/0.70/0.85 |
 | Lower comfort boundary vote | −0.50 | Advanced; −1.0…−0.05 |
 | Upper comfort boundary vote | +0.50 | Advanced; +0.05…+1.0 |
 | Room model | Standard uniform approximation | Existing Home Assistant Mold Indicator for surface-risk diagnostics only |
 | Critical locations | None | At most eight; physical type required |
-| Heating/cooling setback | 2 K each | 0–5 K |
+| Occupancy setback | Comfort / 2 K | Shown only with occupancy; Max, Eco / 4 K, Comfort / 2 K, or Custom 0–5 K |
+| Boost mode | Off | Runtime select: Off, Adaptive, Rapid; Rapid safely falls back to Adaptive for range or mixed-direction zones |
 | Boost delta | 1 K | Ordinary setup; 0–3 K |
 | Boost duration | 60 minutes | Ordinary setup; 5–180 minutes |
 | Command limits | 18–26 °C | Ordinary setup; ordered; within engineering configuration range 5–35 °C |
@@ -1609,8 +1611,8 @@ Keep numerical-kernel constants, strategy fractions, root tolerances, iteration 
 
 - Required source modes/identities, direct RH declaration and target changes use reconfigure.
 - Optional behavior changes use options.
-- Store the selected comfort strategy authoritatively in `ConfigEntry.options.comfort_strategy`, defaulting to Balanced on initial creation.
-- The strategy select updates that same authoritative value through one serialized controller configuration-update path. **Per `ATHB_BUILD_CLARIFICATIONS.md`, a normal strategy-select change must not unload/reload the config entry.**
+- Store the selected comfort level authoritatively in `ConfigEntry.options.comfort_strategy`, defaulting to Balanced on initial creation.
+- The comfort-level, Boost and optional setback selects update their authoritative values through one serialized runtime configuration-update path. **Per `ATHB_BUILD_CLARIFICATIONS.md`, these normal select changes must not unload/reload the config entry.**
 - Changes create a new configuration generation and invalidate calculations and queued commands.
 - Entity renames follow registry identity; replacement entities require explicit selection.
 - Changing the outdoor source starts/reuses the matching new history lineage.
@@ -1643,8 +1645,9 @@ Per zone:
 | Control status sensor | Derived operational state |
 | Outdoor running-mean sensor | Current usable or explicitly partial running mean |
 | Adaptive control switch | User control intent |
-| Comfort strategy select | **Efficient**, **Balanced**, **Comfort**; Balanced default |
-| Profile select | `auto`, `comfort`, `eco`, `boost` |
+| Comfort level select | **Eco**, **Efficient**, **Balanced**, **Comfort**, **Near neutral**; Balanced default |
+| Boost select | `off`, `adaptive`, `rapid`; Off default |
+| Setback select | Max, Eco / 4 K, Comfort / 2 K, Custom; created only when an occupancy source is configured |
 | Resume control button | Resume eligible overridden/faulted targets |
 
 Per target:
@@ -1675,7 +1678,7 @@ For several targets, do not publish one “actual effective target” that hides
 
 **Entity state:** One stable scalar or categorical value.
 
-**Small attributes:** Selected comfort strategy, effective profile, root sensation vote where applicable, compact quality reasons, governing location label and current target role. Heating/cooling control-root sensors are primary raw model roots; per-actuator effective-target sensors show the transformed and normalized request.
+**Small attributes:** Selected comfort level, Boost mode/phase, occupancy/setback state, root sensation vote where applicable, compact quality reasons, governing location label and current target role. Heating/cooling control-root sensors are primary raw model roots; per-actuator effective-target sensors show the transformed and normalized request.
 
 **Diagnostics only:** Raw observations, timestamps, per-location root details, command contexts, full capability snapshots, history rows, decision traces.
 
@@ -1749,8 +1752,10 @@ configuration_fingerprint
 storage_generation
 clean_shutdown
 control_enabled_intent
-selected_profile
-previous_non_boost_profile
+selected_comfort_level
+resolved_occupancy_setback_state
+selected_boost_mode
+rapid_boost_reached
 boost_expiry_utc
 last_good_calculation_summary
 last_good_input_timestamps
@@ -1784,7 +1789,7 @@ For control-critical writes:
 
 This verification is necessary because the inspected HA storage implementation can log write errors internally without propagating them from the public save call.
 
-Persist pending intent before dispatch. Persist disable/override/profile changes promptly. Strategy changes update the authoritative config-entry option and configuration fingerprint; stale persisted recovery summaries cannot restore an old strategy. Coalesce noncritical diagnostic saves.
+Persist pending intent before dispatch. Persist disable/override/comfort-level/setback/Boost changes promptly. Comfort-level changes update the authoritative config-entry option and configuration fingerprint; stale persisted recovery summaries cannot restore an old level. Coalesce noncritical diagnostic saves.
 
 At startup:
 
@@ -1925,10 +1930,10 @@ adapted met and clothing
 primary sensation
 critical-location eligibility and demands
 governing location
-selected comfort strategy, inward fraction and all five requested sensation votes
+selected comfort level, inward fraction and all five requested sensation votes
 lower comfort / heating control / thermal neutral / cooling control / upper comfort roots
 raw comfort band and raw control band
-profile transformation, distinct from comfort strategy
+occupancy-setback or Boost transformation, distinct from comfort level
 critical influence limits and same-vote mapped roots
 slew and bound applications
 requested room target
@@ -1987,13 +1992,13 @@ All required tests run from the repository. They use controlled observations, cl
 | Layer | Purpose | Required evidence |
 | --- | --- | --- |
 | **A — Numerical unit/golden tests** | Validate the selected forward ATHB, pinned-reference conformance, psychrometrics, radiation and all five inverse roots | Independent reference vectors, residuals, domain/failure tests and property checks |
-| **B — Pure policy/state-machine tests** | Validate comfort strategies, critical influence, profiles, bounds, normalization, ownership and recovery | Hand-verifiable policy expectations, deterministic transitions and exact suppression reasons |
+| **B — Pure policy/state-machine tests** | Validate comfort levels, critical influence, occupancy setback, Boost, bounds, normalization, ownership and recovery | Hand-verifiable policy expectations, deterministic transitions and exact suppression reasons |
 | **C — Virtual Installation Validation** | Validate a complete configured zone from observations/history to a climate command or suppression | The canonical VI-001–VI-030 library, full result assertions and decision reports |
 | **D — Home Assistant API-contract tests** | Validate software compatibility with HA's configuration, entity, service, Recorder and storage interfaces | HA Python test helpers or fake/mocked `hass`, fake climates, mocked services/history and config-flow tests |
 
 Layer D may create HA Python objects in the pytest process. It does not start an external HA server, use a real installation or require installation through a UI. Tests for flows invoke their Python flow APIs and inspect form/result contracts. Describe this evidence as **repository-based Home Assistant API-contract testing**.
 
-Layer C invokes the actual implementation components in this order: validated configuration and source observations/history → immutable environmental snapshot → ATHB forward evaluation and inverse roots for the selected strategy → mapped critical-location influence → profile policy → slew/calibration/bounds → climate normalization → ownership/preflight → sole command broker → captured exact service call or suppression. Only external boundaries (clock, source delivery, Recorder, storage I/O, executor scheduling and climate service/feedback) are controlled test doubles. Do not mock the numerical engine, policy, ownership reducer or broker, or feed expected golden results into the production calculation path.
+Layer C invokes the actual implementation components in this order: validated configuration and source observations/history → immutable environmental snapshot → ATHB forward evaluation and inverse roots for the selected comfort level → mapped critical-location influence → occupancy-setback/Boost policy → slew/calibration/bounds → climate normalization → ownership/preflight → sole command broker → captured exact service call or suppression. Only external boundaries (clock, source delivery, Recorder, storage I/O, executor scheduling and climate service/feedback) are controlled test doubles. Do not mock the numerical engine, policy, ownership reducer or broker, or feed expected golden results into the production calculation path.
 
 ### 17.2 Reference isolation and fixture provenance
 
@@ -2032,7 +2037,7 @@ Retain the discrepancy regression showing that the inspected `comf` transfer fun
 
 Inverse properties include ordered successfully solved roots where the monotonic complete solution exists; actual strategy-vote residuals; changed asymmetric outer boundaries; fixed versus moving MRT; signed local deltas; saturation/no-bracket behavior; no endpoint masquerading as a root; deterministic multiple-bracket rejection; all iteration/evaluation limits. Increasing requested sensation cannot decrease the root within an accepted monotonic interval.
 
-Test that Efficient/Balanced/Comfort fractions are applied in sensation space. A test must fail an implementation that uses arithmetic temperature midpoints, hardcoded default votes under changed outer boundaries, or a different vote for a critical location.
+Test that all five comfort-level fractions are applied in sensation space. A test must fail an implementation that uses arithmetic temperature midpoints, hardcoded default votes under changed outer boundaries, or a different vote for a critical location.
 
 > **Normative clarification:** Tests must also cover valid directional actuation when one or more unrelated roots fail, per `ATHB_BUILD_CLARIFICATIONS.md` §2.
 
@@ -2097,13 +2102,13 @@ Every expanded scenario requires:
 | Group | Required fields and semantics |
 | --- | --- |
 | Identity | `schema_version`, unique `scenario_id`, `name`, purpose, baseline/variant identity, fixed UTC clock origin, configured IANA timezone, deterministic random seed |
-| Zone configuration | `zone_id`; primary temperature source identity/unit/provenance; tagged primary RH source (`measured` identity or `declared` numeric value); outdoor identity/attribute; seven-day history settings, alpha, coverage and hold limits; met; automatic/fixed clothing; measured/declared ambient or relative speed; radiant mode; surfaces/view factors/background/calibration; critical locations/types/control eligibility/delta policy; lower/upper comfort votes; comfort strategy; occupancy mapping and profile; eco values; boost delta/duration; user command limits; fallback mode/values; extrapolation policy; per-target calibration and grid/gap options; debounce, rate and override settings |
+| Zone configuration | `zone_id`; primary temperature source identity/unit/provenance; tagged primary RH source (`measured` identity or `declared` numeric value); outdoor identity/attribute; seven-day history settings, alpha, coverage and hold limits; met; automatic/fixed clothing; measured/declared ambient or relative speed; room model and surface-risk calibration; critical locations/types/control eligibility/delta policy; lower/upper comfort votes; comfort level; optional occupancy source and setback; Boost delta/duration; user command limits; fallback mode/values; extrapolation policy; per-target calibration and grid/gap options; debounce, rate and override settings |
 | Environmental state | Source observations with values, units, `observed_at`, `received_at`, availability, validity and provenance; current indoor temperature and measured RH when selected; current outdoor observation; MRT/globe/surface/local-air observations as configured; raw outdoor history records or explicit persisted summaries with coverage and provenance; pre-roll reports for delta filtering/quarantine; input-expiry expectations. A direct declaration has `observed_at=null`, `received_at=null`, and its validated configuration generation rather than a fabricated sensor timestamp |
 | Target capabilities | Stable target identity and entity ID; initial HVAC mode; advertised modes; supported HA feature names; explicit scalar/range shape; min/max/step and their units; grid origin; HA service unit and fake backend native unit; current scalar/range target; availability/restored flag; preset; automatically inferred auto semantics or explicit ambiguity; feedback resolution; readback/coercion/delay/rejection behavior |
-| Runtime/control | Zone enabled state; per-target ownership, target/data readiness and revisions; manual override reason/expiry; selected and previous profile; boost expiry; previous requested room target and acknowledged command; unresolved command/context if any; clean/unclean persisted state; configuration/input/capability generations; pending and queued intent; timer deadlines and source leases |
-| Event timeline | Ordered `(virtual_time, sequence, event)` actions for source report/unavailability, configuration/strategy/profile change, external service/state feedback, fake time advance, controlled executor completion, simulated storage save/read/corruption, load/unload/restart, and target capability changes. Equal timestamps use explicit sequence order |
+| Runtime/control | Zone enabled state; per-target ownership, target/data readiness and revisions; manual override reason/expiry; comfort level; resolved occupancy/setback state; Boost mode, phase, reached latch and expiry; previous requested room target and acknowledged command; unresolved command/context if any; clean/unclean persisted state; configuration/input/capability generations; pending and queued intent; timer deadlines and source leases |
+| Event timeline | Ordered `(virtual_time, sequence, event)` actions for source report/unavailability, configuration/comfort-level/setback/Boost change, external service/state feedback, fake time advance, controlled executor completion, simulated storage save/read/corruption, load/unload/restart, and target capability changes. Equal timestamps use explicit sequence order |
 | Expected numerical result | Current primary sensation or typed failure; requested votes; primary roots with units/tolerances or typed failures; participating critical-location votes/mapped roots or exclusion reasons; history result/coverage; applicability and provenance; exact golden key/hash |
-| Expected policy result | Selected comfort strategy/fraction, selected and resolved profile, comfort/control bands, governing heating/cooling locations, raw/applied critical influence, pre-slew and requested room targets, profile/fallback status, calibration/bound effects |
+| Expected policy result | Selected comfort level/fraction, resolved occupancy/setback state, Boost mode/phase, comfort/control bands, governing heating/cooling locations, raw/applied critical influence, pre-slew and requested room targets, fallback status, calibration/bound effects |
 | Expected broker result | Per-target bounded continuous and normalized scalar/range request, legal-grid index, emitted boolean, ordered exact service payloads and contexts, suppression reason(s), acknowledgement result, ending ownership/revisions, queue/timer state, degraded/fallback reasons and transition sequence |
 | Expected execution evidence | Collector/bootstrap/listener counts where relevant, maximum running jobs/queued requests/pending commands, evaluation budget, discarded generations, total service count, termination conditions and virtual elapsed time |
 
@@ -2128,9 +2133,9 @@ history = hourly reports of 5 °C across each local day 2026-09-03 through 2026-
 history alpha = 0.8, maximum hold = 2 h, daily coverage threshold = 90%
 met = declared(1.1); clothing = automatic; ambient speed = declared(0.1 m/s)
 radiant = uniform; surfaces = []; critical locations = []
-comfort boundaries = [-0.50, +0.50]; comfort strategy = balanced
-selected profile = comfort; occupancy = absent; resolved profile = comfort
-eco = heating 2 K / cooling 2 K; boost = 1 K for 60 min, inactive
+comfort boundaries = [-0.50, +0.50]; comfort level = balanced
+occupancy source = none; setback inactive; configured setback = Comfort / 2 K
+Boost = Off; adaptive shift = 1 K; duration = 60 min
 user command bounds = [18,26] °C; fixed fallback = heat 18 / cool 26 °C
 reject_extrapolation = false; calibration = 0 K; minimum range gap = 1 K
 target = climate.living_room; mode = heat; modes = [off, heat]
@@ -2241,7 +2246,7 @@ python -m pytest tests/virtual_installations -v --athb-report=artifacts/virtual-
 
 Implement `--athb-report` in the test suite's pytest plugin/conftest using existing scenario results. It is a test report, not a standalone application or simulator UI. It creates a concise human-readable Markdown report, a machine-readable JSON companion and an assertion-summary artifact. Normal exit status is zero only if every mandatory scenario and variant passes. Missing fixtures, skipped mandatory variants or absent expected fields fail qualification. Tests never fetch new golden truth from the network.
 
-Each scenario report includes input/provenance summary, running mean/history quality, current sensation, attempted roots and typed failures, raw comfort/control bands where available, governing location, selected strategy/profile, requested room target, applied limitations, normalized actuator target, exact command or suppression reason, ownership transition and PASS/FAIL with failed assertions.
+Each scenario report includes input/provenance summary, running mean/history quality, current sensation, attempted roots and typed failures, raw comfort/control bands where available, governing location, selected comfort level, occupancy/setback and Boost state, requested room target, applied limitations, normalized actuator target, exact command or suppression reason, ownership transition and PASS/FAIL with failed assertions.
 
 Representative expected excerpt:
 
@@ -2257,7 +2262,7 @@ Cooling control target: +0.25 -> 23.481038 °C
 Upper comfort boundary: +0.50 -> 25.518575 °C
 Comfort band: 17.281547 to 25.518575 °C
 Control band: 19.362709 to 23.481038 °C
-Profile: comfort; governing heating location: primary
+Occupancy setback: inactive; Boost: Off; governing heating location: primary
 Requested room target: 19.362709 °C
 Effective actuator target: 19.5 °C
 Command: climate.set_temperature(entity_id=climate.living_room, temperature=19.5)
@@ -2287,7 +2292,7 @@ The implementation must enforce these invariants through core validation and the
 7. **Every commanded range is ordered and meets minimum separation.** An infeasible control band is not widened to comfort boundaries or silently swapped.
 8. **No command changes HVAC mode or unrelated climate functionality.** Off and unsupported modes suspend target writes.
 9. **No write while disabled, overridden, unavailable, incompatible or awaiting required reconciliation.**
-10. **No stale-generation command is dispatched**, including after a comfort-strategy change.
+10. **No stale-generation command is dispatched**, including after a comfort-level, setback or Boost change.
 11. **Only the command broker may call climate services.**
 12. **Only one ATHB zone may hold a target's runtime lease.**
 13. **At most one command is pending and one future intent is queued per target.** Numerical work obeys its own one-per-zone/two-global limits.
@@ -2301,9 +2306,9 @@ The implementation must enforce these invariants through core validation and the
 21. **Known conflicting heating/cooling requests within a zone are not dispatched.** Compare normalized values in room-reference coordinates.
 22. **Stopping ATHB does not silently switch equipment off.**
 23. **The default conditioning targets are the selected strategy roots.** Thermal neutral is a reference; the default ranged request is the control band. Normal target publication does not wait for an outer comfort-boundary crossing.
-24. **Strategy votes come from configured outer boundaries and fixed inward fractions.** No temperature interpolation, personal thermal bias, emitter-type adjustment or predicted overshoot changes them.
+24. **Comfort-level votes come from configured outer boundaries and fixed inward fractions.** No temperature interpolation, personal thermal bias, emitter-type adjustment or predicted overshoot changes them.
 25. **External HVAC-mode changes do not automatically become manual temperature-target overrides.** They update target readiness and reconciliation; external target changes retain manual-override semantics.
-26. **A normal comfort-strategy change does not reload the entire config entry.** It invalidates/recalculates the relevant generation through the lightweight runtime path.
+26. **A normal comfort-level, setback or Boost change does not reload the entire config entry.** It invalidates/recalculates the relevant generation through the lightweight runtime path.
 
 These invariants constrain software requests. They do not guarantee actual room temperature, equipment response, frost protection or absence of manual intervention. The specified proof is deterministic repository evidence for the software's behavior.
 
@@ -2319,7 +2324,7 @@ All phases belong to one full production implementation. Completing the numerica
 | 2. Moisture and radiation | Psychrometrics, radiant models, direct declarations | Phase 1 contracts | Saturation, dew point, globe, surface and declared-RH vectors | Candidate physical semantics and provenance proven |
 | 3. Inverse and locations | Five semantic root attempts, strategy-vote derivation, mapped critical locations and directional actuation eligibility | Phases 1–2 | Root matrix for every strategy, directional-root failures, local mapping/warm-up, failure limits | Deterministic roots and typed failures |
 | 4. Shared environmental history | History math, sources, Recorder/storage adapters | Phase 1 contracts | Coverage, DST, bootstrap, simulated restart and sharing | Reproducible running mean without helper dependencies |
-| 5. Product policy | Comfort strategies, profiles, caps, bounds and coordination | Phases 3–4 | Same-vote critical influence, control band, eco/boost/fallback | Exact directional target semantics for every profile |
+| 5. Product policy | Comfort levels, occupancy setback, Boost, caps, bounds and coordination | Phases 3–4 | Same-vote critical influence, control band, setback/Boost/fallback | Exact directional target semantics for every control state |
 | 6. Climate compatibility | Climate adapter, units and inward normalization | Phase 5 | Complete capability/unit/grid matrix | Exact supported payload or suppression reason |
 | 7. Ownership and broker | Ownership reducer, sole broker, recovery journal | Phases 5–6 | Manual-target intervention, HVAC-mode readiness, acknowledgement, storage and race simulations | Every write-boundary invariant passes |
 | 8. Native HA configuration | Config/reconfigure/options, runtime, entities, lightweight strategy select | Phases 4–7 | Repository HA flow/API-contract and load/unload tests | Complete configuration and production service path exercised through test doubles |
@@ -2339,7 +2344,7 @@ The build agent may return **`SOFTWARE_COMPLETE`** when every item below is sati
 - Frozen ATHB 2022 formulation, numerical contract and source provenance implemented and documented.
 - `comf` discrepancy recorded without merging variants.
 - Pinned-reference numerical conformance, psychrometrics, radiant calculations and inverse-root tests pass.
-- Efficient/Balanced/Comfort use actual sensation roots, fixed fractions and configurable outer boundaries correctly.
+- Eco/Efficient/Balanced/Comfort/Near neutral use actual sensation roots, fixed fractions and configurable outer boundaries correctly.
 - Directional actuation remains valid when unrelated roots fail, exactly as specified in `ATHB_BUILD_CLARIFICATIONS.md`.
 - Dutch winter, critical-air, declared-RH and humid-summer cases have explicit golden-backed outcomes.
 - Applicability limitations, typed failures and measured/declared/estimated provenance remain visible.
@@ -2348,12 +2353,12 @@ The build agent may return **`SOFTWARE_COMPLETE`** when every item below is sati
 ### Policy, control and recovery
 
 - Heating, cooling and range policies use the selected strategy targets; raw comfort/control bands remain distinct where their component roots are available.
-- Critical influence, eco, boost, occupancy resolution, calibration, bounds and fallback tests pass.
+- Critical influence, occupancy setback, Adaptive/Rapid Boost, occupancy resolution, calibration, bounds and fallback tests pass.
 - Production `climate.set_temperature` calls exist solely in the command-broker path and are verified with exact payload assertions against controlled HA service doubles.
 - Entire climate-capability matrix passes, including unsupported/off suppression and inward normalization.
 - Ownership, manual **target** override, HVAC-mode readiness/reconciliation, disable/resume, acknowledgements and clean/unclean restart simulations pass.
 - Event ordering, stale work, bounded queues, storage failure/readback and conflict simulations pass.
-- Strategy select updates are lightweight and do not unload/reload the config entry.
+- Comfort-level, Boost and setback select updates are lightweight and do not unload/reload the config entry.
 - Every safety invariant has passing coverage; numerical failure branches and all safety-critical state-machine transitions are explicitly tested.
 - Stable inputs cause zero redundant calls during 30 minutes of **virtual** time.
 
@@ -2361,7 +2366,7 @@ The build agent may return **`SOFTWARE_COMPLETE`** when every item below is sati
 
 - All canonical VI-001–VI-030 scenarios and every mandatory variant pass with explicit expected sensations, attempted/successful roots, policy decisions, payloads/suppressions, provenance and ownership results.
 - Repository-local demonstration command succeeds and produces inspectable Markdown/JSON evidence.
-- Config, reconfigure, options and strategy-select tests pass through repository HA Python APIs.
+- Config, reconfigure, options and runtime-select tests pass through repository HA Python APIs.
 - Direct fixed RH requires no helper; invalid/missing selected RH cannot trigger a fabricated value or fallback write.
 - Normal default configuration works without MRT/view-factor/cold-surface expertise; optional advanced radiant paths are separately tested.
 - Zone/entity identity survives reconfiguration; disabled-first setup and duplicate target prevention pass.
@@ -2376,7 +2381,7 @@ The build agent may return **`SOFTWARE_COMPLETE`** when every item below is sati
 - Deterministic operation/load simulations in §15.6 pass without hardware-specific qualification dependencies.
 - Versioned config/storage schemas and migration tests exist.
 - Diagnostics/redaction, repair issue behavior and log-transition tests pass.
-- English and Dutch translations and labels are complete; the normal comfort strategy choices are exactly Efficient, Balanced and Comfort.
+- English and Dutch translations and labels are complete; the normal comfort-level choices are exactly Eco, Efficient, Balanced, Comfort and Near neutral.
 - Runtime manifest has no NumPy/SciPy/Numba requirements.
 - Installable archive is built and its contents/import paths/manifest/version validated in repository tests or an isolated temporary extraction; this verification does not install it into HA.
 - HACS-compatible structure and validation pass; publication remains a separate authorized action. [HACS integration requirements](https://www.hacs.xyz/docs/publish/integration/).
@@ -2385,7 +2390,7 @@ The build agent may return **`SOFTWARE_COMPLETE`** when every item below is sati
 
 ### Documentation and closure
 
-Complete README and focused project documentation for the scientific model, source types/provenance, direct RH declaration, MRT/globe/surface/local-air distinctions, progressive-disclosure radiant setup, history quality, comfort strategies and semantic roots, profile transformations, climate-mode support, normalization, bounds, extrapolation, fallback, manual override, diagnostics, troubleshooting, supported HA versions and repository test commands.
+Complete README and focused project documentation for the scientific model, source types/provenance, direct RH declaration, surface/local-air distinctions, progressive-disclosure room setup, history quality, comfort levels and semantic roots, occupancy setback and Boost transformations, climate-mode support, normalization, bounds, extrapolation, fallback, manual override, diagnostics, troubleshooting, supported HA versions and repository test commands.
 
 Ordinary installation/configuration instructions may be provided for future users. Development completion does not depend on executing those instructions, modifying an existing controller or operating any household equipment. Document software capabilities and scientific/measurement limitations without claiming proven building performance, mold prediction or frost protection.
 
@@ -2547,7 +2552,7 @@ Dew point remains approximately 24.225293 °C (±0.001 K). Never clamp candidate
 
 ### VI-017 — Cooling-only strategy targets
 
-Mode `cool`, scalar capability and current target 26 °C. Mandatory variants for all three comfort strategies.
+Mode `cool`, scalar capability and current target 26 °C. Mandatory variants cover the canonical Efficient/Balanced/Comfort numerical references; dedicated fraction tests cover Eco and Near neutral.
 
 Expected:
 

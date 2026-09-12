@@ -34,6 +34,7 @@ from .contracts import (
     AthbResult,
     AthbSuccess,
     AutomaticClothing,
+    BoostMode,
     ComfortStrategy,
     ControlProfile,
     CriticalEligibilityMode,
@@ -120,6 +121,7 @@ from .policy import (
     build_fixed_fallback,
     check_cross_actuator_coordination,
     cooling_dewpoint_eligible,
+    resolve_occupancy_profile,
     resolve_profile,
 )
 from .psychrometrics import (
@@ -179,6 +181,7 @@ __all__ = [
     "AthbSuccess",
     "AutoMapping",
     "AutomaticClothing",
+    "BoostMode",
     "BootstrapResult",
     "CandidateHumidity",
     "CapabilityMapping",
@@ -298,6 +301,7 @@ __all__ = [
     "reduce_ownership",
     "relative_air_speed",
     "resolve_capability",
+    "resolve_occupancy_profile",
     "resolve_profile",
     "running_mean",
     "saturation_vapor_pressure_pa",

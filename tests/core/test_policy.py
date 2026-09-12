@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from custom_components.athb.core.contracts import (
     ActuationDirection,
+    BoostMode,
     ControlProfile,
     CriticalEligibilityMode,
     EcoIntensity,
@@ -264,7 +266,7 @@ def test_eco_and_boost_transform_after_critical_policy_without_changing_roots() 
     )
     assert isinstance(deep, PolicyTargets)
     assert (deep.heating_c, deep.cooling_c) == (16.0, 28.0)
-    assert "eco_deep" in deep.limitations
+    assert "setback_max" in deep.limitations
     guarded_deep = build_adaptive_policy(
         roots=roots,
         critical_demands=(
@@ -291,7 +293,8 @@ def test_eco_and_boost_transform_after_critical_policy_without_changing_roots() 
         roots=roots,
         critical_demands=(),
         direction=ActuationDirection.RANGED,
-        profile=ControlProfile.BOOST,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.ADAPTIVE,
         boost_delta_c=2.0,
         explicit_transition=True,
     )
@@ -302,7 +305,8 @@ def test_eco_and_boost_transform_after_critical_policy_without_changing_roots() 
         roots=roots,
         critical_demands=(),
         direction=ActuationDirection.HEATING_ONLY,
-        profile=ControlProfile.BOOST,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.ADAPTIVE,
         explicit_transition=True,
     )
     assert isinstance(scalar_boost, PolicyTargets)
@@ -334,6 +338,103 @@ def test_environmental_slew_is_half_degree_per_ten_minutes_and_explicit_transiti
     )
     assert isinstance(bypass, PolicyTargets)
     assert (bypass.heating_c, bypass.cooling_c) == (21.0, 25.0)
+
+
+def test_rapid_boost_range_and_cooling_semantics_are_directionally_safe() -> None:
+    ranged = build_adaptive_policy(
+        roots=_roots(),
+        critical_demands=(),
+        direction=ActuationDirection.RANGED,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.RAPID,
+        explicit_transition=True,
+    )
+    assert isinstance(ranged, PolicyTargets)
+    assert ranged.boost_mode is BoostMode.RAPID
+    assert ranged.boost_phase == "adaptive"
+    assert "rapid_boost_range_adaptive" in ranged.limitations
+
+    rapid = build_adaptive_policy(
+        roots=_roots(),
+        critical_demands=(),
+        direction=ActuationDirection.COOLING_ONLY,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.RAPID,
+        current_air_temperature_c=25.0,
+        inactive_heating_c=16.0,
+        inactive_cooling_c=30.0,
+        explicit_transition=True,
+    )
+    assert isinstance(rapid, PolicyTargets)
+    assert rapid.cooling_c == 16.0
+    assert rapid.boost_target_cooling_c == 22.0
+    assert rapid.boost_phase == "rapid"
+
+    reached = build_adaptive_policy(
+        roots=_roots(),
+        critical_demands=(),
+        direction=ActuationDirection.COOLING_ONLY,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.RAPID,
+        current_air_temperature_c=21.5,
+        inactive_heating_c=16.0,
+        inactive_cooling_c=30.0,
+        explicit_transition=True,
+    )
+    assert isinstance(reached, PolicyTargets)
+    assert reached.cooling_c == 22.0
+    assert reached.boost_phase == "hold"
+    assert reached.rapid_boost_reached
+
+
+def test_scalar_adaptive_boost_caps_at_neutral_and_reports_missing_neutral() -> None:
+    capped_heating = build_adaptive_policy(
+        roots=_roots(),
+        critical_demands=(),
+        direction=ActuationDirection.HEATING_ONLY,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.ADAPTIVE,
+        boost_delta_c=3.0,
+        explicit_transition=True,
+    )
+    assert isinstance(capped_heating, PolicyTargets)
+    assert capped_heating.heating_c == 21.0
+    assert "boost_limited" in capped_heating.limitations
+
+    capped_cooling = build_adaptive_policy(
+        roots=_roots(),
+        critical_demands=(),
+        direction=ActuationDirection.COOLING_ONLY,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.ADAPTIVE,
+        boost_delta_c=3.0,
+        explicit_transition=True,
+    )
+    assert isinstance(capped_cooling, PolicyTargets)
+    assert capped_cooling.cooling_c == 21.0
+    assert "boost_limited" in capped_cooling.limitations
+
+    missing_neutral = replace(
+        _roots(),
+        thermal_neutral=RootFailure(
+            RootName.THERMAL_NEUTRAL,
+            0.0,
+            RootFailureCode.NO_BRACKET,
+            33,
+            "neutral unavailable",
+        ),
+    )
+    without_neutral = build_adaptive_policy(
+        roots=missing_neutral,
+        critical_demands=(),
+        direction=ActuationDirection.HEATING_ONLY,
+        profile=ControlProfile.COMFORT,
+        boost_mode=BoostMode.ADAPTIVE,
+        explicit_transition=True,
+    )
+    assert isinstance(without_neutral, PolicyTargets)
+    assert without_neutral.heating_c == 20.0
+    assert "boost_neutral_unavailable" in without_neutral.limitations
 
 
 def test_auto_profile_resolution_holds_unknown_then_falls_back_to_comfort() -> None:

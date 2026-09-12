@@ -48,9 +48,11 @@ DEFAULT_EVALUATION_BUDGET = 3000
 PSYCHROMETRIC_SEARCH_MARGIN_C = 0.001
 
 _STRATEGY_FRACTIONS = {
+    ComfortStrategy.ECO: 0.10,
     ComfortStrategy.EFFICIENT: 0.30,
     ComfortStrategy.BALANCED: 0.50,
     ComfortStrategy.COMFORT: 0.70,
+    ComfortStrategy.NEAR_NEUTRAL: 0.85,
 }
 _ROOT_ORDER = (
     RootName.LOWER_COMFORT,
