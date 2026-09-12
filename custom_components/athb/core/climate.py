@@ -201,6 +201,8 @@ def resolve_capability(
             else ClimateFailure("unsupported_hvac_mode", "heat_cool requires range support")
         )
     if mode == "auto":
+        if auto_mapping is AutoMapping.UNMAPPED:
+            auto_mapping = infer_auto_mapping(snapshot)
         if auto_mapping is AutoMapping.HEATING and scalar:
             return CapabilityMapping(ActuationDirection.HEATING_ONLY, TargetShape.SCALAR)
         if auto_mapping is AutoMapping.COOLING and scalar:
@@ -209,6 +211,27 @@ def resolve_capability(
             return CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE)
         return ClimateFailure("unsupported_auto_mapping")
     return ClimateFailure("unsupported_hvac_mode")
+
+
+def infer_auto_mapping(snapshot: ClimateCapabilitySnapshot) -> AutoMapping:
+    """Infer only unambiguous Auto target semantics from public capabilities."""
+
+    if snapshot.hvac_mode != "auto":
+        return AutoMapping.UNMAPPED
+    scalar = bool(snapshot.supported_features & TARGET_TEMPERATURE)
+    ranged = bool(snapshot.supported_features & TARGET_TEMPERATURE_RANGE)
+    if ranged:
+        return AutoMapping.RANGE
+    if not scalar:
+        return AutoMapping.UNMAPPED
+    modes = set(snapshot.advertised_hvac_modes)
+    has_heat = "heat" in modes
+    has_cool = "cool" in modes
+    if has_heat and not has_cool:
+        return AutoMapping.HEATING
+    if has_cool and not has_heat:
+        return AutoMapping.COOLING
+    return AutoMapping.UNMAPPED
 
 
 def _finite(value: float | None) -> bool:

@@ -40,7 +40,7 @@ async def test_virtual_installation(
     athb_report_results.append(result)
 
 
-async def test_deep_eco_runs_through_snapshot_policy_normalization_and_broker() -> None:
+async def test_max_setback_uses_command_minimum_through_full_broker_path() -> None:
     scenario = json.loads(json.dumps(SCENARIOS[0]))
     scenario["zone_configuration"].update(
         {
@@ -48,7 +48,7 @@ async def test_deep_eco_runs_through_snapshot_policy_normalization_and_broker() 
             "eco_intensity": "deep",
             "inactive_heating_temperature": 16.0,
             "inactive_cooling_temperature": 29.0,
-            "user_min_c": 10.0,
+            "user_min_c": 17.0,
             "user_max_c": 30.0,
         }
     )
@@ -56,7 +56,7 @@ async def test_deep_eco_runs_through_snapshot_policy_normalization_and_broker() 
     calculation = calculate_runtime_snapshot(_captured(scenario))
     calls, reason, acknowledgement, ownership = await _broker_run(scenario, calculation)
 
-    assert calls == [{"entity_id": "climate.living_room", "temperature": 16.0}]
+    assert calls == [{"entity_id": "climate.living_room", "temperature": 17.0}]
     assert reason == "own_context_match"
     assert acknowledgement == "acknowledged"
     assert ownership == "owned"

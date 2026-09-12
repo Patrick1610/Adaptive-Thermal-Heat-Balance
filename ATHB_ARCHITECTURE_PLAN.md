@@ -1040,19 +1040,23 @@ Feature flags are necessary but not sufficient: they are entity-level capabiliti
 | `cool` with range only | No single-target support | Unsupported |
 | `heat_cool` | `TARGET_TEMPERATURE_RANGE` | Write both range endpoints atomically |
 | `heat_cool` with single target only | Inconsistent/inadequate contract | Unsupported |
-| `auto`, default | Any flags | Suspend; mode semantics unconfirmed |
-| `auto`, explicitly declared single heating | `TARGET_TEMPERATURE`; confirmed adjustable in auto | Apply heating policy |
-| `auto`, explicitly declared single cooling | Same, cooling semantics | Apply cooling policy |
+| `auto`, ranged target | `TARGET_TEMPERATURE_RANGE` | Infer ranged semantics; write both endpoints atomically |
+| `auto`, scalar with only `heat` advertised | `TARGET_TEMPERATURE` | Infer heating policy |
+| `auto`, scalar with only `cool` advertised | `TARGET_TEMPERATURE` | Infer cooling policy |
 | `auto`, bidirectional single target without a heating/cooling mapping | `TARGET_TEMPERATURE` | Unsupported; one scalar cannot express the two strategy targets |
-| `auto`, explicitly declared range | `TARGET_TEMPERATURE_RANGE`; confirmed adjustable in auto | Apply ranged policy |
 | `dry` | Temperature/humidity flags irrelevant | Suspend temperature control |
 | `fan_only` | Any | Suspend temperature control |
 | Unknown/unavailable | Any | Suspend; discard queued commands |
 | Unrecognized mode | Any | Unsupported; report reason |
 
-When both target flags exist, use the selected mode mapping; never send both scalar and ranged fields.
+When both target flags exist in `auto`, prefer the explicit ranged target shape; never send both
+scalar and ranged fields.
 
-A bidirectional single-target auto mapping cannot express the selected control band. Suspend with `unsupported_auto_mapping` for all profiles unless the user declares a supported directional or ranged mapping. Do not infer direction from current room temperature or `hvac_action`, and do not substitute thermal neutral. Unmapped auto uses `unsupported_auto_mapping`; off uses `hvac_off`; other unsupported modes use `unsupported_hvac_mode`.
+A bidirectional single-target auto mapping cannot express the selected control band. Infer only from
+public target shape and advertised HVAC modes: range, heating-only scalar, or cooling-only scalar.
+Do not infer direction from current room temperature or `hvac_action`, and do not substitute thermal
+neutral. Ambiguous scalar auto uses `unsupported_auto_mapping`; off uses `hvac_off`; other
+unsupported modes use `unsupported_hvac_mode`. The wizard does not ask the user to declare this.
 
 ### 8.3 Capability snapshot
 
@@ -1567,14 +1571,14 @@ Temporarily unavailable entities may be saved for monitoring, but activation enf
 | Comfort strategy | Balanced | Exactly `efficient`, `balanced`, `comfort`; fixed fractions 0.30/0.50/0.70 |
 | Lower comfort boundary vote | −0.50 | Advanced; −1.0…−0.05 |
 | Upper comfort boundary vote | +0.50 | Advanced; +0.05…+1.0 |
-| MRT | Uniform approximation | Direct, globe or surface alternatives |
+| Room model | Standard uniform approximation | Existing Home Assistant Mold Indicator for surface-risk diagnostics only |
 | Critical locations | None | At most eight; physical type required |
 | Heating/cooling setback | 2 K each | 0–5 K |
-| Boost delta | 1 K | 0–3 K |
-| Boost duration | 60 minutes | 5–180 minutes |
-| Command limits | 18–26 °C | Ordered; within engineering configuration range 5–35 °C |
+| Boost delta | 1 K | Ordinary setup; 0–3 K |
+| Boost duration | 60 minutes | Ordinary setup; 5–180 minutes |
+| Command limits | 18–26 °C | Ordinary setup; ordered; within engineering configuration range 5–35 °C |
 | Fallback | Fixed 18/26 °C | Valid within configured command bounds |
-| Manual override | 120 minutes | 15–1,440 minutes or until resumed |
+| Manual override | 120 minutes | Ordinary setup; 15–1,440 minutes or until resumed |
 | Running-mean alpha | 0.8 | 0.6–0.9 |
 | Reject extrapolation | False | Explicit advanced policy |
 | Calibration offset | 0 K | −3…+3 K per target |
@@ -2095,7 +2099,7 @@ Every expanded scenario requires:
 | Identity | `schema_version`, unique `scenario_id`, `name`, purpose, baseline/variant identity, fixed UTC clock origin, configured IANA timezone, deterministic random seed |
 | Zone configuration | `zone_id`; primary temperature source identity/unit/provenance; tagged primary RH source (`measured` identity or `declared` numeric value); outdoor identity/attribute; seven-day history settings, alpha, coverage and hold limits; met; automatic/fixed clothing; measured/declared ambient or relative speed; radiant mode; surfaces/view factors/background/calibration; critical locations/types/control eligibility/delta policy; lower/upper comfort votes; comfort strategy; occupancy mapping and profile; eco values; boost delta/duration; user command limits; fallback mode/values; extrapolation policy; per-target calibration and grid/gap options; debounce, rate and override settings |
 | Environmental state | Source observations with values, units, `observed_at`, `received_at`, availability, validity and provenance; current indoor temperature and measured RH when selected; current outdoor observation; MRT/globe/surface/local-air observations as configured; raw outdoor history records or explicit persisted summaries with coverage and provenance; pre-roll reports for delta filtering/quarantine; input-expiry expectations. A direct declaration has `observed_at=null`, `received_at=null`, and its validated configuration generation rather than a fabricated sensor timestamp |
-| Target capabilities | Stable target identity and entity ID; initial HVAC mode; advertised modes; supported HA feature names; explicit scalar/range shape; min/max/step and their units; grid origin; HA service unit and fake backend native unit; current scalar/range target; availability/restored flag; preset; explicit auto mapping; feedback resolution; readback/coercion/delay/rejection behavior |
+| Target capabilities | Stable target identity and entity ID; initial HVAC mode; advertised modes; supported HA feature names; explicit scalar/range shape; min/max/step and their units; grid origin; HA service unit and fake backend native unit; current scalar/range target; availability/restored flag; preset; automatically inferred auto semantics or explicit ambiguity; feedback resolution; readback/coercion/delay/rejection behavior |
 | Runtime/control | Zone enabled state; per-target ownership, target/data readiness and revisions; manual override reason/expiry; selected and previous profile; boost expiry; previous requested room target and acknowledged command; unresolved command/context if any; clean/unclean persisted state; configuration/input/capability generations; pending and queued intent; timer deadlines and source leases |
 | Event timeline | Ordered `(virtual_time, sequence, event)` actions for source report/unavailability, configuration/strategy/profile change, external service/state feedback, fake time advance, controlled executor completion, simulated storage save/read/corruption, load/unload/restart, and target capability changes. Equal timestamps use explicit sequence order |
 | Expected numerical result | Current primary sensation or typed failure; requested votes; primary roots with units/tolerances or typed failures; participating critical-location votes/mapped roots or exclusion reasons; history result/coverage; applicability and provenance; exact golden key/hash |
@@ -2185,7 +2189,7 @@ The following scenario library is mandatory. Every unchanged field inherits the 
 | **VI-016 — Humid warm room and saturation** | Air 28 °C, RH 80%, `R=25`, cooling-only. `G_HUMID_B`: heating/neutral roots may be moisture-limited while cooling-control root is valid at 25.660781 °C. **Per `ATHB_BUILD_CLARIFICATIONS.md`, cooling-only control must use the valid cooling root rather than fallback merely because unrelated roots failed.** With a 0.5 °C inward cooling grid, expect 25.5 °C if otherwise eligible. A ranged actuator lacking its heating endpoint remains ineligible. |
 | **VI-017 — Cooling-only strategy targets** | Balanced/Efficient/Comfort scalar cooling variants verify +0.25/+0.35/+0.15 roots and inward normalization. |
 | **VI-018 — Ranged heat/cool** | Balanced range uses `[H,C]`, not `[L,U]`; baseline request `[19.362709,23.481038]` → exact inward normalized range. |
-| **VI-019 — Explicit mapped auto range** | Explicit supported ranged-auto mapping behaves like ranged policy; no mode service call. |
+| **VI-019 — Automatically inferred auto range** | Public ranged-auto capability behaves like ranged policy without a user mapping or mode service call. |
 | **VI-020 — Unsupported auto semantics** | Valid numerical preview may remain, but zero writes and exact `unsupported_auto_mapping`; never choose a neutral scalar substitute. |
 | **VI-021 — Climate off** | Numerical preview remains; zero writes, no turn-on/mode change; readiness suspended. External off does not automatically create a manual target override. |
 | **VI-022 — Fahrenheit and one conversion** | Verify HA-unit service semantics, legal grid and no double conversion. |

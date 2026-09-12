@@ -32,10 +32,11 @@ provenance.
 ## Radiant and local models
 
 Air temperature, mean radiant temperature and surface temperature are separate physical types.
-Uniform mode estimates MRT from air. Direct MRT is held fixed during inverse candidates. Globe MRT
-uses the configured globe properties. Surface-composite MRT combines fixed surface contributions
-in fourth-power temperature space; an internally modelled surface uses current outdoor air and a
-building-specific `f_Rsi`, never the outdoor adaptation running mean.
+The user-facing Standard room model estimates MRT from air. The Mold Indicator route reads its
+calculated critical-point temperature for surface-risk diagnostics only; that coldest point is not
+substituted for occupant-weighted room MRT. The frozen core retains separately tested direct-MRT,
+globe and surface-composite primitives for numerical conformance, but the normal wizard does not
+ask Home Assistant users for those specialist inputs.
 
 Critical local-air locations run the same selected sensation votes as the primary location. They
 require stable warm-up, reject raw deltas above 6 K and have an aggregate influence cap of 2 K.

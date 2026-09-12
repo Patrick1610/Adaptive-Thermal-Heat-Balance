@@ -57,6 +57,7 @@ class AthbSensor(AthbEntity, SensorEntity):
         elif description.humidity:
             self._attr_device_class = SensorDeviceClass.HUMIDITY
             self._attr_native_unit_of_measurement = "%"
+            self._attr_suggested_display_precision = 2
 
     @property
     def native_value(self) -> Any:
@@ -119,7 +120,10 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     runtime = entry.runtime_data
-    surface_enabled = entry.options.get("radiant_model", "uniform") == "surface"
+    surface_enabled = entry.options.get("radiant_model", "uniform") in {
+        "surface",
+        "mold_indicator",
+    }
     descriptions = [
         item for item in DESCRIPTIONS if surface_enabled or not item.key.startswith("surface_")
     ]

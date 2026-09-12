@@ -106,6 +106,8 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
             errors[name] = "invalid_option"
     if data.get("eco_intensity", "custom") not in {"mild", "workday", "deep", "custom"}:
         errors["eco_intensity"] = "invalid_option"
+    if data.get("radiant_model") == "mold_indicator" and not data.get("mold_indicator_entity"):
+        errors["mold_indicator_entity"] = "required"
     air_speed_mode = data.get("air_speed_mode", "fixed")
     if air_speed_mode == "measured":
         if not data.get("air_speed_entity"):

@@ -23,6 +23,35 @@ def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
     return marker.description["suggested_value"]
 
 
+async def _submit_everyday_controls(
+    hass: HomeAssistant,
+    result: config_entries.ConfigFlowResult,
+    *,
+    minimum: float = 18.0,
+    maximum: float = 26.0,
+    options: bool = False,
+) -> config_entries.ConfigFlowResult:
+    assert result["step_id"] == "control_limits"
+    assert _schema_keys(result) == {
+        "minimum_control_temperature",
+        "maximum_control_temperature",
+        "manual_override_minutes",
+        "boost_delta_c",
+        "boost_duration_minutes",
+    }
+    manager = hass.config_entries.options if options else hass.config_entries.flow
+    return await manager.async_configure(
+        result["flow_id"],
+        {
+            "minimum_control_temperature": minimum,
+            "maximum_control_temperature": maximum,
+            "manual_override_minutes": 120.0,
+            "boost_delta_c": 1.0,
+            "boost_duration_minutes": 60.0,
+        },
+    )
+
+
 async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -56,6 +85,7 @@ async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult
             "advanced_settings": False,
         },
     )
+    result = await _submit_everyday_controls(hass, result)
     assert result["step_id"] == "review"
     return await hass.config_entries.flow.async_configure(result["flow_id"], {})
 
@@ -116,19 +146,6 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
             "advanced_settings": True,
         },
     )
-    assert result["step_id"] == "advanced_model"
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
-    )
-    assert result["step_id"] == "air_speed"
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"air_speed_m_s": 0.1}
-    )
-    assert result["step_id"] == "comfort_parameters"
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    assert result["step_id"] == "profile_parameters"
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["step_id"] == "control_limits"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -136,7 +153,8 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
             "minimum_control_temperature": 26.0,
             "maximum_control_temperature": 18.0,
             "manual_override_minutes": 120.0,
-            "auto_mapping": "unmapped",
+            "boost_delta_c": 1.0,
+            "boost_duration_minutes": 60.0,
         },
     )
     assert result["type"] is FlowResultType.FORM
@@ -190,6 +208,7 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
             "advanced_settings": False,
         },
     )
+    result = await _submit_everyday_controls(hass, result, options=True)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["radiant_model"] == "uniform"
     await hass.async_block_till_done()
@@ -200,29 +219,25 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
         {
             "comfort_strategy": "balanced",
             "profile": "comfort",
-            "radiant_model": "surface",
+            "radiant_model": "mold_indicator",
             "advanced_settings": False,
         },
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "radiant"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"surface_source": "measured"}
+    assert _schema_keys(result) == {"mold_indicator_entity"}
+    mold_marker = next(
+        marker
+        for marker in result["data_schema"].schema
+        if str(marker.schema) == "mold_indicator_entity"
     )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "surface_details"
-    assert "surface_temperature_entity" in _schema_keys(result)
-    assert "surface_f_rsi" not in _schema_keys(result)
+    assert result["data_schema"].schema[mold_marker].config["integration"] == "mold_indicator"
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "surface_temperature_entity": "sensor.surface",
-            "surface_view_factor": 0.25,
-            "surface_rh_threshold_pct": 80.0,
-        },
+        result["flow_id"], {"mold_indicator_entity": "sensor.mold_indicator"}
     )
+    result = await _submit_everyday_controls(hass, result, options=True)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"]["surface_temperature_entity"] == "sensor.surface"
+    assert result["data"]["mold_indicator_entity"] == "sensor.mold_indicator"
     await hass.async_block_till_done()
     await hass.config_entries.async_unload(entry.entry_id)
 
@@ -308,6 +323,7 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
             "advanced_settings": False,
         },
     )
+    result = await _submit_everyday_controls(hass, result)
     assert result["step_id"] == "review"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.ABORT
@@ -323,7 +339,7 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
         await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_advanced_options_validate_and_store_modelled_surface_and_target_calibration(
+async def test_advanced_options_store_mold_indicator_and_target_calibration(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
@@ -348,22 +364,17 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
         {
             "comfort_strategy": "balanced",
             "profile": "comfort",
-            "radiant_model": "surface",
+            "eco_intensity": "custom",
+            "radiant_model": "mold_indicator",
             "advanced_settings": True,
         },
     )
     assert result["step_id"] == "radiant"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {"surface_source": "modelled"},
+        {"mold_indicator_entity": "sensor.mold_indicator"},
     )
-    assert result["step_id"] == "surface_details"
-    assert "surface_f_rsi" in _schema_keys(result)
-    assert "surface_temperature_entity" not in _schema_keys(result)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"surface_f_rsi": 0.65, "surface_view_factor": 0.25, "surface_rh_threshold_pct": 80.0},
-    )
+    result = await _submit_everyday_controls(hass, result, options=True)
     assert result["step_id"] == "advanced_model"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -389,18 +400,6 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
         {
             "eco_heating_setback_c": 2.0,
             "eco_cooling_setback_c": 2.0,
-            "boost_delta_c": 1.0,
-            "boost_duration_minutes": 60.0,
-        },
-    )
-    assert result["step_id"] == "control_limits"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "minimum_control_temperature": 18.0,
-            "maximum_control_temperature": 26.0,
-            "manual_override_minutes": 120.0,
-            "auto_mapping": "unmapped",
         },
     )
     assert result["step_id"] == "command_behavior"
@@ -434,12 +433,14 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
     assert _schema_keys(result) == {
         "primary_temperature_freshness_minutes",
         "local_temperature_freshness_minutes",
+        "radiant_freshness_minutes",
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
             "primary_temperature_freshness_minutes": 120.0,
             "local_temperature_freshness_minutes": 60.0,
+            "radiant_freshness_minutes": 90.0,
         },
     )
     assert result["step_id"] == "target_calibration"
@@ -447,11 +448,11 @@ async def test_advanced_options_validate_and_store_modelled_surface_and_target_c
         result["flow_id"], {"calibration_offset_c": 0.5}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"]["surface_modelled"] is True
-    assert result["data"]["surface_f_rsi"] == 0.65
+    assert result["data"]["mold_indicator_entity"] == "sensor.mold_indicator"
     assert result["data"]["critical_locations"][0]["location_id"] == "seat"
     assert result["data"]["primary_temperature_freshness_minutes"] == 120.0
     assert result["data"]["local_temperature_freshness_minutes"] == 60.0
+    assert result["data"]["radiant_freshness_minutes"] == 90.0
     assert result["data"]["calibration_target-stable"] == 0.5
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
@@ -531,7 +532,7 @@ async def test_config_flow_rejects_target_claimed_by_enabled_entry(
     assert result["errors"] == {"targets": "target_already_controlled"}
 
 
-async def test_radiant_options_cover_direct_globe_and_surface_validation(
+async def test_room_model_only_offers_standard_and_mold_indicator(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
@@ -541,66 +542,18 @@ async def test_radiant_options_cover_direct_globe_and_surface_validation(
         options={"comfort_strategy": "balanced", "profile": "comfort"},
     )
     entry.add_to_hass(hass)
-    for model, fields, expected_key in (
-        ("direct_mrt", {"mrt_entity": "sensor.mrt"}, "mrt_entity"),
-        (
-            "globe",
-            {
-                "globe_temperature_entity": "sensor.globe",
-                "globe_diameter_m": 0.15,
-                "globe_emissivity": 0.95,
-            },
-            "globe_temperature_entity",
-        ),
-    ):
-        result = await hass.config_entries.options.async_init(entry.entry_id)
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {
-                "comfort_strategy": "balanced",
-                "profile": "comfort",
-                "radiant_model": model,
-                "advanced_settings": False,
-            },
-        )
-        result = await hass.config_entries.options.async_configure(result["flow_id"], fields)
-        assert result["type"] is FlowResultType.CREATE_ENTRY
-        assert result["data"][expected_key] == fields[expected_key]
-        await hass.async_block_till_done()
-
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "profile": "comfort",
-            "radiant_model": "surface",
-            "advanced_settings": False,
-        },
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"surface_source": "measured"}
-    )
-    assert result["step_id"] == "surface_details"
-    assert "surface_temperature_entity" in _schema_keys(result)
-    assert "surface_f_rsi" not in _schema_keys(result)
+    schema = result["data_schema"].schema
+    model_marker = next(marker for marker in schema if str(marker.schema) == "radiant_model")
+    model_selector = schema[model_marker]
+    assert model_selector.config["options"] == ["uniform", "mold_indicator"]
 
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "profile": "comfort",
-            "radiant_model": "surface",
-            "advanced_settings": False,
-        },
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"surface_source": "modelled"}
-    )
-    assert result["step_id"] == "surface_details"
-    assert "surface_f_rsi" in _schema_keys(result)
-    assert "surface_temperature_entity" not in _schema_keys(result)
+    strategy_marker = next(marker for marker in schema if str(marker.schema) == "comfort_strategy")
+    profile_marker = next(marker for marker in schema if str(marker.schema) == "profile")
+    setback_marker = next(marker for marker in schema if str(marker.schema) == "eco_intensity")
+    assert schema[strategy_marker].config["options"] == ["efficient", "balanced", "comfort"]
+    assert schema[profile_marker].config["options"] == ["eco", "auto", "comfort", "boost"]
+    assert schema[setback_marker].config["options"] == ["deep", "workday", "mild", "custom"]
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
         await hass.config_entries.async_unload(entry.entry_id)
@@ -626,6 +579,7 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
             "advanced_settings": True,
         },
     )
+    result = await _submit_everyday_controls(hass, result, options=True)
     assert result["step_id"] == "advanced_model"
     assert _schema_keys(result) == {"met", "clothing_mode", "air_speed_mode"}
     result = await hass.config_entries.options.async_configure(
@@ -641,13 +595,13 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
     assert _schema_keys(result) == {"air_speed_entity"}
 
 
-def test_freshness_page_only_shows_selected_measured_source_types() -> None:
+def test_freshness_page_includes_selected_mold_indicator() -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"zone_uuid": "zone-freshness", "rh_mode": "measured", "targets": []},
         options={
-            "radiant_model": "direct_mrt",
-            "mrt_entity": "sensor.mrt",
+            "radiant_model": "mold_indicator",
+            "mold_indicator_entity": "sensor.mold_indicator",
             "air_speed_mode": "measured",
             "air_speed_entity": "sensor.air_speed",
         },
@@ -664,7 +618,7 @@ def test_freshness_page_only_shows_selected_measured_source_types() -> None:
     }
 
 
-async def test_deep_eco_discloses_only_inactive_targets_in_advanced_profile_page(
+async def test_max_setback_uses_command_limits_without_duplicate_fields(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
@@ -689,6 +643,15 @@ async def test_deep_eco_discloses_only_inactive_targets_in_advanced_profile_page
             "advanced_settings": True,
         },
     )
+    assert result["step_id"] == "control_limits"
+    assert _schema_keys(result) == {
+        "minimum_control_temperature",
+        "maximum_control_temperature",
+        "manual_override_minutes",
+        "boost_delta_c",
+        "boost_duration_minutes",
+    }
+    result = await _submit_everyday_controls(hass, result, options=True)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
@@ -698,10 +661,4 @@ async def test_deep_eco_discloses_only_inactive_targets_in_advanced_profile_page
     )
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
 
-    assert result["step_id"] == "profile_parameters"
-    assert _schema_keys(result) == {
-        "inactive_heating_temperature",
-        "inactive_cooling_temperature",
-        "boost_delta_c",
-        "boost_duration_minutes",
-    }
+    assert result["step_id"] == "command_behavior"

@@ -135,6 +135,7 @@ def test_target_container_and_all_self_references_fail(targets: object) -> None:
             "inactive_cooling_temperature",
         ),
         ({"radiant_model": "surface", "surface_modelled": True}, "surface_f_rsi"),
+        ({"radiant_model": "mold_indicator"}, "mold_indicator_entity"),
         (
             {"minimum_control_temperature": 18.0, "maximum_control_temperature": 18.0},
             "control_bounds",

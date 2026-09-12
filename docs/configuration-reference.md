@@ -50,11 +50,11 @@ pressure remains constant. Thermal neutral (vote 0) is a reference, not the norm
 target.
 
 `comfort` uses the solved strategy targets. `eco` widens those targets using the separately
-selectable Eco intensity. `boost` temporarily shifts both sides toward comfort by
+selectable Setback. `boost` temporarily shifts both sides toward comfort by
 `boost_delta_c`, bounded by policy, and expires after `boost_duration_minutes`. `auto` resolves to
 Comfort or Eco from the optional occupancy source; unknown occupancy is held briefly and then
-resolves conservatively. Changing strategy, profile, or Eco intensity is a lightweight runtime
-change and does not reload the config entry.
+resolves conservatively. Changing strategy, profile, or Setback is a lightweight runtime change
+and does not reload the config entry.
 
 The **Heating control target**, **Thermal neutral**, and **Cooling control target** sensors expose
 the inverse-solved ATHB roots before profile policy. They therefore change with comfort strategy,
@@ -68,22 +68,28 @@ the fallback or suppression reason. Consequently a fixed effective target with I
 
 ## Radiant and surface models
 
-- **Uniform** (default): mean radiant temperature (MRT) equals local air temperature.
-- **Direct MRT**: `mrt_entity` must measure mean radiant temperature, not a surface temperature.
-- **Globe**: MRT is derived from globe temperature, air temperature, air speed,
-  `globe_diameter_m`, and `globe_emissivity`. Diameter and emissivity control the convective and
-  radiative correction.
-- **Surface**: a cold surface is either measured or modelled and mixed into MRT using the bounded
-  `surface_view_factor`. All remaining radiant surroundings use the uniform assumption.
+- **Standard** (default): mean radiant temperature (MRT) equals the representative room-air
+  temperature. This deliberately simple assumption is appropriate when no true occupant-weighted
+  radiant measurement is available.
+- **Mold Indicator**: `mold_indicator_entity` selects a Home Assistant Mold Indicator. ATHB reads
+  its `estimated_critical_temp` attribute as the estimated coldest inner-surface temperature. It
+  uses that value only for surface-temperature, surface-RH and saturation diagnostics. Comfort
+  solving remains on the Standard room model: the critical point is not room MRT and no arbitrary
+  view factor is invented.
 
-For a modelled surface:
+Home Assistant's Mold Indicator estimates the critical point from its own configured indoor,
+outdoor and calibration inputs. ATHB does not duplicate that calibration and does not require a
+template sensor for the attribute. If the entity or attribute is missing, invalid or stale, ATHB
+does not fabricate a value.
+
+The underlying diagnostic relationship is equivalent to a calibrated inner-surface model:
 
 `T_surface = T_outdoor + f_Rsi × (T_indoor - T_outdoor)`
 
-`surface_f_rsi` is a dimensionless existing calibration and must be greater than zero and at most
-one. `surface_rh_threshold_pct` is diagnostic only: surface RH is calculated at constant indoor
-vapour pressure and saturation or non-physical states fail explicitly. Surface temperature,
-local-air temperature, and MRT remain separate physical quantities.
+`f_Rsi` is the Mold Indicator's dimensionless calibration. `surface_rh_threshold_pct` is
+diagnostic only: surface RH is calculated at constant indoor vapour pressure and saturation or
+non-physical states fail explicitly. Surface temperature, local-air temperature, and MRT remain
+separate physical quantities.
 
 ## Human and air-movement model
 
@@ -126,40 +132,46 @@ When `reject_extrapolation` is off, a numerically valid result outside the ATHB 
 range is explicitly flagged. When on, those roots are rejected and control is suppressed if the
 required directional roots are no longer available.
 
-## Profile tuning
+## Setback tuning
 
-Eco intensity controls what the Eco profile does after sensation-space inverse solving:
+Setback controls what the Eco profile does after sensation-space inverse solving. The wizard and
+entity present the choices from maximum saving to greatest comfort, with Custom last:
 
-| Eco intensity | Heating policy | Cooling policy | Intended use |
+| Setback | Heating policy | Cooling policy | Intended use |
 |---|---|---|---|
-| Mild | solved root − 2 °C | solved root + 2 °C | Short absence or modest savings. |
-| Workday | solved root − 4 °C | solved root + 4 °C | Longer daytime absence. |
-| Deep | configured inactive heating target | configured inactive cooling target | Long absence; no adaptive target is implied. |
+| Max | configured minimum command temperature | configured maximum command temperature | Maximum saving or long absence; no adaptive target is implied. |
+| Eco — 4 °C | solved root − 4 °C | solved root + 4 °C | Longer daytime absence. |
+| Comfort — 2 °C | solved root − 2 °C | solved root + 2 °C | Short absence or modest savings. |
 | Custom | root − `eco_heating_setback_c` | root + `eco_cooling_setback_c` | Expert offsets from 0–5 °C. |
 
-Deep targets form the inactive baseline. Any eligible critical local-air location can still add
+Max uses the configured minimum and maximum command temperatures directly. Any eligible critical
+local-air location can still add
 its already bounded, directional correction of at most 2 °C. The result is then intersected with
 the configured control bounds and device bounds and rounded inward to the device grid. Existing
-entries created before Eco intensity retain their configured offsets through the Custom mode;
-new entries default to Mild. Only the parameters used by Custom or Deep appear on the advanced
-profile page.
+entries created before Setback retain their configured offsets through the Custom mode; new entries
+default to Comfort — 2 °C. Only the two offsets used by Custom appear on the advanced profile page.
 
-`boost_delta_c` (0–3 °C) shifts in the opposite, comfort-seeking direction. Boost lasts 5–180
-minutes. All profile operations occur before final actuator bounds and grid normalization.
-
-## Control limits and Auto mapping
+## Everyday control settings
 
 `minimum_control_temperature` and `maximum_control_temperature` are hard user bounds in Celsius
-and must be ordered. They are intersected with each climate entity's own limits.
-`manual_override_minutes` is 15–1440 minutes.
+and must be ordered. They are intersected with each climate entity's own limits. They also directly
+form the heating and cooling requests for Max setback. `manual_override_minutes` is 15–1440 minutes.
 
-ATHB never changes HVAC mode. `auto_mapping` only interprets a target already in `auto`:
+`boost_delta_c` (0–3 °C) shifts solved targets in the comfort-seeking direction. Boost lasts
+5–180 minutes according to `boost_duration_minutes`, then returns to the previous profile. These
+five everyday values are shown in normal Setup, Reconfigure and Options, not hidden behind
+Advanced. Profile operations occur before final actuator bounds and grid normalization.
 
-- `unmapped`: fail-safe; no command.
-- `heating`: use the scalar heating root.
-- `cooling`: use the scalar cooling root.
-- `range`: require ranged capability and use both directional roots.
-- `bidirectional_scalar`: use current directional demand with scalar capability.
+ATHB never changes HVAC mode. For a target already in `auto`, it derives the mapping from public
+Home Assistant capabilities:
+
+- range target support maps to the atomic heating/cooling range;
+- a scalar target with only `heat` advertised maps to heating;
+- a scalar target with only `cool` advertised maps to cooling;
+- scalar Auto with both or neither direction advertised is ambiguous and remains fail-safe
+  suppressed.
+
+No Auto-mapping choice is shown to the user. Capability inference never causes an HVAC-mode call.
 
 ## Command normalization and fallback
 

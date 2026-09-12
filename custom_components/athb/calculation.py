@@ -14,7 +14,6 @@ from .adapters.sources import (
 )
 from .core.athb_engine import relative_air_speed
 from .core.climate import (
-    AutoMapping,
     CapabilityMapping,
     ClimateCapabilitySnapshot,
     ClimateFailure,
@@ -201,6 +200,7 @@ def _radiant_model(
         "direct_mrt": SourceKind.DIRECT_MRT,
         "globe": SourceKind.GLOBE,
         "surface": SourceKind.SURFACE,
+        "mold_indicator": SourceKind.SURFACE,
     }.get(mode)
     if kind is None or source is None:
         return (
@@ -230,6 +230,15 @@ def _radiant_model(
                 "radiant_fallback_missing_source",
             ),
             None,
+        )
+    if mode == "mold_indicator":
+        return (
+            UniformRadiantModel(),
+            (
+                "estimated_uniform_radiant_environment",
+                "mold_indicator_surface_diagnostic",
+            ),
+            value,
         )
     if mode == "direct_mrt":
         return DirectRadiantModel(MeasuredMeanRadiantTemperature(value)), (), None
@@ -358,7 +367,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
     )
     configured_radiant_provenance = (
         "estimated"
-        if snapshot.options.get("radiant_model", "uniform") == "uniform"
+        if snapshot.options.get("radiant_model", "uniform") in {"uniform", "mold_indicator"}
         or snapshot.optional_radiant is None
         or bool(snapshot.options.get("surface_modelled", False))
         else "measured"
@@ -419,14 +428,13 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
     radiant_provenance = (
         "estimated"
         if fallback_for_speed
-        or str(snapshot.options.get("radiant_model", "uniform")) == "uniform"
+        or str(snapshot.options.get("radiant_model", "uniform")) in {"uniform", "mold_indicator"}
         or any(reason.startswith("radiant_fallback") for reason in radiant_reasons)
         or "modelled_surface" in radiant_reasons
         else "measured"
     )
     strategy = ComfortStrategy(snapshot.strategy)
     profile = ControlProfile(snapshot.profile)
-    auto_mapping = AutoMapping(str(snapshot.options.get("auto_mapping", "unmapped")))
     critical = []
     met = _finite_option(snapshot.options, "met", 1.1)
     clothing = (
@@ -485,7 +493,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 critical.append(prepared)
     target_results: list[TargetCalculation] = []
     for target in snapshot.targets:
-        capability_result = resolve_capability(target.capability, auto_mapping=auto_mapping)
+        capability_result = resolve_capability(target.capability)
         capability_reason = (
             capability_result.reason if isinstance(capability_result, ClimateFailure) else None
         )
@@ -541,12 +549,8 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                     snapshot.options, "eco_cooling_setback_c", 2.0
                 ),
                 eco_intensity=EcoIntensity(str(snapshot.options.get("eco_intensity", "custom"))),
-                inactive_heating_c=_finite_option(
-                    snapshot.options, "inactive_heating_temperature", 18.0
-                ),
-                inactive_cooling_c=_finite_option(
-                    snapshot.options, "inactive_cooling_temperature", 26.0
-                ),
+                inactive_heating_c=grid.user_min_c,
+                inactive_cooling_c=grid.user_max_c,
                 boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 1.0),
                 previous_requested=snapshot.previous_requested,
                 elapsed_since_previous_seconds=snapshot.elapsed_since_previous_seconds,

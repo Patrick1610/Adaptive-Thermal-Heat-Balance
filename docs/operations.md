@@ -16,7 +16,9 @@ removed.
 ## Common suppression reasons
 
 - `hvac_off`: ATHB does not turn the target on.
-- `unsupported_auto_mapping` or `unsupported_hvac_mode`: configure a supported mapping/mode.
+- `unsupported_auto_mapping`: the target exposes ambiguous scalar semantics in `auto`; select a
+  concrete supported HVAC mode on the climate device. `unsupported_hvac_mode` means the current
+  mode/target shape is unsupported.
 - `target_unavailable` / `restored_target_state`: wait for an authoritative live target state.
 - `manual_override`: an external temperature target owns the actuator until expiry or Resume.
 - `running_mean_unavailable`: adaptive data is insufficient; fixed fallback/no-write policy applies.

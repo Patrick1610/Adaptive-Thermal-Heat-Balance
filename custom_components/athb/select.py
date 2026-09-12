@@ -1,4 +1,4 @@
-"""Lightweight strategy, profile, and Eco intensity selects."""
+"""Lightweight strategy, profile, and setback selects."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class ProfileSelect(AthbEntity, SelectEntity):
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "profile")
-        self._attr_options = ["auto", "comfort", "eco", "boost"]
+        self._attr_options = ["eco", "auto", "comfort", "boost"]
 
     @property
     def current_option(self) -> str:
@@ -45,7 +45,7 @@ class EcoIntensitySelect(AthbEntity, SelectEntity):
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "eco_intensity")
-        self._attr_options = ["mild", "workday", "deep", "custom"]
+        self._attr_options = ["deep", "workday", "mild", "custom"]
 
     @property
     def current_option(self) -> str:

@@ -40,7 +40,10 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     entities: list[BinarySensorEntity] = [ControlEligibleBinarySensor(entry.runtime_data)]
-    surface_enabled = entry.options.get("radiant_model", "uniform") == "surface"
+    surface_enabled = entry.options.get("radiant_model", "uniform") in {
+        "surface",
+        "mold_indicator",
+    }
     if surface_enabled:
         entities.append(SurfaceSaturationBinarySensor(entry.runtime_data))
     else:

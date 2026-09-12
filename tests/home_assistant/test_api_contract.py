@@ -22,6 +22,7 @@ from custom_components.athb.binary_sensor import (
     ControlEligibleBinarySensor,
     SurfaceSaturationBinarySensor,
 )
+from custom_components.athb.binary_sensor import async_setup_entry as async_setup_binary_entry
 from custom_components.athb.button import ResumeButton
 from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE
 from custom_components.athb.runtime import ZoneRuntime
@@ -189,7 +190,9 @@ def test_surface_values_and_inapplicable_target_endpoints_remain_truthful() -> N
     )
 
     assert not AthbSensor(runtime, surface_temperature).available
-    assert not AthbSensor(runtime, surface_humidity).available
+    humidity_sensor = AthbSensor(runtime, surface_humidity)
+    assert not humidity_sensor.available
+    assert humidity_sensor.suggested_display_precision == 2
     assert SurfaceSaturationBinarySensor(runtime).is_on is None
 
     target = {
@@ -268,6 +271,28 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
     assert registry.async_get(obsolete_range.entity_id) is None
     assert registry.async_get(obsolete_surface.entity_id) is None
     assert "zone-1_input_status" in unique_ids
+
+
+async def test_mold_indicator_mode_exposes_surface_diagnostic_entities(hass: Any) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    entry = MockConfigEntry(
+        domain="athb",
+        entry_id="entry-mold-indicator",
+        data={"targets": []},
+        options={"radiant_model": "mold_indicator"},
+    )
+    entry.add_to_hass(hass)
+    entry.runtime_data = runtime
+    sensors: list[Any] = []
+    binary_sensors: list[Any] = []
+
+    await async_setup_sensor_entry(hass, cast(Any, entry), sensors.extend)
+    await async_setup_binary_entry(hass, cast(Any, entry), binary_sensors.extend)
+
+    assert "zone-1_surface_temperature" in {entity.unique_id for entity in sensors}
+    assert "zone-1_surface_relative_humidity" in {entity.unique_id for entity in sensors}
+    assert "zone-1_surface_saturation" in {entity.unique_id for entity in binary_sensors}
 
 
 def test_strategy_select_persists_authoritative_option_without_reload() -> None:

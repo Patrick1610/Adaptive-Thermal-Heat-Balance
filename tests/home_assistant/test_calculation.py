@@ -248,6 +248,56 @@ def test_modelled_surface_without_calibration_never_invents_a_factor() -> None:
     assert "modelled_surface" not in result.quality_reasons
 
 
+def test_mold_indicator_attribute_drives_surface_risk_without_changing_comfort_roots() -> None:
+    shared = (
+        NOW,
+        _state("sensor.room", "20", "°C"),
+        None,
+        60.0,
+        _state("sensor.outdoor", "0", "°C"),
+    )
+    mold = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            *shared,
+            _state("sensor.mold_indicator", "12", "°C"),
+            5.0,
+            "complete_history",
+            "balanced",
+            "comfort",
+            {
+                "radiant_model": "mold_indicator",
+                "surface_rh_threshold_pct": 80.0,
+            },
+            (_target(),),
+            explicit_transition=True,
+        )
+    )
+    standard = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            *shared,
+            None,
+            5.0,
+            "complete_history",
+            "balanced",
+            "comfort",
+            {"radiant_model": "uniform"},
+            (_target(),),
+            explicit_transition=True,
+        )
+    )
+
+    assert mold.surface_temperature_c == pytest.approx(12.0)
+    assert mold.surface_relative_humidity_pct is not None
+    assert mold.surface_relative_humidity_pct > 90.0
+    assert mold.surface_saturation is True
+    assert "mold_indicator_surface_diagnostic" in mold.quality_reasons
+    assert dict(mold.provenance)["radiant"] == "estimated"
+    assert result_values(mold)["effective_targets"] == result_values(standard)["effective_targets"]
+    assert mold.targets[0].result is not None
+    assert standard.targets[0].result is not None
+    assert mold.targets[0].result.roots == standard.targets[0].result.roots
+
+
 def test_snapshot_applies_configured_profile_values_and_environmental_slew() -> None:
     result = calculate_runtime_snapshot(
         CapturedZoneSnapshot(
@@ -277,7 +327,7 @@ def test_snapshot_applies_configured_profile_values_and_environmental_slew() -> 
     assert policy.heating_c == pytest.approx(18.5)
 
 
-def test_snapshot_applies_deep_eco_and_reports_fixed_fallback_truthfully() -> None:
+def test_snapshot_applies_max_setback_from_command_bounds_and_reports_fallback_truthfully() -> None:
     adaptive = calculate_runtime_snapshot(
         CapturedZoneSnapshot(
             NOW,
@@ -294,14 +344,14 @@ def test_snapshot_applies_deep_eco_and_reports_fixed_fallback_truthfully() -> No
                 "eco_intensity": "deep",
                 "inactive_heating_temperature": 16.0,
                 "inactive_cooling_temperature": 29.0,
-                "minimum_control_temperature": 10.0,
+                "minimum_control_temperature": 17.0,
                 "maximum_control_temperature": 30.0,
             },
             (_target(),),
             explicit_transition=True,
         )
     )
-    assert result_values(adaptive)["effective_targets"]["target-1"]["temperature"] == 16.0
+    assert result_values(adaptive)["effective_targets"]["target-1"]["temperature"] == 17.0
 
     fallback = calculate_runtime_snapshot(
         CapturedZoneSnapshot(

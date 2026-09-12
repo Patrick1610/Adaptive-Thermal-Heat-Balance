@@ -19,6 +19,7 @@ from .const import (
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
     CONF_ECO_INTENSITY,
+    CONF_MOLD_INDICATOR_ENTITY,
     CONF_OUTDOOR_SOURCE,
     CONF_PRIMARY_TEMPERATURE,
     CONF_PROFILE,
@@ -35,6 +36,9 @@ from .const import (
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig())
 CLIMATES = selector.EntitySelector(selector.EntitySelectorConfig(domain="climate", multiple=True))
+MOLD_INDICATORS = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="sensor", integration="mold_indicator")
+)
 
 
 def _select(options: tuple[str, ...], translation_key: str) -> selector.SelectSelector:
@@ -74,8 +78,6 @@ OPTION_DEFAULTS: dict[str, object] = {
     "running_mean_alpha": 0.8,
     "eco_heating_setback_c": 2.0,
     "eco_cooling_setback_c": 2.0,
-    "inactive_heating_temperature": 18.0,
-    "inactive_cooling_temperature": 26.0,
     "boost_delta_c": 1.0,
     "boost_duration_minutes": 60.0,
     "manual_override_minutes": 120.0,
@@ -90,7 +92,6 @@ OPTION_DEFAULTS: dict[str, object] = {
     "radiant_freshness_minutes": 30.0,
     "air_speed_freshness_minutes": 30.0,
     "reject_extrapolation": False,
-    "auto_mapping": "unmapped",
     "fallback_mode": "fixed",
     "fallback_heating_c": 18.0,
     "fallback_cooling_c": 26.0,
@@ -127,8 +128,16 @@ class _OptionsWizardMixin:
         self._wizard_targets = targets
         self._wizard_environment = dict(environment_data)
         compatible_existing = dict(existing_options)
+        compatible_existing.pop("auto_mapping", None)
+        compatible_existing.pop("inactive_heating_temperature", None)
+        compatible_existing.pop("inactive_cooling_temperature", None)
         if compatible_existing and CONF_ECO_INTENSITY not in compatible_existing:
             compatible_existing[CONF_ECO_INTENSITY] = "custom"
+        if compatible_existing.get("radiant_model", "uniform") not in {
+            "uniform",
+            "mold_indicator",
+        }:
+            compatible_existing["radiant_model"] = "uniform"
         self._pending_options = {**OPTION_DEFAULTS, **compatible_existing}
         self._advanced = False
         self._critical_existing = [
@@ -149,28 +158,29 @@ class _OptionsWizardMixin:
             self._advanced = bool(submitted.pop("advanced_settings", False))
             occupancy = submitted.pop("occupancy_entity", None)
             self._pending_options.update(submitted)
+            self._pending_options.pop("inactive_heating_temperature", None)
+            self._pending_options.pop("inactive_cooling_temperature", None)
+            self._pending_options.pop("auto_mapping", None)
             self._pending_options.pop("occupancy_entity", None)
             if isinstance(occupancy, str) and (occupancy := occupancy.strip()):
                 self._pending_options["occupancy_entity"] = occupancy
             self._clean_radiant_options(str(self._pending_options["radiant_model"]))
             if self._pending_options["radiant_model"] != "uniform":
                 return await self.async_step_radiant()
-            if self._advanced:
-                return await self.async_step_advanced_model()
-            return await self._async_complete_wizard()
+            return await self.async_step_control_limits()
         defaults = self._pending_options
         fields: dict[vol.Marker, object] = {
             vol.Required(CONF_COMFORT_STRATEGY, default=defaults[CONF_COMFORT_STRATEGY]): _select(
                 ("efficient", "balanced", "comfort"), "comfort_strategy"
             ),
             vol.Required(CONF_PROFILE, default=defaults[CONF_PROFILE]): _select(
-                ("auto", "comfort", "eco", "boost"), "profile"
+                ("eco", "auto", "comfort", "boost"), "profile"
             ),
             vol.Required(CONF_ECO_INTENSITY, default=defaults[CONF_ECO_INTENSITY]): _select(
-                ("mild", "workday", "deep", "custom"), "eco_intensity"
+                ("deep", "workday", "mild", "custom"), "eco_intensity"
             ),
             vol.Required("radiant_model", default=defaults["radiant_model"]): _select(
-                ("uniform", "direct_mrt", "globe", "surface"), "radiant_model"
+                ("uniform", "mold_indicator"), "radiant_model"
             ),
             vol.Optional("advanced_settings", default=False): bool,
         }
@@ -183,105 +193,41 @@ class _OptionsWizardMixin:
         return self.async_show_form(step_id=step_id, data_schema=vol.Schema(fields))
 
     def _clean_radiant_options(self, model: str) -> None:
-        keys_by_model = {
-            "uniform": set(),
-            "direct_mrt": {"mrt_entity"},
-            "globe": {"globe_temperature_entity", "globe_diameter_m", "globe_emissivity"},
-            "surface": {
-                "surface_modelled",
-                "surface_temperature_entity",
-                "surface_f_rsi",
-                "surface_view_factor",
-                "surface_rh_threshold_pct",
-            },
+        old_and_current_keys = {
+            "mrt_entity",
+            "globe_temperature_entity",
+            "globe_diameter_m",
+            "globe_emissivity",
+            "surface_modelled",
+            "surface_temperature_entity",
+            "surface_f_rsi",
+            "surface_view_factor",
+            "surface_rh_threshold_pct",
+            CONF_MOLD_INDICATOR_ENTITY,
         }
-        all_keys = set().union(*keys_by_model.values())
-        for key in all_keys - keys_by_model.get(model, set()):
+        retained = {CONF_MOLD_INDICATOR_ENTITY} if model == "mold_indicator" else set()
+        for key in old_and_current_keys - retained:
             self._pending_options.pop(key, None)
 
     async def async_step_radiant(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        model = str(self._pending_options["radiant_model"])
         if user_input is not None:
-            submitted = dict(user_input)
-            if model == "surface":
-                self._pending_options["surface_modelled"] = (
-                    submitted["surface_source"] == "modelled"
-                )
-                return await self.async_step_surface_details()
-            self._pending_options.update(submitted)
+            self._pending_options.update(user_input)
             return await self._after_radiant()
         defaults = self._pending_options
-        if model == "direct_mrt":
-            schema = vol.Schema(
-                {_required_entity("mrt_entity", defaults.get("mrt_entity")): ENTITY}
-            )
-        elif model == "globe":
-            schema = vol.Schema(
-                {
-                    _required_entity(
-                        "globe_temperature_entity", defaults.get("globe_temperature_entity")
-                    ): ENTITY,
-                    vol.Required(
-                        "globe_diameter_m", default=defaults.get("globe_diameter_m", 0.15)
-                    ): _number(0.01, 1.0, 0.01, "m"),
-                    vol.Required(
-                        "globe_emissivity", default=defaults.get("globe_emissivity", 0.95)
-                    ): _number(0.01, 1.0, 0.01),
-                }
-            )
-        else:
-            source = "modelled" if defaults.get("surface_modelled", False) else "measured"
-            schema = vol.Schema(
-                {
-                    vol.Required("surface_source", default=source): _select(
-                        ("measured", "modelled"), "surface_source"
-                    )
-                }
-            )
+        schema = vol.Schema(
+            {
+                _required_entity(
+                    CONF_MOLD_INDICATOR_ENTITY,
+                    defaults.get(CONF_MOLD_INDICATOR_ENTITY),
+                ): MOLD_INDICATORS
+            }
+        )
         return self.async_show_form(step_id="radiant", data_schema=schema)
 
     async def _after_radiant(self) -> ConfigFlowResult:
-        return (
-            await self.async_step_advanced_model()
-            if self._advanced
-            else await self._async_complete_wizard()
-        )
-
-    async def async_step_surface_details(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        if user_input is not None:
-            self._pending_options.update(user_input)
-            if self._pending_options["surface_modelled"]:
-                self._pending_options.pop("surface_temperature_entity", None)
-            else:
-                self._pending_options.pop("surface_f_rsi", None)
-            return await self._after_radiant()
-        defaults = self._pending_options
-        fields: dict[vol.Marker, object] = {
-            vol.Required(
-                "surface_view_factor", default=defaults.get("surface_view_factor", 0.25)
-            ): _number(0.0, 1.0, 0.01),
-            vol.Required(
-                "surface_rh_threshold_pct",
-                default=defaults.get("surface_rh_threshold_pct", 80.0),
-            ): _number(1.0, 100.0, 1.0, "%"),
-        }
-        if defaults.get("surface_modelled", False):
-            fields[
-                vol.Required("surface_f_rsi", default=defaults["surface_f_rsi"])
-                if "surface_f_rsi" in defaults
-                else vol.Required("surface_f_rsi")
-            ] = _number(0.01, 1.0, 0.01)
-        else:
-            fields[
-                _required_entity(
-                    "surface_temperature_entity", defaults.get("surface_temperature_entity")
-                )
-            ] = ENTITY
-        return self.async_show_form(step_id="surface_details", data_schema=vol.Schema(fields))
+        return await self.async_step_control_limits()
 
     async def async_step_advanced_model(
         self, user_input: dict[str, Any] | None = None
@@ -404,45 +350,22 @@ class _OptionsWizardMixin:
     ) -> ConfigFlowResult:
         if user_input is not None:
             self._pending_options.update(user_input)
-            return await self.async_step_control_limits()
+            return await self.async_step_command_behavior()
         defaults = self._pending_options
         eco_intensity = str(defaults.get(CONF_ECO_INTENSITY, DEFAULT_ECO_INTENSITY))
+        if eco_intensity != "custom":
+            return await self.async_step_command_behavior()
         fields: dict[vol.Marker, object] = {}
-        if eco_intensity == "custom":
-            fields.update(
-                {
-                    vol.Required(
-                        "eco_heating_setback_c",
-                        default=defaults.get("eco_heating_setback_c", 2.0),
-                    ): _number(0.0, 5.0, 0.1, "°C"),
-                    vol.Required(
-                        "eco_cooling_setback_c",
-                        default=defaults.get("eco_cooling_setback_c", 2.0),
-                    ): _number(0.0, 5.0, 0.1, "°C"),
-                }
-            )
-        elif eco_intensity == "deep":
-            fields.update(
-                {
-                    vol.Required(
-                        "inactive_heating_temperature",
-                        default=defaults.get("inactive_heating_temperature", 18.0),
-                    ): _number(5.0, 35.0, 0.5, "°C"),
-                    vol.Required(
-                        "inactive_cooling_temperature",
-                        default=defaults.get("inactive_cooling_temperature", 26.0),
-                    ): _number(5.0, 35.0, 0.5, "°C"),
-                }
-            )
         fields.update(
             {
-                vol.Required("boost_delta_c", default=defaults.get("boost_delta_c", 1.0)): _number(
-                    0.0, 3.0, 0.1, "°C"
-                ),
                 vol.Required(
-                    "boost_duration_minutes",
-                    default=defaults.get("boost_duration_minutes", 60.0),
-                ): _number(5.0, 180.0, 5.0, "min"),
+                    "eco_heating_setback_c",
+                    default=defaults.get("eco_heating_setback_c", 2.0),
+                ): _number(0.0, 5.0, 0.1, "°C"),
+                vol.Required(
+                    "eco_cooling_setback_c",
+                    default=defaults.get("eco_cooling_setback_c", 2.0),
+                ): _number(0.0, 5.0, 0.1, "°C"),
             }
         )
         return self.async_show_form(
@@ -456,13 +379,38 @@ class _OptionsWizardMixin:
         if user_input is not None:
             pending = {**self._pending_options, **user_input}
             errors = validate_options(pending)
-            if "control_bounds" not in errors:
+            control_errors = {
+                "control_bounds",
+                "manual_override_minutes",
+                "boost_delta_c",
+                "boost_duration_minutes",
+            } & errors.keys()
+            if not control_errors:
+                minimum = float(pending["minimum_control_temperature"])
+                maximum = float(pending["maximum_control_temperature"])
+                if pending.get("fallback_mode", "fixed") == "fixed":
+                    fallback_heating = float(pending.get("fallback_heating_c", minimum))
+                    fallback_cooling = float(pending.get("fallback_cooling_c", maximum))
+                    if not minimum <= fallback_heating < maximum:
+                        pending["fallback_heating_c"] = minimum
+                    if not minimum < fallback_cooling <= maximum:
+                        pending["fallback_cooling_c"] = maximum
                 self._pending_options = pending
-                return await self.async_step_command_behavior()
+                return (
+                    await self.async_step_advanced_model()
+                    if self._advanced
+                    else await self._async_complete_wizard()
+                )
             return self.async_show_form(
                 step_id="control_limits",
                 data_schema=self._control_limits_schema(),
-                errors={"base": "invalid_control_bounds"},
+                errors={
+                    "base": (
+                        "invalid_control_bounds"
+                        if "control_bounds" in control_errors
+                        else "invalid_option"
+                    )
+                },
             )
         return self.async_show_form(
             step_id="control_limits", data_schema=self._control_limits_schema()
@@ -484,12 +432,13 @@ class _OptionsWizardMixin:
                     "manual_override_minutes",
                     default=defaults.get("manual_override_minutes", 120.0),
                 ): _number(15.0, 1440.0, 15.0, "min"),
-                vol.Required("auto_mapping", default=defaults.get("auto_mapping", "unmapped")): (
-                    _select(
-                        ("unmapped", "heating", "cooling", "range", "bidirectional_scalar"),
-                        "auto_mapping",
-                    )
+                vol.Required("boost_delta_c", default=defaults.get("boost_delta_c", 1.0)): _number(
+                    0.0, 3.0, 0.1, "°C"
                 ),
+                vol.Required(
+                    "boost_duration_minutes",
+                    default=defaults.get("boost_duration_minutes", 60.0),
+                ): _number(5.0, 180.0, 5.0, "min"),
             }
         )
 
@@ -675,7 +624,7 @@ class _OptionsWizardMixin:
                 )
             ] = _number(5.0, 360.0, 5.0, "min")
         radiant_model = str(defaults.get("radiant_model", "uniform"))
-        measured_radiant = radiant_model in {"direct_mrt", "globe"} or (
+        measured_radiant = radiant_model in {"direct_mrt", "globe", "mold_indicator"} or (
             radiant_model == "surface" and not defaults.get("surface_modelled", False)
         )
         if measured_radiant:

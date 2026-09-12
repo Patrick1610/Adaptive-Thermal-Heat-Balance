@@ -30,7 +30,7 @@ def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None
         "issue_tracker": ("https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance/issues"),
         "name": "Adaptive Thermal Heat Balance",
         "requirements": [],
-        "version": "0.1.6",
+        "version": "0.1.7",
     }
     assert manifest["domain"] == DOMAIN
 

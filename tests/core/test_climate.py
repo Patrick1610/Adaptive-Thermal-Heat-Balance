@@ -22,6 +22,7 @@ from custom_components.athb.core.climate import (
     celsius_delta_to_unit,
     celsius_to_ha,
     ha_to_celsius,
+    infer_auto_mapping,
     normalize_range_target,
     normalize_scalar_target,
     resolve_capability,
@@ -118,6 +119,40 @@ def test_complete_capability_mode_matrix(
         assert result.reason == expected
     else:
         assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("features", "advertised_modes", "expected"),
+    [
+        (TARGET_TEMPERATURE_RANGE, ("off", "auto"), AutoMapping.RANGE),
+        (TARGET_TEMPERATURE, ("off", "heat", "auto"), AutoMapping.HEATING),
+        (TARGET_TEMPERATURE, ("off", "cool", "auto"), AutoMapping.COOLING),
+        (TARGET_TEMPERATURE, ("off", "heat", "cool", "auto"), AutoMapping.UNMAPPED),
+        (TARGET_TEMPERATURE, ("off", "auto"), AutoMapping.UNMAPPED),
+    ],
+)
+def test_auto_mapping_is_inferred_only_from_unambiguous_public_capabilities(
+    features: int,
+    advertised_modes: tuple[str, ...],
+    expected: AutoMapping,
+) -> None:
+    snapshot = _snapshot(mode="auto", features=features)
+    snapshot = ClimateCapabilitySnapshot(
+        snapshot.hvac_mode,
+        advertised_modes,
+        snapshot.supported_features,
+        snapshot.min_temp_ha,
+        snapshot.max_temp_ha,
+        snapshot.target_temp_step_ha,
+        snapshot.temperature_unit,
+    )
+
+    assert infer_auto_mapping(snapshot) is expected
+    result = resolve_capability(snapshot)
+    if expected is AutoMapping.UNMAPPED:
+        assert result == ClimateFailure("unsupported_auto_mapping")
+    else:
+        assert isinstance(result, CapabilityMapping)
 
 
 def test_both_feature_flags_still_use_only_current_mode_shape() -> None:

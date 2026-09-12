@@ -37,6 +37,7 @@ _IDENTITY_KEYS = {
     "mrt_entity",
     "globe_temperature_entity",
     "surface_temperature_entity",
+    "mold_indicator_entity",
 }
 
 

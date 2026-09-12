@@ -121,7 +121,7 @@ The implementation must avoid maintaining two competing authoritative strategy s
 
 ---
 
-## 4. Radiant and cold-surface configuration uses progressive disclosure
+## 4. Radiant and cold-surface configuration uses simple routes
 
 MRT, cold-surface modelling and critical local-air locations are **optional quality improvements**, not prerequisites for ordinary ATHB use.
 
@@ -137,42 +137,41 @@ A normal user should therefore be able to configure ATHB without understanding:
 
 - MRT;
 - view factors;
-- Mold Indicator;
 - critical points;
 - globe thermometers;
 - surface modelling.
 
-### Optional cold-surface path
+### Optional Mold Indicator path
 
-When a user chooses to improve the radiant model with cold-surface information, progressively disclose only the fields required for the chosen physical source type.
+The ordinary user-facing room-model choice contains only:
 
-Supported distinctions remain:
+- **Standard**: the uniform radiant environment; and
+- **Mold Indicator**: select an existing Home Assistant Mold Indicator and read its
+  `estimated_critical_temp` attribute directly.
 
-- calibrated/modelled cold surface;
-- measured surface temperature;
-- direct/actual MRT;
-- globe-derived MRT;
-- critical local-air measurement.
+The Mold Indicator critical point is used only for surface-temperature, surface-RH and saturation
+diagnostics. It is not treated as room MRT and does not change comfort roots without an actual
+occupant-weighted radiant measurement. The wizard asks for no view factor, direct MRT, globe or
+manually modelled surface values. Those numerical primitives may remain internally tested but are
+not normal configuration choices.
 
 A calibrated/modelled surface is never treated as local air or direct MRT.
 
 ### Home Assistant Mold Indicator-style calibration
 
-A user with an existing Home Assistant Mold Indicator calibration must be able to enter the corresponding calibration factor directly when configuring a calibrated cold-surface estimate.
+A user with an existing Home Assistant Mold Indicator selects that entity directly. ATHB consumes
+the integration's calculated critical-point attribute, so no template sensor, duplicated
+calibration input or helper solely for ATHB is required.
 
-ATHB performs the equivalent internal surface calculation. No Mold Indicator entity, template sensor or helper is required at runtime solely for ATHB.
+### Everyday controls and HVAC Auto
 
-Where the Home Assistant Mold Indicator calibration convention differs algebraically from ATHB's internal `f_Rsi` representation, accept the user-facing calibration form explicitly and convert internally with tested semantics.
+Boost shift, Boost duration, minimum and maximum command temperature, and manual-override duration
+belong to the ordinary Setup, Reconfigure and Options path rather than Advanced.
 
-### View factors
-
-Do **not** invent arbitrary Low/Medium/High radiant-influence presets unless those values are scientifically justified and documented.
-
-For the initial implementation, it is acceptable for explicit surface-to-MRT contribution/view-factor configuration to remain an advanced option.
-
-Do not hide an arbitrary numerical assumption behind a friendly label.
-
-Keep the ordinary default path simple even though the underlying radiant engine is technically capable.
+The user does not declare an Auto mapping. ATHB infers only semantics that public climate
+capabilities make unambiguous: range support, heating-only scalar, or cooling-only scalar. An
+ambiguous scalar `auto` target remains suppressed with `unsupported_auto_mapping`. ATHB does not
+infer direction from room temperature or `hvac_action` and never changes HVAC mode.
 
 ---
 

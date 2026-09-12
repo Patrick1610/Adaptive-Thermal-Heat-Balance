@@ -56,10 +56,12 @@ from .const import (
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
     CONF_ECO_INTENSITY,
+    CONF_MOLD_INDICATOR_ENTITY,
     CONF_PROFILE,
     DEFAULT_PROFILE,
     DEFAULT_STRATEGY,
     DOMAIN,
+    MOLD_INDICATOR_CRITICAL_TEMP_ATTRIBUTE,
 )
 from .controller import ZoneController
 from .core.climate import (
@@ -249,6 +251,7 @@ class ZoneRuntime:
         }
         for name in ("mrt_entity", "globe_temperature_entity", "surface_temperature_entity"):
             ids.add(str(self.entry.options.get(name, "")))
+        ids.add(str(self.entry.options.get(CONF_MOLD_INDICATOR_ENTITY, "")))
         for item in self.entry.options.get("critical_locations", ()):
             if isinstance(item, dict):
                 ids.add(str(item.get("entity_id", "")))
@@ -353,6 +356,7 @@ class ZoneRuntime:
             "mrt_entity",
             "globe_temperature_entity",
             "surface_temperature_entity",
+            CONF_MOLD_INDICATOR_ENTITY,
         ):
             if options.get(key) == old_entity_id:
                 options[key] = entity_id
@@ -495,6 +499,7 @@ class ZoneRuntime:
                     "mrt_entity",
                     "globe_temperature_entity",
                     "surface_temperature_entity",
+                    CONF_MOLD_INDICATOR_ENTITY,
                 )
                 if self.entry.options.get(name)
             ),
@@ -523,7 +528,11 @@ class ZoneRuntime:
             self._snapshot_state(
                 self.hass.states.get(str(self.entry.data.get("outdoor_source", "")))
             ),
-            self._snapshot_state(self.hass.states.get(radiant_id)),
+            (
+                self._snapshot_mold_indicator(self.hass.states.get(radiant_id))
+                if self.entry.options.get("radiant_model") == "mold_indicator"
+                else self._snapshot_state(self.hass.states.get(radiant_id))
+            ),
             running_mean,
             history.quality.value,
             self.strategy,
@@ -614,6 +623,32 @@ class ZoneRuntime:
             state,
             registry_identity=(registry_entry.id if registry_entry is not None else None),
             source_generation=self.source_generation,
+        )
+
+    def _snapshot_mold_indicator(self, state: State | None) -> StateValue | None:
+        """Capture the Mold Indicator critical-point attribute as estimated surface data."""
+
+        if state is None:
+            return None
+        registry_entry = er.async_get(self.hass).async_get(state.entity_id)
+        captured = snapshot_state(
+            state,
+            attributes=(MOLD_INDICATOR_CRITICAL_TEMP_ATTRIBUTE,),
+            registry_identity=(registry_entry.id if registry_entry is not None else None),
+            source_generation=self.source_generation,
+        )
+        assert captured is not None
+        return StateValue(
+            captured.entity_id,
+            captured.attributes.get(MOLD_INDICATOR_CRITICAL_TEMP_ATTRIBUTE),
+            str(self.hass.config.units.temperature_unit),
+            captured.observed_at,
+            captured.available,
+            captured.attributes,
+            captured.context_id,
+            captured.parent_context_id,
+            captured.registry_identity,
+            captured.source_generation,
         )
 
     @staticmethod
@@ -848,6 +883,7 @@ class ZoneRuntime:
             "direct_mrt": SourceKind.DIRECT_MRT,
             "globe": SourceKind.GLOBE,
             "surface": SourceKind.SURFACE,
+            "mold_indicator": SourceKind.SURFACE,
         }.get(str(self.entry.options.get("radiant_model", "uniform")), SourceKind.DIRECT_MRT)
 
     def _reconcile_targets(self, result: RuntimeCalculation) -> None:

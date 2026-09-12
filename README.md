@@ -12,17 +12,18 @@ environment is used only to generate and audit independent development goldens.
 
 - Strategies are **Efficient**, **Balanced** (default) and **Comfort**. Each solves its own
   sensation-space roots; targets are not interpolated between temperatures.
-- Eco strength is independently selectable as **Mild**, **Workday**, **Deep**, or **Custom**;
-  profile policy is applied only after the adaptive roots have been solved.
+- **Setback** is independently selectable as **Max**, **Eco — 4 °C**, **Comfort — 2 °C**,
+  or **Custom**; profile policy is applied only after the adaptive roots have been solved.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's
   heating/cooling control roots.
 - ATHB calls only `climate.set_temperature`. It never turns equipment on or off and never changes
   HVAC mode, preset, fan, swing or humidity settings.
 - An external temperature-target change creates a manual override. An external HVAC-mode change
   only causes capability/reconciliation handling.
-- The ordinary setup uses the uniform-radiant approximation. Direct MRT, globe temperature,
-  measured/modelled surfaces and critical local-air locations are optional advanced inputs and
-  remain physically distinct.
+- The ordinary setup offers a standard uniform-radiant room model or an existing Home Assistant
+  Mold Indicator. Its calculated critical point is used only for cold-surface diagnostics and is
+  never mistaken for room mean radiant temperature (MRT). Critical local-air locations remain
+  optional advanced inputs and physically distinct.
 - Missing mandatory measurements are never replaced with plausible values. Direct fixed RH and
   air-speed inputs remain explicitly `declared`.
 

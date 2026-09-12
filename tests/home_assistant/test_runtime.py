@@ -568,6 +568,29 @@ def test_runtime_tracks_all_progressive_sources_and_critical_freshness(
         cancel()
 
 
+def test_runtime_reads_mold_indicator_critical_point_attribute_as_temperature(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    hass.states.async_set(
+        "sensor.mold_indicator",
+        "86.2",
+        {
+            "unit_of_measurement": "%",
+            "estimated_critical_temp": 16.7,
+            "dewpoint": 13.2,
+        },
+    )
+
+    captured = runtime._snapshot_mold_indicator(hass.states.get("sensor.mold_indicator"))
+
+    assert captured is not None
+    assert captured.raw_state == 16.7
+    assert captured.unit == str(hass.config.units.temperature_unit)
+    assert captured.attributes == {"estimated_critical_temp": 16.7}
+
+
 def test_service_and_registry_events_distinguish_own_context_and_removal(
     hass: HomeAssistant,
 ) -> None:
@@ -697,6 +720,7 @@ def test_registry_rename_updates_every_configured_source_kind(hass: HomeAssistan
             "mrt_entity": old_entity_id,
             "globe_temperature_entity": old_entity_id,
             "surface_temperature_entity": old_entity_id,
+            "mold_indicator_entity": old_entity_id,
             "critical_locations": [
                 {"location_id": "window", "entity_id": old_entity_id},
                 "preserved-extension-value",
@@ -732,6 +756,7 @@ def test_registry_rename_updates_every_configured_source_kind(hass: HomeAssistan
         "mrt_entity",
         "globe_temperature_entity",
         "surface_temperature_entity",
+        "mold_indicator_entity",
     ):
         assert entry.options[key] == new_entity_id
     assert entry.options["critical_locations"] == [
@@ -1062,6 +1087,7 @@ def test_readiness_radiant_modes_and_noop_timer_paths() -> None:
         ("direct_mrt", "direct_mrt"),
         ("globe", "globe"),
         ("surface", "surface"),
+        ("mold_indicator", "surface"),
         ("uniform", "direct_mrt"),
     ):
         runtime.entry.options["radiant_model"] = mode
