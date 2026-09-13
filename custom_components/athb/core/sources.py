@@ -214,15 +214,22 @@ def validate_measured_source(
         return SourceUpdate(observation, SourceState(state.last_accepted, recovering=True))
 
     last = state.last_accepted
-    if last is not None and last.observed_at is not None and observed <= last.observed_at:
-        observation = _invalid(
-            identity,
-            now=now,
-            reason="non_increasing_timestamp",
-            unit=canonical_unit,
-            value=value,
-        )
-        return SourceUpdate(observation, SourceState(last, recovering=True))
+    if last is not None and last.observed_at is not None:
+        if observed == last.observed_at and value == last.value and canonical_unit == last.unit:
+            return SourceUpdate(last, state)
+        if observed <= last.observed_at:
+            observation = _invalid(
+                identity,
+                now=now,
+                reason=(
+                    "timestamp_value_conflict"
+                    if observed == last.observed_at
+                    else "non_increasing_timestamp"
+                ),
+                unit=canonical_unit,
+                value=value,
+            )
+            return SourceUpdate(observation, SourceState(last, recovering=True))
 
     jump = False
     if (

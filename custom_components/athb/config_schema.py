@@ -155,7 +155,7 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         errors["inactive_cooling_temperature"] = "invalid_option"
     if data.get("fallback_mode", "fixed") not in {"fixed", "no_write"}:
         errors["fallback_mode"] = "invalid_option"
-    if data.get("fallback_mode", "fixed") == "fixed" and "control_bounds" not in errors:
+    if "control_bounds" not in errors:
         heating = data.get("fallback_heating_c", minimum)
         cooling = data.get("fallback_cooling_c", maximum)
         if not _finite_in_range(heating, float(minimum), float(maximum)):

@@ -477,11 +477,7 @@ class _OptionsWizardMixin:
     ) -> ConfigFlowResult:
         if user_input is not None:
             self._pending_options.update(user_input)
-            if self._pending_options["fallback_mode"] == "fixed":
-                return await self.async_step_fallback_temperatures()
-            self._pending_options.pop("fallback_heating_c", None)
-            self._pending_options.pop("fallback_cooling_c", None)
-            return await self.async_step_critical_locations()
+            return await self.async_step_fallback_temperatures()
         defaults = self._pending_options
         return self.async_show_form(
             step_id="command_behavior",

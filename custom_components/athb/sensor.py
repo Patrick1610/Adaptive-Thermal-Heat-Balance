@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.climate.const import ClimateEntityFeature
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -56,10 +56,11 @@ DESCRIPTIONS = (
 TARGET_ENDPOINTS = ("temperature", "target_low", "target_high")
 
 
-class AthbSensor(AthbEntity, SensorEntity):
+class AthbSensor(AthbEntity, RestoreSensor):
     def __init__(self, runtime: ZoneRuntime, description: Description) -> None:
         super().__init__(runtime, description.key)
         self.description = description
+        self._restored_native_value: Any = None
         self._attr_translation_key = description.key
         self._attr_entity_registry_enabled_default = description.enabled_default
         self._attr_entity_category = description.entity_category
@@ -73,7 +74,15 @@ class AthbSensor(AthbEntity, SensorEntity):
 
     @property
     def native_value(self) -> Any:
-        return self.runtime.values.get(self.description.key)
+        value = self.runtime.values.get(self.description.key)
+        return value if value is not None else self._restored_native_value
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.runtime.values.get(self.description.key) is None:
+            restored = await self.async_get_last_sensor_data()
+            if restored is not None:
+                self._restored_native_value = restored.native_value
 
     @property
     def available(self) -> bool:
@@ -81,6 +90,9 @@ class AthbSensor(AthbEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        data_quality = self.runtime.values.get("data_quality")
+        if self._restored_native_value is not None and data_quality in {None, "unavailable"}:
+            data_quality = "restored_stale"
         return {
             "comfort_level": self.runtime.strategy,
             "boost_mode": self.runtime.boost_mode,
@@ -91,10 +103,14 @@ class AthbSensor(AthbEntity, SensorEntity):
             "ownership": self.runtime.values.get("ownership", {}),
             "data_readiness": self.runtime.values.get("data_readiness", {}),
             "target_readiness": self.runtime.values.get("target_readiness", {}),
+            "data_quality": data_quality,
+            "last_valid_at": self.runtime.values.get("last_valid_at"),
+            "data_age_minutes": self.runtime.values.get("data_age_minutes"),
+            "stale_safety_active": self.runtime.values.get("stale_safety_active", False),
         }
 
 
-class TargetSensor(AthbEntity, SensorEntity):
+class TargetSensor(AthbEntity, RestoreSensor):
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
@@ -108,6 +124,7 @@ class TargetSensor(AthbEntity, SensorEntity):
         super().__init__(runtime, f"{target['target_uuid']}_{endpoint}")
         self.target = target
         self.endpoint = endpoint
+        self._restored_native_value: Any = None
         self._attr_translation_key = {
             "temperature": "effective_target",
             "target_low": "effective_heating_target",
@@ -120,7 +137,16 @@ class TargetSensor(AthbEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         targets = self.runtime.values.get("effective_targets", {})
-        return targets.get(self.target["target_uuid"], {}).get(self.endpoint)
+        value = targets.get(self.target["target_uuid"], {}).get(self.endpoint)
+        return value if value is not None else self._restored_native_value
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        targets = self.runtime.values.get("effective_targets", {})
+        if targets.get(self.target["target_uuid"], {}).get(self.endpoint) is None:
+            restored = await self.async_get_last_sensor_data()
+            if restored is not None:
+                self._restored_native_value = restored.native_value
 
     @property
     def available(self) -> bool:
@@ -130,6 +156,9 @@ class TargetSensor(AthbEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         targets = self.runtime.values.get("effective_target_details", {})
         detail = targets.get(self.target["target_uuid"], {})
+        data_quality = self.runtime.values.get("data_quality")
+        if self._restored_native_value is not None and data_quality in {None, "unavailable"}:
+            data_quality = "restored_stale"
         return {
             "mode": detail.get("mode", "unavailable"),
             "reason": detail.get("reason"),
@@ -140,6 +169,11 @@ class TargetSensor(AthbEntity, SensorEntity):
             "occupancy_status": self.runtime.values.get("occupancy_status"),
             "setback_active": self.runtime.values.get("setback_active", False),
             "setback": self.runtime.eco_intensity,
+            "stale": detail.get("stale", False),
+            "safety_deescalation": detail.get("safety_deescalation", False),
+            "data_quality": data_quality,
+            "last_valid_at": self.runtime.values.get("last_valid_at"),
+            "data_age_minutes": self.runtime.values.get("data_age_minutes"),
         }
 
 

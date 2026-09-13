@@ -281,6 +281,30 @@ def test_surface_values_and_inapplicable_target_endpoints_remain_truthful() -> N
     assert effective.extra_state_attributes["reason"] == "running_mean_unavailable"
 
 
+def test_restored_values_are_visible_but_explicitly_stale() -> None:
+    runtime = _runtime()
+    runtime.publish({"data_quality": "unavailable"})
+    sensation = AthbSensor(runtime, DESCRIPTIONS[0])
+    sensation._restored_native_value = -0.2
+    assert sensation.native_value == -0.2
+    assert sensation.extra_state_attributes["data_quality"] == "restored_stale"
+
+    target = {
+        "target_uuid": "target-1",
+        "entity_id": "climate.target",
+        "registry_identity": "registry-1",
+    }
+    effective = TargetSensor(runtime, target, "temperature")
+    effective._restored_native_value = 19.5
+    assert effective.native_value == 19.5
+    assert effective.extra_state_attributes["data_quality"] == "restored_stale"
+
+    saturation = SurfaceSaturationBinarySensor(runtime)
+    saturation._restored_is_on = True
+    assert saturation.is_on is True
+    assert saturation.extra_state_attributes["data_quality"] == "restored_stale"
+
+
 async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolete_entities(
     hass: Any,
 ) -> None:

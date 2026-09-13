@@ -78,6 +78,7 @@ def _intent(
     direction: ActuationDirection = ActuationDirection.HEATING_ONLY,
     shape: TargetShape = TargetShape.SCALAR,
     explicit: bool = False,
+    safety_deescalation: bool = False,
     input_generation: int = 1,
 ) -> NormalizedIntent:
     return NormalizedIntent(
@@ -106,6 +107,7 @@ def _intent(
         NOW,
         NOW + timedelta(minutes=2),
         explicit,
+        safety_deescalation,
     )
 
 
@@ -198,6 +200,40 @@ def test_all_preflight_failures_suppress_without_queue_or_call() -> None:
         assert outcome.reason == reason
         assert service.calls == []
         assert broker.state_counts("registry-1") == (0, 0)
+
+
+def test_stale_safety_bypasses_only_data_readiness_and_keeps_exact_payload() -> None:
+    stale = replace(_preflight(), data_ready=False)
+    service, persistence, current = FakeService(), FakePersistence(), [stale]
+    broker = _broker(service, persistence, current)
+
+    outcome = asyncio.run(
+        broker.async_submit(
+            _intent(value=18.0, explicit=True, safety_deescalation=True),
+            now=NOW,
+        )
+    )
+
+    assert outcome.dispatch_status is DispatchStatus.DISPATCHED
+    assert service.calls[0][0] == {"entity_id": "climate.test", "temperature": 18.0}
+    assert "hvac_mode" not in service.calls[0][0]
+
+    for unsafe in (
+        replace(stale, ownership=Ownership.MANUAL_OVERRIDE),
+        replace(stale, target_ready=False),
+        replace(stale, lease_owner="zone-2"),
+        replace(stale, dispatch_gate_open=False),
+    ):
+        blocked_service = FakeService()
+        blocked = _broker(blocked_service, FakePersistence(), [unsafe])
+        blocked_outcome = asyncio.run(
+            blocked.async_submit(
+                _intent(value=18.0, explicit=True, safety_deescalation=True),
+                now=NOW,
+            )
+        )
+        assert blocked_outcome.dispatch_status is DispatchStatus.NOT_DISPATCHED
+        assert blocked_service.calls == []
 
 
 def test_acknowledgement_updates_last_owned_target_and_suppresses_duplicate() -> None:

@@ -458,6 +458,40 @@ async def test_configure_source_humidity_page_only_shows_the_selected_measured_i
     assert _schema_keys(result) == {"rh_entity"}
 
 
+async def test_no_write_history_mode_still_collects_stale_safety_temperatures(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Room",
+        data={"zone_uuid": "zone-safety", "targets": []},
+        options={},
+    )
+    flow = AthbOptionsFlow(entry)
+    flow.hass = hass
+
+    result = await flow.async_step_command_behavior(
+        {
+            "minimum_range_gap": 1.0,
+            "minimum_meaningful_change": 0.1,
+            "feedback_resolution": 0.01,
+            "fallback_mode": "no_write",
+        }
+    )
+
+    assert result["step_id"] == "fallback_temperatures"
+    assert _schema_keys(result) == {"fallback_heating_c", "fallback_cooling_c"}
+
+    invalid = await flow.async_step_fallback_temperatures(
+        {"fallback_heating_c": 27.0, "fallback_cooling_c": 17.0}
+    )
+    assert invalid["step_id"] == "fallback_temperatures"
+    assert invalid["errors"] == {
+        "fallback_heating_c": "invalid_option",
+        "fallback_cooling_c": "invalid_option",
+    }
+
+
 async def test_reconfigure_preserves_target_uuid_for_registry_identity(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable, Coroutine
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -67,12 +68,21 @@ from .controller import ZoneController
 from .core.climate import (
     CapabilityMapping,
     ClimateFailure,
+    GridOptions,
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     ha_to_celsius,
+    normalize_range_target,
+    normalize_scalar_target,
     resolve_capability,
 )
-from .core.contracts import AcknowledgementStatus, BoostMode, TargetShape
+from .core.contracts import (
+    AcknowledgementStatus,
+    ActuationDirection,
+    BoostMode,
+    DispatchStatus,
+    TargetShape,
+)
 from .core.history import HistoryQuality, OutdoorSample
 from .core.locations import CriticalDeltaState, update_critical_delta
 from .core.ownership import (
@@ -98,6 +108,19 @@ from .core.trace import DecisionTraceRing
 from .repairs import RepairManager, TransitionLogger
 
 _LOGGER = logging.getLogger(__name__)
+STALE_SAFETY_DELAY = timedelta(hours=1)
+_HELD_VALUE_KEYS = (
+    "thermal_sensation",
+    "heating_control_target",
+    "thermal_neutral",
+    "cooling_control_target",
+    "comfort_status",
+    "surface_temperature",
+    "surface_relative_humidity",
+    "surface_saturation",
+    "effective_targets",
+    "effective_target_details",
+)
 
 
 @dataclass(slots=True)
@@ -142,6 +165,9 @@ class ZoneRuntime:
     rejection_counts: dict[str, int] = field(default_factory=dict)
     failure_hold_reason: str | None = None
     failure_hold_elapsed: bool = False
+    last_valid_values: dict[str, Any] = field(default_factory=dict)
+    last_valid_at: datetime | None = None
+    stale_safety_applied: set[str] = field(default_factory=set)
 
     async def async_start(self) -> None:
         """Acquire recovery state, shared history, listeners and initial calculation."""
@@ -692,7 +718,8 @@ class ZoneRuntime:
             },
         )
         self._reconcile_targets(result)
-        values = {**self.values, **result_values(result)}
+        self._schedule_stale_safety(result)
+        values = {**self.values, **self._observable_values(result)}
         values["calculation_generation"] = generation
         values["control_enabled"] = self.control_enabled
         values["ownership"] = {
@@ -735,9 +762,337 @@ class ZoneRuntime:
             )
             self.previous_requested_at = dt_util.utcnow()
 
+    def _observable_values(self, result: RuntimeCalculation) -> dict[str, Any]:
+        """Keep the last valid output visible while clearly labelling held data."""
+
+        projected = result_values(result)
+        primary = dict(result.source_states).get("primary")
+        accepted = primary.last_accepted if primary is not None else None
+        primary_fresh = (
+            result.primary_value_c is not None
+            and primary is not None
+            and not primary.recovering
+            and accepted is not None
+            and accepted.observed_at is not None
+        )
+        if primary_fresh and projected.get("thermal_sensation") is not None:
+            assert accepted is not None
+            self.last_valid_values = {
+                key: deepcopy(projected[key])
+                for key in _HELD_VALUE_KEYS
+                if key in projected and projected[key] is not None and projected[key] != "unknown"
+            }
+            self.last_valid_at = accepted.observed_at
+        elif result.hold_condition is not None and self.last_valid_values:
+            for key, value in self.last_valid_values.items():
+                projected_value = projected.get(key)
+                if (
+                    projected_value is None
+                    or projected_value == "unknown"
+                    or (
+                        key in {"effective_targets", "effective_target_details"}
+                        and not projected_value
+                    )
+                ):
+                    projected[key] = deepcopy(value)
+            details = projected.get("effective_target_details", {})
+            if isinstance(details, dict):
+                projected["effective_target_details"] = {
+                    target_uuid: {
+                        **detail,
+                        "mode": "stale_hold",
+                        "reason": result.hold_condition,
+                        "stale": True,
+                    }
+                    for target_uuid, detail in details.items()
+                    if isinstance(detail, dict)
+                }
+            if self.stale_safety_applied:
+                projected["effective_targets"] = deepcopy(
+                    self.values.get("effective_targets", projected.get("effective_targets", {}))
+                )
+                projected["effective_target_details"] = deepcopy(
+                    self.values.get(
+                        "effective_target_details",
+                        projected.get("effective_target_details", {}),
+                    )
+                )
+        now = dt_util.utcnow()
+        projected["data_quality"] = (
+            "current"
+            if primary_fresh and projected.get("thermal_sensation") is not None
+            else "stale"
+            if self.last_valid_values and result.hold_condition is not None
+            else "unavailable"
+        )
+        projected["last_valid_at"] = (
+            self.last_valid_at.isoformat() if self.last_valid_at is not None else None
+        )
+        projected["data_age_minutes"] = (
+            max(0.0, (now - self.last_valid_at).total_seconds() / 60.0)
+            if self.last_valid_at is not None
+            else None
+        )
+        projected["stale_safety_active"] = bool(self.stale_safety_applied)
+        return projected
+
+    def _schedule_stale_safety(self, result: RuntimeCalculation) -> None:
+        """Arm one bounded de-escalation after one hour of stale primary data."""
+
+        if not self.control_enabled:
+            if (cancel := self.timers.pop("stale_safety", None)) is not None:
+                cancel()
+            self.stale_safety_applied.clear()
+            return
+        if not (
+            result.hold_condition is not None
+            and result.hold_condition.startswith("primary_temperature_")
+        ):
+            if (cancel := self.timers.pop("stale_safety", None)) is not None:
+                cancel()
+            if any(
+                target.result is not None and target.result.normalized is not None
+                for target in result.targets
+            ):
+                self.stale_safety_applied.clear()
+            return
+        reference = self._primary_safety_reference(result)
+        if reference is None:
+            return
+        _value, observed_at = reference
+        pending = {
+            str(target["registry_identity"]) for target in self.entry.data.get("targets", ())
+        } - self.stale_safety_applied
+        if not pending:
+            return
+        now = dt_util.utcnow()
+        delay = max(
+            0.0,
+            (observed_at + STALE_SAFETY_DELAY - now).total_seconds(),
+        )
+        self._replace_timer(
+            "stale_safety",
+            delay,
+            lambda: self._create_task(self._async_apply_stale_safety()),
+        )
+
+    async def _async_apply_stale_safety(self) -> None:
+        """Withdraw stale heating/cooling demand using configured fallback targets."""
+
+        if not self.control_enabled or self.broker is None:
+            return
+        reference = self._primary_safety_reference()
+        now = dt_util.utcnow()
+        if reference is None or now - reference[1] < STALE_SAFETY_DELAY:
+            return
+        last_primary_c, observed_at = reference
+        outcomes: dict[str, str] = {}
+        for configured in self.entry.data.get("targets", ()):
+            identity = str(configured["registry_identity"])
+            if identity in self.stale_safety_applied:
+                continue
+            entity_id = str(configured["entity_id"])
+            capability = capability_from_state(self.hass.states.get(entity_id))
+            mapping = resolve_capability(capability)
+            if not isinstance(mapping, CapabilityMapping):
+                outcomes[str(configured["target_uuid"])] = "stale_safety_target_not_ready"
+                continue
+            normalized = self._stale_safety_target(
+                str(configured["target_uuid"]),
+                capability,
+                mapping,
+                last_primary_c,
+            )
+            if normalized is None:
+                outcomes[str(configured["target_uuid"])] = "stale_safety_not_required"
+                continue
+            target = TargetCalculation(
+                str(configured["target_uuid"]),
+                identity,
+                entity_id,
+                capability,
+                mapping,
+                None,
+                None,
+            )
+            intent = self._intent_from_result(
+                target,
+                normalized,
+                mapping,
+                now,
+                explicit_transition=True,
+                safety_deescalation=True,
+            )
+            outcome = await self.broker.async_submit(intent, now=now)
+            outcomes[target.target_uuid] = outcome.reason
+            accepted_outcome = (
+                outcome.dispatch_status is DispatchStatus.DISPATCHED
+                or outcome.reason
+                in {
+                    "command_pending",
+                    "command_interval",
+                    "target_unchanged",
+                }
+            )
+            if accepted_outcome:
+                self.stale_safety_applied.add(identity)
+                self._publish_stale_safety_target(target.target_uuid, normalized)
+            self._schedule_broker_deadline(
+                identity,
+                acknowledgement=outcome.acknowledgement_status
+                in {AcknowledgementStatus.PENDING, AcknowledgementStatus.UNKNOWN},
+                queued=outcome.reason == "command_interval",
+                explicit_transition=True,
+            )
+            if outcome.reason == "command_outcome_unknown":
+                self._transition(identity, OwnershipEvent.COMMAND_UNKNOWN)
+        values = {
+            **self.values,
+            "command_outcomes": outcomes,
+            "stale_safety_active": bool(self.stale_safety_applied),
+            "control_eligible": False,
+        }
+        if self.stale_safety_applied:
+            values["control_status"] = "stale_safety"
+        self.publish(values)
+        self.trace_ring.add(
+            generation=int(self.values.get("calculation_generation", 0)),
+            payload={
+                "event": "stale_safety",
+                "command_outcomes": outcomes,
+                "last_valid_primary_temperature_c": last_primary_c,
+                "last_valid_primary_at": observed_at.isoformat(),
+            },
+        )
+
+    def _primary_safety_reference(
+        self, result: RuntimeCalculation | None = None
+    ) -> tuple[float, datetime] | None:
+        """Return measured stale evidence without promoting it to a fresh observation."""
+
+        source_states = dict(result.source_states) if result is not None else self.source_states
+        primary = source_states.get("primary")
+        accepted = primary.last_accepted if primary is not None else None
+        candidates: list[tuple[float, datetime]] = []
+        if accepted is not None and accepted.value is not None and accepted.observed_at is not None:
+            candidates.append((float(accepted.value), accepted.observed_at))
+        entity_id = str(self.entry.data.get("primary_temperature", ""))
+        state = self.hass.states.get(entity_id) if entity_id else None
+        value = self._state_temperature_c(state, SourceKind.PRIMARY_AIR)
+        observed_at = (
+            getattr(state, "last_reported", None) or state.last_updated
+            if state is not None
+            else None
+        )
+        if value is not None and observed_at is not None:
+            candidates.append((value, observed_at))
+        return max(candidates, key=lambda item: item[1]) if candidates else None
+
+    def _stale_safety_target(
+        self,
+        target_uuid: str,
+        capability: Any,
+        mapping: CapabilityMapping,
+        last_primary_c: float,
+    ) -> NormalizedScalarTarget | NormalizedRangeTarget | None:
+        """Return only a fallback request that reduces the observed demand."""
+
+        calibration = float(self.entry.options.get(f"calibration_{target_uuid}", 0.0))
+        grid = GridOptions(
+            float(self.entry.options.get("minimum_control_temperature", 18.0)),
+            float(self.entry.options.get("maximum_control_temperature", 26.0)),
+            calibration,
+            minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+        )
+        if mapping.direction is ActuationDirection.RANGED:
+            if capability.target_temp_low_ha is None or capability.target_temp_high_ha is None:
+                return None
+            current_low = (
+                ha_to_celsius(capability.target_temp_low_ha, capability.temperature_unit)
+                - calibration
+            )
+            current_high = (
+                ha_to_celsius(capability.target_temp_high_ha, capability.temperature_unit)
+                - calibration
+            )
+            demand = last_primary_c < current_low or last_primary_c > current_high
+            normalized = normalize_range_target(
+                requested_heating_room_c=float(self.entry.options.get("fallback_heating_c", 18.0)),
+                requested_cooling_room_c=float(self.entry.options.get("fallback_cooling_c", 26.0)),
+                snapshot=capability,
+                options=grid,
+            )
+            if isinstance(normalized, ClimateFailure):
+                return None
+            deescalates = (
+                normalized.heating.normalized_room_c <= current_low
+                and normalized.cooling.normalized_room_c >= current_high
+                and (
+                    normalized.heating.normalized_room_c < current_low
+                    or normalized.cooling.normalized_room_c > current_high
+                )
+            )
+            return normalized if demand and deescalates else None
+        if capability.scalar_target_ha is None:
+            return None
+        current = (
+            ha_to_celsius(capability.scalar_target_ha, capability.temperature_unit) - calibration
+        )
+        fallback = (
+            float(self.entry.options.get("fallback_heating_c", 18.0))
+            if mapping.direction is ActuationDirection.HEATING_ONLY
+            else float(self.entry.options.get("fallback_cooling_c", 26.0))
+        )
+        scalar_normalized = normalize_scalar_target(
+            requested_room_c=fallback,
+            direction=mapping.direction,
+            snapshot=capability,
+            options=grid,
+        )
+        if isinstance(scalar_normalized, ClimateFailure):
+            return None
+        if mapping.direction is ActuationDirection.HEATING_ONLY:
+            return (
+                scalar_normalized
+                if current > last_primary_c and scalar_normalized.normalized_room_c < current
+                else None
+            )
+        return (
+            scalar_normalized
+            if current < last_primary_c and scalar_normalized.normalized_room_c > current
+            else None
+        )
+
+    def _publish_stale_safety_target(
+        self,
+        target_uuid: str,
+        normalized: NormalizedScalarTarget | NormalizedRangeTarget,
+    ) -> None:
+        effective = deepcopy(self.values.get("effective_targets", {}))
+        details = deepcopy(self.values.get("effective_target_details", {}))
+        if isinstance(normalized, NormalizedScalarTarget):
+            effective[target_uuid] = {"temperature": normalized.normalized_actuator_c}
+        else:
+            effective[target_uuid] = {
+                "target_low": normalized.heating.normalized_actuator_c,
+                "target_high": normalized.cooling.normalized_actuator_c,
+            }
+        details[target_uuid] = {
+            **details.get(target_uuid, {}),
+            "mode": "stale_safety",
+            "reason": "primary_temperature_stale",
+            "fallback": True,
+            "stale": True,
+            "safety_deescalation": True,
+        }
+        self.values["effective_targets"] = effective
+        self.values["effective_target_details"] = details
+
     def _control_status(self) -> str:
         if not self.control_enabled:
             return Ownership.DISABLED.value
+        if self.stale_safety_applied:
+            return "stale_safety"
         ownerships = {state.ownership for state in self.ownership.values()}
         for ownership in (
             Ownership.COMMAND_FAULT,
@@ -1055,6 +1410,7 @@ class ZoneRuntime:
         now: datetime,
         *,
         explicit_transition: bool,
+        safety_deescalation: bool = False,
     ) -> NormalizedIntent:
         state = self.ownership[target.registry_identity]
         common = (
@@ -1072,6 +1428,7 @@ class ZoneRuntime:
             now,
             now + timedelta(minutes=5),
             explicit_transition,
+            safety_deescalation,
         )
         if isinstance(normalized, NormalizedRangeTarget):
             return NormalizedIntent(

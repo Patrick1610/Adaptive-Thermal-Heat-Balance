@@ -27,7 +27,8 @@ preferred; both routes retain the same zone identity and device.
 
 Setup and Reconfigure expose the same complete set of sources, targets, model choices and expert
 parameters. Conditional pages show only values required by the selected humidity, radiant,
-clothing, air-speed and fallback modes. See the full [technical configuration
+clothing and air-speed modes. Fallback heating and cooling temperatures are always retained: they
+also bound the stale-input safety action. See the full [technical configuration
 reference](configuration-reference.md) for formulas, supported ranges and policy effects.
 
 The device page groups occupant-facing outputs under semantic names such as **Comfort**, **Target**,
@@ -50,6 +51,20 @@ atomic, ordered and separated by at least the configured gap. An infeasible rang
 
 Changing HVAC mode does not create a manual temperature override, and ATHB never changes the mode.
 Changing a target externally does create an override for the configured duration or until Resume.
+
+## Stale room-temperature safety
+
+When a previously valid source stops reporting, ATHB keeps the last valid outputs visible and
+marks them stale instead of showing a wall of unavailable entities. The input-status entity still
+shows the real stale reason. These retained values are display-only: ATHB stops normal calculation
+and normal target writes.
+
+After one hour without a new primary room-temperature report, ATHB checks whether the currently
+observed climate setpoint still implies heating or cooling demand against the last accepted room
+temperature. If so, it sends the configured fallback heating or cooling temperature once, solely
+to reduce that demand. The safeguard never increases demand, never changes HVAC mode, respects
+manual override and all normal target/ownership limits, and uses the sole CommandBroker. A valid
+sensor recovery returns the zone to normal event-driven control.
 
 ## Room model and advanced environmental inputs
 

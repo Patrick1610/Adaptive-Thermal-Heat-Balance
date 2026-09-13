@@ -58,6 +58,7 @@ class NormalizedIntent:
     created_at: datetime
     expires_at: datetime
     explicit_transition: bool = False
+    safety_deescalation: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,7 +210,7 @@ def _preflight_reason(
         return current.ownership.value
     if not current.target_ready:
         return "target_not_ready"
-    if not current.data_ready:
+    if not current.data_ready and not intent.safety_deescalation:
         return "data_not_ready"
     if current.lease_owner != intent.lease_owner:
         return "target_lease_lost"

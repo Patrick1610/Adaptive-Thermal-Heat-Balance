@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -153,6 +154,42 @@ def test_primary_freshness_option_supports_slow_reporting_sensor() -> None:
     assert result.primary_value_c == 20.0
     assert result.suppression_reason is None
     assert result.targets[0].result is not None
+
+
+def test_other_source_update_reuses_same_still_fresh_primary_observation() -> None:
+    snapshot = CapturedZoneSnapshot(
+        NOW,
+        _state("sensor.room", "20", "°C"),
+        _state("sensor.rh", "50", "%"),
+        None,
+        _state("sensor.outdoor", "5", "°C"),
+        None,
+        5.0,
+        "complete_history",
+        "balanced",
+        "comfort",
+        {"minimum_control_temperature": 18.0, "maximum_control_temperature": 26.0},
+        (_target(),),
+    )
+    first = calculate_runtime_snapshot(snapshot)
+    assert snapshot.relative_humidity is not None
+
+    humidity_update = replace(
+        snapshot,
+        now=NOW + timedelta(minutes=1),
+        relative_humidity=replace(
+            snapshot.relative_humidity,
+            raw_state="55",
+            observed_at=NOW + timedelta(minutes=1),
+        ),
+        source_states=first.source_states,
+    )
+    second = calculate_runtime_snapshot(humidity_update)
+
+    assert second.primary_value_c == 20.0
+    assert second.relative_humidity_pct == 55.0
+    assert second.hold_condition is None
+    assert second.targets[0].result is not None
 
 
 def test_humid_cooling_uses_valid_directional_root_despite_unrelated_failures() -> None:

@@ -17,10 +17,22 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.athb import runtime as runtime_module
-from custom_components.athb.adapters.broker import CommandOutcome
+from custom_components.athb.adapters.broker import CommandBroker, CommandOutcome
+from custom_components.athb.adapters.climate import HomeAssistantClimateService
 from custom_components.athb.calculation import CapturedTarget, calculate_runtime_snapshot
-from custom_components.athb.core.climate import ClimateCapabilitySnapshot, TemperatureUnit
-from custom_components.athb.core.contracts import AcknowledgementStatus, DispatchStatus
+from custom_components.athb.core.climate import (
+    ClimateCapabilitySnapshot,
+    NormalizedRangeTarget,
+    NormalizedScalarTarget,
+    TemperatureUnit,
+)
+from custom_components.athb.core.contracts import (
+    AcknowledgementStatus,
+    DispatchStatus,
+    Observation,
+    ObservationValidity,
+    Provenance,
+)
 from custom_components.athb.core.ownership import (
     DataReadiness,
     Ownership,
@@ -28,6 +40,7 @@ from custom_components.athb.core.ownership import (
     OwnershipState,
     TargetReadiness,
 )
+from custom_components.athb.core.sources import SourceState
 from custom_components.athb.runtime import ZoneRuntime
 from tests.virtual_installations.runner import _captured
 from tests.virtual_installations.schema import load_scenarios
@@ -196,6 +209,442 @@ def test_control_status_is_unknown_without_a_registered_target() -> None:
     runtime = _runtime()
     runtime.control_enabled = True
     assert runtime._control_status() == "unknown"
+    runtime.stale_safety_applied.add("registry-1")
+    assert runtime._control_status() == "stale_safety"
+
+
+def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
+    scenario = load_scenarios()[0]
+    snapshot = _captured(scenario)
+    valid = calculate_runtime_snapshot(snapshot)
+    runtime = _runtime(target_identity="registry-climate-living-room")
+
+    current = runtime._observable_values(valid)
+    runtime.values = current
+    assert current["thermal_sensation"] is not None
+    assert current["data_quality"] == "current"
+
+    stale = calculate_runtime_snapshot(
+        replace(
+            snapshot,
+            now=snapshot.now + timedelta(hours=1),
+            source_states=valid.source_states,
+        )
+    )
+    held = runtime._observable_values(stale)
+
+    assert stale.hold_condition == "primary_temperature_stale"
+    assert held["thermal_sensation"] == current["thermal_sensation"]
+    assert held["heating_control_target"] == current["heating_control_target"]
+    assert held["effective_targets"] == current["effective_targets"]
+    assert held["input_status"] == "primary_temperature_stale"
+    assert held["data_quality"] == "stale"
+    assert all(
+        detail["stale"] is True and detail["mode"] == "stale_hold"
+        for detail in held["effective_target_details"].values()
+    )
+
+    runtime.stale_safety_applied.add("registry-climate-living-room")
+    runtime.values["effective_targets"] = {"target-living-room": {"temperature": 18.0}}
+    runtime.values["effective_target_details"] = {"target-living-room": {"mode": "stale_safety"}}
+    guarded = runtime._observable_values(stale)
+    assert guarded["effective_targets"] == {"target-living-room": {"temperature": 18.0}}
+    assert guarded["effective_target_details"] == {"target-living-room": {"mode": "stale_safety"}}
+
+
+async def test_stale_safety_uses_configured_fallback_without_hvac_command(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update(
+        {
+            "control_enabled": True,
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": 26.0,
+            "fallback_heating_c": 17.5,
+            "fallback_cooling_c": 26.0,
+        }
+    )
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.HOLD_LAST_GOOD,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+        revision=1,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            19.0,
+            "°C",
+            now - timedelta(hours=1, minutes=1),
+            now - timedelta(hours=1, minutes=1),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        ),
+        recovering=True,
+    )
+    hass.states.async_set(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+            "temperature": 22.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class Broker:
+        def __init__(self) -> None:
+            self.intents: list[Any] = []
+
+        async def async_submit(self, intent: Any, *, now: datetime) -> CommandOutcome:
+            self.intents.append(intent)
+            return CommandOutcome(
+                "safety-command",
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "dispatched",
+            )
+
+    broker = Broker()
+    runtime.broker = cast(Any, broker)
+
+    await runtime._async_apply_stale_safety()
+
+    assert len(broker.intents) == 1
+    intent = broker.intents[0]
+    assert intent.temperature_ha == 17.5
+    assert intent.safety_deescalation is True
+    assert intent.explicit_transition is True
+    assert runtime.values["effective_targets"] == {"target-1": {"temperature": 17.5}}
+    assert runtime.values["effective_target_details"]["target-1"] == {
+        "mode": "stale_safety",
+        "reason": "primary_temperature_stale",
+        "fallback": True,
+        "stale": True,
+        "safety_deescalation": True,
+    }
+    assert runtime.values["control_status"] == "stale_safety"
+    assert runtime.values["control_eligible"] is False
+
+    await runtime._async_apply_stale_safety()
+    assert len(broker.intents) == 1
+
+
+async def test_stale_safety_runs_through_real_broker_to_exact_service_payload(
+    hass: HomeAssistant,
+) -> None:
+    calls: list[ServiceCall] = []
+
+    async def capture(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("climate", "set_temperature", capture)
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": 26.0,
+            "fallback_heating_c": 18.0,
+            "fallback_cooling_c": 26.0,
+        }
+    )
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.INVALID,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+        revision=1,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    runtime_module.get_lease_registry(hass).acquire("registry-1", runtime.entry.entry_id)
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            19.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    hass.states.async_set(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+            "temperature": 22.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class Persistence:
+        async def async_persist_pending(self, _command: Any) -> bool:
+            return True
+
+        async def async_mark_dispatched(self, _command: Any) -> bool:
+            return True
+
+        async def async_resolve(self, _command: Any, _reason: str) -> bool:
+            return True
+
+    runtime.broker = CommandBroker(
+        service=HomeAssistantClimateService(hass),
+        persistence=Persistence(),
+        preflight=runtime._broker_preflight,
+        command_id_factory=lambda: "stale-safety-command",
+        context_factory=runtime._context_token,
+    )
+
+    await runtime._async_apply_stale_safety()
+
+    assert [dict(call.data) for call in calls] == [
+        {"entity_id": "climate.target", "temperature": 18.0}
+    ]
+    assert all("hvac_mode" not in call.data for call in calls)
+    assert runtime.values["control_status"] == "stale_safety"
+    for cancel in runtime.timers.values():
+        cancel()
+
+
+async def test_stale_safety_reports_unready_and_unneeded_targets(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.data["targets"] = [
+        {
+            "target_uuid": "unready",
+            "entity_id": "climate.unready",
+            "registry_identity": "registry-unready",
+        },
+        {
+            "target_uuid": "settled",
+            "entity_id": "climate.settled",
+            "registry_identity": "registry-settled",
+        },
+    ]
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            19.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    hass.states.async_set("climate.unready", "unavailable")
+    hass.states.async_set(
+        "climate.settled",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+            "temperature": 18.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class UnusedBroker:
+        async def async_submit(self, _intent: Any, *, now: datetime) -> CommandOutcome:
+            raise AssertionError("no safety command expected")
+
+    runtime.broker = cast(Any, UnusedBroker())
+    await runtime._async_apply_stale_safety()
+
+    assert runtime.values["command_outcomes"] == {
+        "unready": "stale_safety_target_not_ready",
+        "settled": "stale_safety_not_required",
+    }
+    assert runtime.values["stale_safety_active"] is False
+
+
+async def test_stale_safety_requires_control_broker_and_old_accepted_value(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    await runtime._async_apply_stale_safety()
+
+    runtime.control_enabled = True
+    runtime.broker = cast(Any, SimpleNamespace())
+    await runtime._async_apply_stale_safety()
+
+    assert runtime.values == {}
+
+
+def test_stale_safety_can_recover_timestamped_sensor_evidence_after_reload() -> None:
+    runtime = _runtime()
+    observed_at = datetime(2026, 9, 13, 8, 0, tzinfo=UTC)
+    state = State(
+        "sensor.room",
+        "19.25",
+        {"unit_of_measurement": "°C"},
+        last_changed=observed_at,
+        last_reported=observed_at,
+        last_updated=observed_at,
+    )
+    runtime.entry.data["primary_temperature"] = "sensor.room"
+    runtime.hass = cast(
+        Any,
+        SimpleNamespace(states=SimpleNamespace(get=lambda _entity_id: state)),
+    )
+
+    assert runtime._primary_safety_reference() == (19.25, observed_at)
+
+
+def test_stale_safety_never_increases_heating_demand(hass: HomeAssistant) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": 26.0,
+            "fallback_heating_c": 18.0,
+        }
+    )
+    capability = ClimateCapabilitySnapshot(
+        "heat",
+        ("off", "heat"),
+        1,
+        5.0,
+        30.0,
+        0.5,
+        TemperatureUnit.CELSIUS,
+        18.0,
+    )
+    mapping = runtime_module.resolve_capability(capability)
+    assert not isinstance(mapping, runtime_module.ClimateFailure)
+
+    assert runtime._stale_safety_target("target-1", capability, mapping, 19.0) is None
+
+
+def test_stale_safety_normalizes_cooling_and_range_away_from_demand(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": 28.0,
+            "fallback_heating_c": 18.0,
+            "fallback_cooling_c": 27.0,
+            "minimum_range_gap": 1.0,
+        }
+    )
+    cooling = ClimateCapabilitySnapshot(
+        "cool",
+        ("off", "cool"),
+        1,
+        5.0,
+        30.0,
+        0.5,
+        TemperatureUnit.CELSIUS,
+        21.0,
+    )
+    cooling_mapping = runtime_module.resolve_capability(cooling)
+    assert not isinstance(cooling_mapping, runtime_module.ClimateFailure)
+    cooling_result = runtime._stale_safety_target("target-1", cooling, cooling_mapping, 24.0)
+    assert isinstance(cooling_result, NormalizedScalarTarget)
+    assert cooling_result.normalized_actuator_c == 27.0
+
+    ranged = ClimateCapabilitySnapshot(
+        "heat_cool",
+        ("off", "heat_cool"),
+        2,
+        5.0,
+        30.0,
+        0.5,
+        TemperatureUnit.CELSIUS,
+        None,
+        21.0,
+        24.0,
+    )
+    ranged_mapping = runtime_module.resolve_capability(ranged)
+    assert not isinstance(ranged_mapping, runtime_module.ClimateFailure)
+    ranged_result = runtime._stale_safety_target("target-1", ranged, ranged_mapping, 19.0)
+    assert isinstance(ranged_result, NormalizedRangeTarget)
+    assert ranged_result.heating.normalized_actuator_c == 18.0
+    assert ranged_result.cooling.normalized_actuator_c == 27.0
+
+    runtime._publish_stale_safety_target("target-1", ranged_result)
+    assert runtime.values["effective_targets"] == {
+        "target-1": {"target_low": 18.0, "target_high": 27.0}
+    }
+    assert (
+        runtime._stale_safety_target(
+            "target-1", replace(ranged, target_temp_low_ha=None), ranged_mapping, 19.0
+        )
+        is None
+    )
+    assert (
+        runtime._stale_safety_target(
+            "target-1", replace(cooling, scalar_target_ha=None), cooling_mapping, 24.0
+        )
+        is None
+    )
+
+
+def test_stale_safety_timer_arms_cancels_and_clears_after_valid_recovery(
+    hass: HomeAssistant,
+) -> None:
+    scenario = load_scenarios()[0]
+    snapshot = _captured(scenario)
+    valid = calculate_runtime_snapshot(snapshot)
+    stale = calculate_runtime_snapshot(
+        replace(
+            snapshot,
+            now=snapshot.now + timedelta(hours=1),
+            source_states=valid.source_states,
+        )
+    )
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+
+    runtime._schedule_stale_safety(stale)
+    assert "stale_safety" in runtime.timers
+
+    runtime.stale_safety_applied.add("registry-1")
+    runtime._schedule_stale_safety(valid)
+    assert "stale_safety" not in runtime.timers
+    assert runtime.stale_safety_applied == set()
+
+    runtime._schedule_stale_safety(replace(stale, source_states=()))
+    assert "stale_safety" not in runtime.timers
+
+    runtime._schedule_stale_safety(stale)
+    assert "stale_safety" in runtime.timers
+    runtime.stale_safety_applied.add("registry-1")
+    runtime.control_enabled = False
+    runtime._schedule_stale_safety(stale)
+    assert "stale_safety" not in runtime.timers
+    assert runtime.stale_safety_applied == set()
 
 
 def test_control_enable_uses_domain_lease_and_rolls_back_conflict() -> None:

@@ -123,10 +123,39 @@ or surface temperature, and measured air speed. The safe default is 30 minutes.
 
 A longer window is appropriate for a trustworthy battery sensor that reports only slowly or when
 its value changes. It is an observation-hold assumption, not proof that a new measurement occurred.
-Once the configured window expires, the source becomes stale and dependent ATHB values become
-unavailable; ATHB never substitutes a plausible temperature or humidity. The outdoor-history
+Once the configured window expires, the source becomes stale and ATHB stops normal calculation and
+normal writes. The last valid calculated values remain visible rather than turning unavailable,
+but are explicitly marked `data_quality: stale` with `last_valid_at` and `data_age_minutes`; the
+input-status entity retains the exact stale reason. ATHB never substitutes a plausible temperature
+or humidity. After a Home Assistant restart, restorable numerical entities may display their last
+recorded value as `restored_stale` until a valid calculation is available. The outdoor-history
 collector retains its separate two-hour maximum hold and builds adaptation only from completed
 local calendar days.
+
+When another input changes, ATHB may re-evaluate using the same already accepted primary report
+while it remains inside its freshness window. An identical value and timestamp are reuse of one
+observation, not a fabricated new report, and never count as a second recovery sample. An older
+timestamp or a different value carrying the same timestamp remains invalid.
+
+### Stale-measurement safety
+
+One hour after the newest trustworthy primary room-temperature report, ATHB performs a one-shot
+safety check. If that last temperature is below the currently observed heating setpoint, it lowers
+the setpoint to `fallback_heating_c`. For cooling, the inverse applies and ATHB raises the setpoint
+to `fallback_cooling_c`. An atomic range can only be widened toward both fallback limits. If this
+would not strictly reduce an existing demand, nothing is sent.
+
+The timestamped, numerically valid Home Assistant state may be reused as safety evidence after an
+integration reload, but remains stale and is never admitted to the ATHB comfort calculation. An
+unavailable, malformed or physically invalid state cannot supply this reload evidence.
+
+This is not an adaptive calculation from stale data. It is a bounded withdrawal of an already
+present demand so a silent room sensor cannot leave a stale high-heating or low-cooling request in
+place indefinitely. It still requires enabled control, owned target, supported and available
+climate state, the current ATHB lease, matching generations and verified command persistence. The
+exact normalized fallback target goes through `CommandBroker`; no HVAC-mode or other climate
+setting is included. Manual override and disabled or unavailable targets remain untouched. A fully
+valid recovered calculation clears the one-shot state and resumes ordinary event-driven control.
 
 ## Comfort and adaptation bounds
 
@@ -196,7 +225,9 @@ last owned command; increase it only for a device that reports a coarser or nois
 
 With insufficient outdoor history, `fixed` uses `fallback_heating_c` and
 `fallback_cooling_c` within the hard bounds. `no_write` sends nothing until history qualifies.
-Neither mode substitutes current outdoor temperature for the missing running mean.
+Neither mode substitutes current outdoor temperature for the missing running mean. Both fallback
+temperatures are always configured and validated because they are also the stale-measurement
+safety limits described above; `no_write` affects only insufficient-history behaviour.
 
 ## Critical local-air locations
 

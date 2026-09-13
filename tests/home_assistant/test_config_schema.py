@@ -167,18 +167,20 @@ def test_each_runtime_option_failure_is_typed(
     }
 
 
-def test_no_write_fallback_skips_irrelevant_fixed_target_validation() -> None:
-    assert (
-        validate_options(
-            {
-                "fallback_mode": "no_write",
-                "fallback_heating_c": -100,
-                "fallback_cooling_c": 100,
-                "critical_locations": [
-                    {"location_id": "a", "entity_id": "sensor.a", "mode": "monitoring"},
-                    {"location_id": "b", "entity_id": "sensor.b", "mode": "cooling"},
-                ],
-            }
-        )
-        == {}
+def test_no_write_history_mode_still_validates_stale_safety_targets() -> None:
+    errors = validate_options(
+        {
+            "fallback_mode": "no_write",
+            "fallback_heating_c": -100,
+            "fallback_cooling_c": 100,
+            "critical_locations": [
+                {"location_id": "a", "entity_id": "sensor.a", "mode": "monitoring"},
+                {"location_id": "b", "entity_id": "sensor.b", "mode": "cooling"},
+            ],
+        }
     )
+
+    assert errors == {
+        "fallback_heating_c": "invalid_option",
+        "fallback_cooling_c": "invalid_option",
+    }

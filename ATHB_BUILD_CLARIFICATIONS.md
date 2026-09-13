@@ -231,3 +231,42 @@ normalization, user/device bounds and the sole `CommandBroker` write path.
 Config-entry version 1 migrates to version 2. Legacy `eco` Profile maps to the Eco comfort level;
 legacy `boost` maps to Adaptive Boost; other legacy Profiles preserve the selected comfort level
 and Boost Off. The obsolete Profile entity is removed.
+
+---
+
+## 7. Stale measurements remain observable and can only trigger de-escalation
+
+This section narrows the architecture's blanket wording that stale primary input always permits
+zero writes. It does not permit adaptive calculation from stale input.
+
+When a previously valid mandatory measurement becomes stale, ATHB retains the last valid
+calculated values for display only. Every retained value is explicitly labelled stale, exposes the
+last-valid timestamp and age, and the input-status entity reports the actual failure. Retention is
+not a fabricated observation, a fresh calculation, or evidence that the physical state is
+unchanged. Normal adaptive calculation and normal climate writes remain inhibited.
+
+Recalculation caused by another source may reuse an already accepted, still-fresh observation with
+the same value and timestamp. This does not refresh its age or advance recovery counters. Older
+timestamps and conflicting values at the same timestamp remain invalid.
+
+If the primary room-temperature report has been stale or otherwise invalid for at least one hour
+and the newest trustworthy timestamped temperature evidence still indicates demand against the
+currently observed climate target, ATHB may issue one safety de-escalation per target. During a
+reload, a still-present numerically valid Home Assistant sensor state and its original report
+timestamp may supply this evidence; it is never promoted to a fresh adaptive input.
+
+- heating-only: lower the target to the configured fallback heating temperature;
+- cooling-only: raise the target to the configured fallback cooling temperature;
+- atomic range: widen the active demand side(s) toward the two configured fallback temperatures.
+
+The safety action is permitted only when it strictly reduces existing demand. It may never create
+or increase heating or cooling demand. It remains subject to current ownership, target support and
+availability, lease identity, entry/input/capability/ownership generations, persistence-before-
+dispatch, command acknowledgement, device/user bounds and grid normalization. It goes through the
+sole `CommandBroker` and contains temperature fields only; ATHB still never changes HVAC mode.
+Manual override, disabled control, unavailable targets and lost leases remain fail-closed.
+
+The action is one-shot for the stale episode. A fully valid recovered calculation clears the
+safety state and resumes the ordinary event-driven path. The configured fallback temperatures are
+therefore always retained and validated, even when insufficient outdoor history is configured as
+`no_write`; that choice controls history fallback only.

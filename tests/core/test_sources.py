@@ -96,7 +96,35 @@ def test_source_limits_freshness_availability_and_timestamp_order_are_explicit()
     assert missing.observation.reasons == ("missing_freshness",)
     first = _update()
     duplicate = _update(first.state, received_at=NOW + timedelta(seconds=1))
-    assert duplicate.observation.reasons == ("non_increasing_timestamp",)
+    assert duplicate.observation is first.observation
+    assert duplicate.state is first.state
+    older = _update(
+        first.state,
+        observed_at=NOW - timedelta(seconds=1),
+        received_at=NOW + timedelta(seconds=1),
+    )
+    assert older.observation.reasons == ("non_increasing_timestamp",)
+    conflict = _update(first.state, value=21.0, received_at=NOW + timedelta(seconds=1))
+    assert conflict.observation.reasons == ("timestamp_value_conflict",)
+
+
+def test_reusing_same_observation_does_not_advance_recovery_reports() -> None:
+    invalid = _update(available=False)
+    first_recovery = _update(
+        invalid.state,
+        observed_at=NOW + timedelta(seconds=1),
+        received_at=NOW + timedelta(seconds=1),
+    )
+
+    replay = _update(
+        first_recovery.state,
+        observed_at=NOW + timedelta(seconds=1),
+        received_at=NOW + timedelta(seconds=10),
+    )
+
+    assert replay.observation is first_recovery.observation
+    assert replay.state.recovering is True
+    assert replay.state.recovery_reports == first_recovery.state.recovery_reports
 
 
 def test_configured_freshness_can_extend_but_not_disable_stale_screening() -> None:

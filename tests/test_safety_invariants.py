@@ -14,7 +14,7 @@ def test_all_26_safety_invariants_have_named_test_bindings() -> None:
     payload = json.loads(MAPPING.read_text(encoding="utf-8"))
     invariants = payload["invariants"]
     assert payload["schema_version"] == 1
-    assert [item["id"] for item in invariants] == [f"SI-{index:02d}" for index in range(1, 27)]
+    assert [item["id"] for item in invariants] == [f"SI-{index:02d}" for index in range(1, 28)]
     for invariant in invariants:
         assert invariant["requirement"]
         assert len(invariant["tests"]) >= 2
