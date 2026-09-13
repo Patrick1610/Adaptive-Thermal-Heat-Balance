@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -12,7 +13,8 @@ from .runtime import AthbConfigEntry, ZoneRuntime
 
 
 class ControlEligibleBinarySensor(AthbEntity, BinarySensorEntity):
-    _attr_name = "Control eligible"
+    _attr_translation_key = "control_eligible"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "control_eligible")
@@ -23,7 +25,7 @@ class ControlEligibleBinarySensor(AthbEntity, BinarySensorEntity):
 
 
 class SurfaceSaturationBinarySensor(AthbEntity, BinarySensorEntity):
-    _attr_name = "Predicted surface saturation"
+    _attr_translation_key = "surface_saturation"
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "surface_saturation")

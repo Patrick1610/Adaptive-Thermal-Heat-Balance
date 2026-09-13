@@ -19,14 +19,21 @@ reached, then holds that target. It never changes HVAC mode.
 The normal setup explains each input. Its **Everyday control settings** page always shows command
 minimum/maximum, manual-override duration and Boost shift/duration. Numerical comfort assumptions,
 fallback behaviour and specialist source settings remain behind **Configure advanced settings**.
-A final review page summarizes the zone before creation. Run **Reconfigure** from the integration
-entry to repeat the measurement and target selection later while retaining the same zone identity
-and device.
+A final review page summarizes the zone before creation. The device's **Configure** action opens a
+short settings menu for room/measurement sources, climate targets, or comfort/control settings.
+It covers the same choices without forcing every technical page into one long form. Run
+**Reconfigure** from the integration entry when a complete sequential setup walkthrough is
+preferred; both routes retain the same zone identity and device.
 
 Setup and Reconfigure expose the same complete set of sources, targets, model choices and expert
 parameters. Conditional pages show only values required by the selected humidity, radiant,
 clothing, air-speed and fallback modes. See the full [technical configuration
 reference](configuration-reference.md) for formulas, supported ranges and policy effects.
+
+The device page groups occupant-facing outputs under semantic names such as **Comfort**, **Target**,
+**Surface**, and **Weather**. Raw inverse roots, input readiness, control state, and eligibility are
+classified as Home Assistant diagnostic entities. Existing unique IDs remain stable, so this
+presentation change does not silently replace entities used by dashboards or automations.
 
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
 normalization. Heating rounds inward upward; cooling rounds inward downward. Ranged targets remain

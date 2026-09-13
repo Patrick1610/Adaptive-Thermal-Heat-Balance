@@ -11,7 +11,7 @@ from .runtime import AthbConfigEntry, ZoneRuntime
 
 
 class ResumeButton(AthbEntity, ButtonEntity):
-    _attr_name = "Resume control"
+    _attr_translation_key = "resume_control"
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "resume_control")

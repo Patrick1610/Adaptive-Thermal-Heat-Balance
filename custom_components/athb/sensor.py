@@ -7,7 +7,7 @@ from typing import Any
 
 from homeassistant.components.climate.const import ClimateEntityFeature
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -19,25 +19,36 @@ from .runtime import AthbConfigEntry, ZoneRuntime
 @dataclass(frozen=True, slots=True)
 class Description:
     key: str
-    name: str
     temperature: bool = False
     humidity: bool = False
     enabled_default: bool = True
+    entity_category: EntityCategory | None = None
 
 
 DESCRIPTIONS = (
-    Description("thermal_sensation", "Thermal sensation"),
-    Description("heating_control_target", "Heating control target", True),
-    Description("thermal_neutral", "Thermal neutral", True),
-    Description("cooling_control_target", "Cooling control target", True),
-    Description("comfort_status", "Comfort status"),
-    Description("input_status", "Input status"),
-    Description("control_status", "Control status"),
-    Description("outdoor_running_mean", "Outdoor running mean", True),
-    Description("surface_temperature", "Surface temperature", True),
+    Description("thermal_sensation"),
+    Description(
+        "heating_control_target",
+        temperature=True,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    Description(
+        "thermal_neutral",
+        temperature=True,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    Description(
+        "cooling_control_target",
+        temperature=True,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    Description("comfort_status"),
+    Description("input_status", entity_category=EntityCategory.DIAGNOSTIC),
+    Description("control_status", entity_category=EntityCategory.DIAGNOSTIC),
+    Description("outdoor_running_mean", temperature=True),
+    Description("surface_temperature", temperature=True),
     Description(
         "surface_relative_humidity",
-        "Surface relative humidity",
         humidity=True,
     ),
 )
@@ -49,8 +60,9 @@ class AthbSensor(AthbEntity, SensorEntity):
     def __init__(self, runtime: ZoneRuntime, description: Description) -> None:
         super().__init__(runtime, description.key)
         self.description = description
-        self._attr_name = description.name
+        self._attr_translation_key = description.key
         self._attr_entity_registry_enabled_default = description.enabled_default
+        self._attr_entity_category = description.entity_category
         if description.temperature:
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -86,11 +98,24 @@ class TargetSensor(AthbEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
-    def __init__(self, runtime: ZoneRuntime, target: dict[str, str], endpoint: str) -> None:
+    def __init__(
+        self,
+        runtime: ZoneRuntime,
+        target: dict[str, str],
+        endpoint: str,
+        target_name: str | None = None,
+    ) -> None:
         super().__init__(runtime, f"{target['target_uuid']}_{endpoint}")
         self.target = target
         self.endpoint = endpoint
-        self._attr_name = f"{target['entity_id']} effective {endpoint.replace('_', ' ')}"
+        self._attr_translation_key = {
+            "temperature": "effective_target",
+            "target_low": "effective_heating_target",
+            "target_high": "effective_cooling_target",
+        }[endpoint]
+        self._attr_translation_placeholders = {
+            "target": target_name or _fallback_target_name(target["entity_id"])
+        }
 
     @property
     def native_value(self) -> Any:
@@ -135,11 +160,37 @@ async def async_setup_entry(
     desired_unique_ids = {entity.unique_id for entity in entities}
     for target in entry.data.get("targets", ()):
         for endpoint in _target_endpoints(hass, target["entity_id"]):
-            entity = TargetSensor(runtime, target, endpoint)
+            entity = TargetSensor(
+                runtime,
+                target,
+                endpoint,
+                _target_display_name(hass, target["entity_id"]),
+            )
             entities.append(entity)
             desired_unique_ids.add(entity.unique_id)
     _remove_stale_sensor_entities(hass, entry, desired_unique_ids)
     async_add_entities(entities)
+
+
+def _target_display_name(hass: HomeAssistant, entity_id: str) -> str:
+    """Return a human name without exposing a raw entity id in the UI."""
+
+    state = hass.states.get(entity_id)
+    if state is not None:
+        friendly_name = state.attributes.get("friendly_name")
+        if isinstance(friendly_name, str) and friendly_name.strip():
+            return friendly_name.strip()
+    registry_entry = er.async_get(hass).async_get(entity_id)
+    if registry_entry is not None:
+        for candidate in (registry_entry.name, registry_entry.original_name):
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return _fallback_target_name(entity_id)
+
+
+def _fallback_target_name(entity_id: str) -> str:
+    object_id = entity_id.partition(".")[2] or entity_id
+    return object_id.replace("_", " ").strip().title()
 
 
 def _target_endpoints(hass: HomeAssistant, entity_id: str) -> tuple[str, ...]:

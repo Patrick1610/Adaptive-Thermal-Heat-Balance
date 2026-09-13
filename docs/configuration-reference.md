@@ -65,14 +65,15 @@ Rapid falls back explicitly to Adaptive for an atomic range or a zone with separ
 cooling targets. Boost expires to Off. Comfort-level, Setback and Boost changes are lightweight
 and do not reload the config entry.
 
-The **Heating control target**, **Thermal neutral**, and **Cooling control target** sensors expose
-the inverse-solved ATHB roots before occupancy or Boost policy. They therefore change with comfort
-level, but not with Setback or Boost. A climate-specific **effective temperature** (or effective low/high)
-is the final request after occupancy/Boost, critical-location policy, calibration, bounds, and device-grid
-normalization. It is a preview even while control is disabled. The actual climate target changes
-only when adaptive control is enabled and ownership, capability, override, and broker gates allow
-a write. Its state attributes distinguish `adaptive`, `fallback`, and `unavailable` mode and give
-the fallback or suppression reason. Consequently a fixed effective target with Input status
+The diagnostic **Model — heating target**, **Model — neutral reference**, and **Model — cooling
+target** sensors expose the inverse-solved ATHB roots before occupancy or Boost policy. They
+therefore change with comfort level, but not with Setback or Boost. A climate-specific **Target —
+<climate name>** sensor (or its heating/cooling variants) is the final request after
+occupancy/Boost, critical-location policy, calibration, bounds, and device-grid normalization. It
+is a preview even while control is disabled. The actual climate target changes only when adaptive
+control is enabled and ownership, capability, override, and broker gates allow a write. Its state
+attributes distinguish `adaptive`, `fallback`, and `unavailable` mode and give the fallback or
+suppression reason. Consequently a fixed effective target with **Status — inputs** equal to
 `running_mean_unavailable` is explicit fallback behaviour, not a responsive ATHB result.
 
 ## Radiant and surface models

@@ -11,7 +11,7 @@ from .runtime import AthbConfigEntry, ZoneRuntime
 
 
 class AdaptiveControlSwitch(AthbEntity, SwitchEntity):
-    _attr_name = "Adaptive control"
+    _attr_translation_key = "adaptive_control"
 
     def __init__(self, runtime: ZoneRuntime) -> None:
         super().__init__(runtime, "adaptive_control")

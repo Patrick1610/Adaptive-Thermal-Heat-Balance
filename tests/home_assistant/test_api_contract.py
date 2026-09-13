@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.components.climate import ClimateEntityFeature
+from homeassistant.const import EntityCategory
 from homeassistant.core import Context
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
@@ -27,7 +28,12 @@ from custom_components.athb.button import ResumeButton
 from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE
 from custom_components.athb.runtime import ZoneRuntime
 from custom_components.athb.select import BoostModeSelect, EcoIntensitySelect, StrategySelect
-from custom_components.athb.sensor import DESCRIPTIONS, AthbSensor, TargetSensor
+from custom_components.athb.sensor import (
+    DESCRIPTIONS,
+    AthbSensor,
+    TargetSensor,
+    _target_display_name,
+)
 from custom_components.athb.sensor import async_setup_entry as async_setup_sensor_entry
 from custom_components.athb.switch import AdaptiveControlSwitch
 
@@ -133,6 +139,59 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
     assert all(entity.device_info["identifiers"] == {("athb", "zone-1")} for entity in entities)
     assert all(entity.device_info["name"] == "Living room" for entity in entities)
     assert all(entity.device_info["manufacturer"] == "ATHB" for entity in entities)
+
+
+def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_churn() -> None:
+    runtime = _runtime()
+    descriptions = {item.key: item for item in DESCRIPTIONS}
+
+    assert AthbSensor(runtime, descriptions["thermal_sensation"]).entity_category is None
+    assert AthbSensor(runtime, descriptions["comfort_status"]).entity_category is None
+    assert AthbSensor(runtime, descriptions["outdoor_running_mean"]).entity_category is None
+    assert AthbSensor(runtime, descriptions["surface_temperature"]).entity_category is None
+    assert (
+        AthbSensor(runtime, descriptions["heating_control_target"]).entity_category
+        is EntityCategory.DIAGNOSTIC
+    )
+    assert (
+        AthbSensor(runtime, descriptions["thermal_neutral"]).entity_category
+        is EntityCategory.DIAGNOSTIC
+    )
+    assert (
+        AthbSensor(runtime, descriptions["cooling_control_target"]).entity_category
+        is EntityCategory.DIAGNOSTIC
+    )
+    assert (
+        AthbSensor(runtime, descriptions["input_status"]).entity_category
+        is EntityCategory.DIAGNOSTIC
+    )
+    assert ControlEligibleBinarySensor(runtime).entity_category is EntityCategory.DIAGNOSTIC
+
+    target = {
+        "target_uuid": "target-1",
+        "entity_id": "climate.roommind_living_room_override",
+        "registry_identity": "registry-1",
+    }
+    effective = TargetSensor(runtime, target, "temperature", "Living Room")
+    assert effective.unique_id == "zone-1_target-1_temperature"
+    assert effective.translation_key == "effective_target"
+    assert effective.translation_placeholders == {"target": "Living Room"}
+
+
+def test_target_display_names_prefer_state_then_registry_and_never_show_raw_ids(hass: Any) -> None:
+    hass.states.async_set(
+        "climate.living_room", "heat", {"friendly_name": "Living Room Thermostat"}
+    )
+    assert _target_display_name(hass, "climate.living_room") == "Living Room Thermostat"
+
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(
+        "climate", "test", "hallway", suggested_object_id="hallway", original_name="Hallway"
+    )
+    assert _target_display_name(hass, entry.entity_id) == "Hallway"
+    assert _target_display_name(hass, "climate.roommind_bedroom_override") == (
+        "Roommind Bedroom Override"
+    )
 
 
 async def test_full_entry_setup_registers_eco_intensity_select(

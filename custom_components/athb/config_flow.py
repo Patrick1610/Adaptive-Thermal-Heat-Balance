@@ -937,10 +937,11 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
 
 
 class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload):
-    """Edit the same option set exposed during setup and reconfigure."""
+    """Present all zone settings behind the standard Configure action."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._entry = config_entry
+        self._pending_data = {**config_entry.data, CONF_NAME: config_entry.title}
         self._pending_options = {}
         self._wizard_targets = list(config_entry.data.get(CONF_TARGETS, ()))
         self._advanced = False
@@ -957,11 +958,182 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         )
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return await self._async_preferences("init", user_input)
+        """Show a short settings menu instead of one long technical form."""
+
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=("sources", "target_entities", "comfort"),
+        )
+
+    async def async_step_sources(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the zone name and environmental source identities."""
+
+        if user_input is not None:
+            self._pending_data.update(user_input)
+            stale_key = (
+                CONF_RH_DECLARED
+                if self._pending_data[CONF_RH_MODE] == "measured"
+                else CONF_RH_ENTITY
+            )
+            self._pending_data.pop(stale_key, None)
+            return await self.async_step_source_humidity()
+        defaults = self._pending_data
+        return self.async_show_form(
+            step_id="sources",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=defaults[CONF_NAME]): str,
+                    _required_entity(
+                        CONF_PRIMARY_TEMPERATURE,
+                        defaults.get(CONF_PRIMARY_TEMPERATURE),
+                    ): ENTITY,
+                    vol.Required(
+                        CONF_RH_MODE,
+                        default=defaults.get(CONF_RH_MODE, "measured"),
+                    ): _select(("measured", "declared"), "rh_mode"),
+                    _required_entity(
+                        CONF_OUTDOOR_SOURCE,
+                        defaults.get(CONF_OUTDOOR_SOURCE),
+                    ): ENTITY,
+                }
+            ),
+        )
+
+    async def async_step_source_humidity(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Collect only the humidity input selected on the source page."""
+
+        mode = str(self._pending_data[CONF_RH_MODE])
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            environment = {**self._pending_data, **user_input}
+            errors = validate_environment(environment)
+            if not errors:
+                self._pending_data.update(user_input)
+                stale_key = CONF_RH_DECLARED if mode == "measured" else CONF_RH_ENTITY
+                self._pending_data.pop(stale_key, None)
+                return self._save_data_settings()
+        if mode == "measured":
+            schema = vol.Schema(
+                {
+                    _required_entity(
+                        CONF_RH_ENTITY,
+                        self._pending_data.get(CONF_RH_ENTITY),
+                    ): ENTITY
+                }
+            )
+        else:
+            schema = vol.Schema(
+                {
+                    vol.Required(
+                        CONF_RH_DECLARED,
+                        default=self._pending_data.get(CONF_RH_DECLARED, 50.0),
+                    ): _number(0.0, 100.0, 1.0, "%")
+                }
+            )
+        return self.async_show_form(
+            step_id="source_humidity",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_target_entities(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit climate targets while preserving their stable identities."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors, targets = self._resolve_targets(user_input.get(CONF_TARGETS))
+            if not errors:
+                self._pending_data[CONF_TARGETS] = targets
+                self._wizard_targets = targets
+                valid_calibrations = {f"calibration_{target['target_uuid']}" for target in targets}
+                for key in tuple(self._pending_options):
+                    if key.startswith("calibration_") and key not in valid_calibrations:
+                        self._pending_options.pop(key)
+                return self._save_data_settings(options=self._pending_options)
+        defaults = [
+            target["entity_id"]
+            for target in self._pending_data.get(CONF_TARGETS, ())
+            if isinstance(target, dict) and isinstance(target.get("entity_id"), str)
+        ]
+        marker = vol.Required(CONF_TARGETS, default=defaults)
+        return self.async_show_form(
+            step_id="target_entities",
+            data_schema=vol.Schema({marker: CLIMATES}),
+            errors=errors,
+        )
+
+    def _resolve_targets(self, raw_targets: object) -> tuple[dict[str, str], list[dict[str, str]]]:
+        try:
+            entity_ids = validate_targets(raw_targets)
+        except ValueError:
+            return {CONF_TARGETS: "invalid_targets"}, []
+        registry = er.async_get(self.hass)
+        prior = {
+            target["registry_identity"]: target["target_uuid"]
+            for target in self._pending_data.get(CONF_TARGETS, ())
+            if isinstance(target, dict)
+        }
+        targets: list[dict[str, str]] = []
+        for entity_id in entity_ids:
+            registry_entry = registry.async_get(entity_id)
+            if registry_entry is None:
+                return {CONF_TARGETS: "target_not_registered"}, []
+            if self._target_is_claimed(registry_entry.id):
+                return {CONF_TARGETS: "target_already_controlled"}, []
+            targets.append(
+                {
+                    "target_uuid": prior.get(registry_entry.id, str(uuid4())),
+                    "entity_id": entity_id,
+                    "registry_identity": registry_entry.id,
+                }
+            )
+        return {}, targets
+
+    def _target_is_claimed(self, registry_identity: str) -> bool:
+        for existing in self.hass.config_entries.async_entries(DOMAIN):
+            if existing.entry_id == self._entry.entry_id or not existing.options.get(
+                CONF_CONTROL_ENABLED, False
+            ):
+                continue
+            if any(
+                target.get("registry_identity") == registry_identity
+                for target in existing.data.get(CONF_TARGETS, ())
+            ):
+                return True
+        return False
+
+    async def async_step_comfort(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit comfort, occupancy, limits, and optionally expert settings."""
+
+        return await self._async_preferences("comfort", user_input)
+
+    def _save_data_settings(self, *, options: Mapping[str, Any] | None = None) -> ConfigFlowResult:
+        """Persist data edited from Options and reload once after completion."""
+
+        updated = dict(self._pending_data)
+        title = str(updated.pop(CONF_NAME))
+        changed = self.hass.config_entries.async_update_entry(
+            self._entry,
+            title=title,
+            data=updated,
+        )
+        if changed:
+            self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
+        return self.async_create_entry(
+            data=dict(self._entry.options if options is None else options)
+        )
 
     async def _async_complete_wizard(self) -> ConfigFlowResult:
         if validate_options(self._pending_options):
             return self.async_show_form(
-                step_id="init", data_schema=vol.Schema({}), errors={"base": "invalid_option"}
+                step_id="comfort", data_schema=vol.Schema({}), errors={"base": "invalid_option"}
             )
         return self.async_create_entry(data=self._pending_options)

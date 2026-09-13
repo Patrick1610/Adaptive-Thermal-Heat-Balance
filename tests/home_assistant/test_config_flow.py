@@ -24,6 +24,18 @@ def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
     return marker.description["suggested_value"]
 
 
+async def _open_options_section(
+    hass: HomeAssistant,
+    result: config_entries.ConfigFlowResult,
+    section: str,
+) -> config_entries.ConfigFlowResult:
+    assert result["type"] is FlowResultType.MENU
+    assert tuple(result["menu_options"]) == ("sources", "target_entities", "comfort")
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": section}
+    )
+
+
 async def test_version_one_profiles_migrate_to_the_new_single_control_model(
     hass: HomeAssistant,
 ) -> None:
@@ -227,6 +239,7 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -242,6 +255,7 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
     await hass.async_block_till_done()
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
@@ -267,6 +281,181 @@ async def test_options_use_uniform_default_and_progressively_disclose_selected_r
     assert result["data"]["mold_indicator_entity"] == "sensor.mold_indicator"
     await hass.async_block_till_done()
     await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_configure_menu_edits_name_and_all_environment_sources(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Old room",
+        data={
+            "zone_uuid": "zone-settings",
+            "primary_temperature": "sensor.old_temperature",
+            "outdoor_source": "sensor.old_outdoor",
+            "rh_mode": "measured",
+            "rh_entity": "sensor.old_humidity",
+            "targets": [],
+        },
+        options={"comfort_strategy": "balanced", "control_enabled": False},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "sources")
+    assert result["step_id"] == "sources"
+    assert _schema_keys(result) == {
+        "name",
+        "primary_temperature",
+        "rh_mode",
+        "outdoor_source",
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "name": "Bedroom",
+            "primary_temperature": "sensor.bedroom_temperature",
+            "rh_mode": "declared",
+            "outdoor_source": "sensor.garden_temperature",
+        },
+    )
+    assert result["step_id"] == "source_humidity"
+    assert _schema_keys(result) == {"rh_declared"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"rh_declared": 48.0}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.title == "Bedroom"
+    assert entry.data["primary_temperature"] == "sensor.bedroom_temperature"
+    assert entry.data["outdoor_source"] == "sensor.garden_temperature"
+    assert entry.data["rh_mode"] == "declared"
+    assert entry.data["rh_declared"] == 48.0
+    assert "rh_entity" not in entry.data
+    assert entry.options["comfort_strategy"] == "balanced"
+    await hass.async_block_till_done()
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_configure_menu_edits_targets_and_preserves_existing_target_identity(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    registry = er.async_get(hass)
+    first = registry.async_get_or_create(
+        "climate", "test", "first-target", suggested_object_id="first_target"
+    )
+    second = registry.async_get_or_create(
+        "climate", "test", "second-target", suggested_object_id="second_target"
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "zone_uuid": "zone-target-settings",
+            "targets": [
+                {
+                    "target_uuid": "stable-target-uuid",
+                    "entity_id": first.entity_id,
+                    "registry_identity": first.id,
+                }
+            ],
+        },
+        options={
+            "comfort_strategy": "balanced",
+            "control_enabled": False,
+            "calibration_stable-target-uuid": 0.5,
+            "calibration_obsolete-target-uuid": -0.5,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "target_entities")
+    assert result["step_id"] == "target_entities"
+    assert _schema_keys(result) == {"targets"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"targets": [first.entity_id, second.entity_id]}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data["targets"][0] == {
+        "target_uuid": "stable-target-uuid",
+        "entity_id": first.entity_id,
+        "registry_identity": first.id,
+    }
+    assert entry.data["targets"][1]["entity_id"] == second.entity_id
+    assert entry.data["targets"][1]["target_uuid"]
+    assert entry.options["calibration_stable-target-uuid"] == 0.5
+    assert "calibration_obsolete-target-uuid" not in entry.options
+    await hass.async_block_till_done()
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_configure_target_validation_rejects_empty_unregistered_and_claimed_targets(
+    hass: HomeAssistant,
+) -> None:
+    registry = er.async_get(hass)
+    claimed_target = registry.async_get_or_create(
+        "climate", "test", "claimed", suggested_object_id="claimed"
+    )
+    claimed_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "zone_uuid": "other-zone",
+            "targets": [
+                {
+                    "target_uuid": "claimed-uuid",
+                    "entity_id": claimed_target.entity_id,
+                    "registry_identity": claimed_target.id,
+                }
+            ],
+        },
+        options={"control_enabled": True},
+    )
+    claimed_entry.add_to_hass(hass)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "zone-validation", "targets": []},
+        options={"control_enabled": False},
+    )
+    entry.add_to_hass(hass)
+    flow = AthbOptionsFlow(entry)
+    flow.hass = hass
+
+    assert flow._resolve_targets(None) == ({"targets": "invalid_targets"}, [])
+    assert flow._resolve_targets(["climate.not_registered"]) == (
+        {"targets": "target_not_registered"},
+        [],
+    )
+    assert flow._resolve_targets([claimed_target.entity_id]) == (
+        {"targets": "target_already_controlled"},
+        [],
+    )
+
+
+async def test_configure_source_humidity_page_only_shows_the_selected_measured_input(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Room",
+        data={
+            "zone_uuid": "zone-measured",
+            "primary_temperature": "sensor.room",
+            "outdoor_source": "sensor.outdoor",
+            "rh_mode": "measured",
+            "targets": [],
+        },
+        options={},
+    )
+    flow = AthbOptionsFlow(entry)
+    flow.hass = hass
+
+    result = await flow.async_step_source_humidity()
+
+    assert result["step_id"] == "source_humidity"
+    assert _schema_keys(result) == {"rh_entity"}
 
 
 async def test_reconfigure_preserves_target_uuid_for_registry_identity(
@@ -383,6 +572,7 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
@@ -557,6 +747,7 @@ async def test_room_model_only_offers_standard_and_mold_indicator(
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
     schema = result["data_schema"].schema
     model_marker = next(marker for marker in schema if str(marker.schema) == "radiant_model")
     model_selector = schema[model_marker]
@@ -588,6 +779,7 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
@@ -650,6 +842,7 @@ async def test_max_setback_uses_command_limits_without_duplicate_fields(
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
@@ -699,6 +892,7 @@ async def test_custom_setback_is_conditionally_collected_before_everyday_control
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
