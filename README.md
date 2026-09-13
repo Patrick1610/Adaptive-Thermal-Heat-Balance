@@ -30,8 +30,9 @@ environment is used only to generate and audit independent development goldens.
 - Missing mandatory measurements are never replaced with plausible values. Direct fixed RH and
   air-speed inputs remain explicitly `declared`.
 - A stale measurement stops normal adaptive writes while the last valid outputs remain visibly
-  marked stale. After one hour, a one-shot safeguard may only reduce existing demand to the
-  configured fallback temperature; it still uses the sole CommandBroker and never changes mode.
+  marked stale, including across reloads once a valid snapshot has been stored. After one hour, a
+  one-shot safeguard may only reduce existing demand to the configured fallback temperature; it
+  still uses the sole CommandBroker and never changes mode.
 
 ## Installation and configuration
 

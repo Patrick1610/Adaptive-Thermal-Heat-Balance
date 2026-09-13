@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -84,6 +85,54 @@ def test_control_state_round_trip_is_canonical_and_versioned() -> None:
     loaded = load_control_state(serialized)
     assert loaded == ControlLoadResult(state, None)
     assert serialize_control_state(loaded.state) == serialized
+
+
+def test_last_valid_display_output_round_trips_and_old_store_remains_compatible() -> None:
+    values_json = json.dumps(
+        {
+            "thermal_sensation": -0.2,
+            "effective_targets": {"target-1": {"temperature": 19.5}},
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    state = replace(
+        _state(),
+        last_valid_values_json=values_json,
+        last_valid_at="2026-09-11T12:00:00+00:00",
+    )
+    assert load_control_state(serialize_control_state(state)).state == state
+
+    old_payload = json.loads(serialize_control_state(_state()))
+    old_payload.pop("last_valid_values_json")
+    old_payload.pop("last_valid_at")
+    loaded_old = load_control_state(json.dumps(old_payload))
+    assert loaded_old.state is not None
+    assert loaded_old.state.last_valid_values_json is None
+    assert loaded_old.state.last_valid_at is None
+
+
+@pytest.mark.parametrize(
+    ("values_json", "observed_at"),
+    [
+        ('{"thermal_sensation":-0.2}', None),
+        (None, "2026-09-11T12:00:00+00:00"),
+        ('{"unknown_key":1}', "2026-09-11T12:00:00+00:00"),
+        ('{"thermal_sensation":NaN}', "2026-09-11T12:00:00+00:00"),
+        ('{"thermal_sensation":-0.2}', "2026-09-11T12:00:00"),
+    ],
+)
+def test_last_valid_display_output_is_strictly_validated(
+    values_json: str | None, observed_at: str | None
+) -> None:
+    with pytest.raises(ValueError, match="last valid output"):
+        serialize_control_state(
+            replace(
+                _state(),
+                last_valid_values_json=values_json,
+                last_valid_at=observed_at,
+            )
+        )
 
 
 @pytest.mark.parametrize(
@@ -180,7 +229,12 @@ def test_generation_and_payload_mismatch_fail_verification() -> None:
 
 
 def test_clean_restart_restores_intent_only_and_starts_new_run_unclean() -> None:
-    loaded = load_control_state(serialize_control_state(_state(clean=True)))
+    prior = replace(
+        _state(clean=True),
+        last_valid_values_json='{"thermal_sensation":-0.2}',
+        last_valid_at="2026-09-11T12:00:00+00:00",
+    )
+    loaded = load_control_state(serialize_control_state(prior))
     recovery = prepare_startup_recovery(
         loaded, run_id="run-new", configuration_fingerprint="config-a", strategy="balanced"
     )
@@ -189,6 +243,8 @@ def test_clean_restart_restores_intent_only_and_starts_new_run_unclean() -> None
     assert not recovery.state.clean_shutdown
     assert recovery.state.run_id == "run-new"
     assert recovery.state.actuators[0].ownership == "reconciling"
+    assert recovery.state.last_valid_values_json == '{"thermal_sensation":-0.2}'
+    assert recovery.state.last_valid_at == "2026-09-11T12:00:00+00:00"
 
 
 def test_unclean_or_unresolved_restart_requires_resume_and_never_replays_command() -> None:
@@ -218,7 +274,15 @@ def test_corrupt_store_is_preserved_and_requires_resume() -> None:
 
 
 def test_strategy_or_configuration_drift_cannot_restore_stale_state() -> None:
-    prior = load_control_state(serialize_control_state(_state(clean=True)))
+    prior = load_control_state(
+        serialize_control_state(
+            replace(
+                _state(clean=True),
+                last_valid_values_json='{"thermal_sensation":-0.2}',
+                last_valid_at="2026-09-11T12:00:00+00:00",
+            )
+        )
+    )
     for fingerprint, strategy in (("config-b", "balanced"), ("config-a", "comfort")):
         recovery = prepare_startup_recovery(
             prior,
@@ -228,6 +292,8 @@ def test_strategy_or_configuration_drift_cannot_restore_stale_state() -> None:
         )
         assert recovery.requires_resume
         assert recovery.reason == "configuration_changed"
+        assert recovery.state.last_valid_values_json is None
+        assert recovery.state.last_valid_at is None
 
 
 def test_clean_shutdown_rejects_pending_commands_and_naive_clock() -> None:
@@ -266,6 +332,10 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
         rapid_boost_reached=True,
         boost_expiry_utc="2026-09-11T13:00:00+00:00",
     )
+    assert await persistence.async_update_last_valid_output(
+        values_json='{"thermal_sensation":-0.2}',
+        observed_at="2026-09-11T12:30:00+00:00",
+    )
     assert await persistence.async_update_actuator(
         "registry-1",
         ownership="manual_override",
@@ -281,8 +351,17 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
     assert loaded.state.boost_mode == "rapid"
     assert loaded.state.rapid_boost_reached is True
     assert loaded.state.boost_expiry_utc == "2026-09-11T13:00:00+00:00"
+    assert loaded.state.last_valid_values_json == '{"thermal_sensation":-0.2}'
+    assert loaded.state.last_valid_at == "2026-09-11T12:30:00+00:00"
     assert loaded.state.actuators[0].ownership == "manual_override"
     assert loaded.state.actuators[0].external_revision == 2
+
+    assert await persistence.async_update_last_valid_output(
+        values_json='{"thermal_sensation":-0.4}',
+        observed_at="2026-09-11T12:29:00+00:00",
+    )
+    assert persistence.state is not None
+    assert persistence.state.last_valid_values_json == '{"thermal_sensation":-0.2}'
 
 
 async def test_unstarted_or_unknown_persistence_operations_fail_closed() -> None:
@@ -303,6 +382,10 @@ async def test_unstarted_or_unknown_persistence_operations_fail_closed() -> None
         boost_mode="off",
         rapid_boost_reached=False,
         boost_expiry_utc=None,
+    )
+    assert not await persistence.async_update_last_valid_output(
+        values_json='{"thermal_sensation":-0.2}',
+        observed_at="2026-09-11T12:30:00+00:00",
     )
     assert not await persistence.async_update_actuator(
         "registry-1",

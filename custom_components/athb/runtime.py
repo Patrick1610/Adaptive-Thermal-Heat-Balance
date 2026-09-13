@@ -43,7 +43,11 @@ from .adapters.outdoor_history import (
 )
 from .adapters.recorder import HomeAssistantRecorderHistoryReader
 from .adapters.sources import StateValue, configured_freshness, snapshot_state
-from .adapters.storage import HomeAssistantControlStorageBackend, ZoneCommandPersistence
+from .adapters.storage import (
+    LAST_VALID_OUTPUT_KEYS,
+    HomeAssistantControlStorageBackend,
+    ZoneCommandPersistence,
+)
 from .calculation import (
     CapturedCriticalLocation,
     CapturedTarget,
@@ -109,19 +113,7 @@ from .repairs import RepairManager, TransitionLogger
 
 _LOGGER = logging.getLogger(__name__)
 STALE_SAFETY_DELAY = timedelta(hours=1)
-_HELD_VALUE_KEYS = (
-    "thermal_sensation",
-    "heating_control_target",
-    "thermal_neutral",
-    "cooling_control_target",
-    "comfort_status",
-    "surface_temperature",
-    "surface_relative_humidity",
-    "surface_saturation",
-    "effective_targets",
-    "effective_target_details",
-    "target_scenarios",
-)
+_HELD_VALUE_KEYS = LAST_VALID_OUTPUT_KEYS
 
 
 @dataclass(slots=True)
@@ -168,6 +160,7 @@ class ZoneRuntime:
     failure_hold_elapsed: bool = False
     last_valid_values: dict[str, Any] = field(default_factory=dict)
     last_valid_at: datetime | None = None
+    last_valid_persistence_payload: str | None = None
     stale_safety_applied: set[str] = field(default_factory=set)
 
     async def async_start(self) -> None:
@@ -192,6 +185,15 @@ class ZoneRuntime:
                 {"control_status": "storage_fault", "suppression_reason": "storage_io_failed"}
             )
             self.repair_manager.update("corrupt_control_storage", True)
+        if self.persistence.state is not None:
+            stored_values = getattr(self.persistence.state, "last_valid_values_json", None)
+            stored_at = getattr(self.persistence.state, "last_valid_at", None)
+            if stored_values is not None and stored_at is not None:
+                restored = json.loads(stored_values)
+                if isinstance(restored, dict):
+                    self.last_valid_values = restored
+                    self.last_valid_at = datetime.fromisoformat(stored_at)
+                    self.last_valid_persistence_payload = stored_values
         if self.boost_mode != "off" and self.persistence.state is not None:
             stored_expiry = self.persistence.state.boost_expiry_utc
             expiry = datetime.fromisoformat(stored_expiry) if stored_expiry is not None else None
@@ -784,6 +786,7 @@ class ZoneRuntime:
                 if key in projected and projected[key] is not None and projected[key] != "unknown"
             }
             self.last_valid_at = accepted.observed_at
+            self._schedule_last_valid_persistence()
         elif result.hold_condition is not None and self.last_valid_values:
             for key, value in self.last_valid_values.items():
                 projected_value = projected.get(key)
@@ -836,6 +839,33 @@ class ZoneRuntime:
         )
         projected["stale_safety_active"] = bool(self.stale_safety_applied)
         return projected
+
+    def _schedule_last_valid_persistence(self) -> None:
+        """Persist changed last-valid display values without blocking publication."""
+
+        if self.persistence is None or self.last_valid_at is None:
+            return
+        payload = json.dumps(
+            self.last_valid_values,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        if payload == self.last_valid_persistence_payload:
+            return
+        self.last_valid_persistence_payload = payload
+        self._create_task(self._async_persist_last_valid_output(payload, self.last_valid_at))
+
+    async def _async_persist_last_valid_output(self, payload: str, observed_at: datetime) -> None:
+        persistence = self.persistence
+        if persistence is None:
+            return
+        saved = await persistence.async_update_last_valid_output(
+            values_json=payload,
+            observed_at=observed_at.isoformat(),
+        )
+        if not saved and self.last_valid_persistence_payload == payload:
+            self.last_valid_persistence_payload = None
 
     def _schedule_stale_safety(self, result: RuntimeCalculation) -> None:
         """Arm one bounded de-escalation after one hour of stale primary data."""

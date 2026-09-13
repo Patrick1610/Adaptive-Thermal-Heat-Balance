@@ -66,14 +66,16 @@ Changing a target externally does create an override for the configured duration
 When a previously valid source stops reporting, ATHB keeps the last valid outputs visible and
 marks them stale instead of showing a wall of unavailable entities. The input-status entity still
 shows the real stale reason. These retained values are display-only: ATHB stops normal calculation
-and normal target writes.
+and normal target writes. ATHB persists this bounded display snapshot, so an integration reload or
+Home Assistant restart can restore it when the zone configuration and comfort level are unchanged.
 
 After one hour without a new primary room-temperature report, ATHB checks whether the currently
 observed climate setpoint still implies heating or cooling demand against the last accepted room
 temperature. If so, it sends the configured fallback heating or cooling temperature once, solely
 to reduce that demand. The safeguard never increases demand, never changes HVAC mode, respects
-manual override and all normal target/ownership limits, and uses the sole CommandBroker. A valid
-sensor recovery returns the zone to normal event-driven control.
+manual override and all normal target/ownership limits, and uses the sole CommandBroker. After
+age-only staleness, the first genuinely newer valid sensor report returns the zone to normal
+event-driven control; invalid or unavailable-source recovery retains the stricter stability gate.
 
 ## Room model and advanced environmental inputs
 

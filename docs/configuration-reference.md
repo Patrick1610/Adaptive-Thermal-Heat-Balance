@@ -149,15 +149,21 @@ Once the configured window expires, the source becomes stale and ATHB stops norm
 normal writes. The last valid calculated values remain visible rather than turning unavailable,
 but are explicitly marked `data_quality: stale` with `last_valid_at` and `data_age_minutes`; the
 input-status entity retains the exact stale reason. ATHB never substitutes a plausible temperature
-or humidity. After a Home Assistant restart, restorable numerical entities may display their last
-recorded value as `restored_stale` until a valid calculation is available. The outdoor-history
-collector retains its separate two-hour maximum hold and builds adaptation only from completed
-local calendar days.
+or humidity. The bounded last-valid display snapshot is stored with the zone's verified state and
+restored after an integration reload or Home Assistant restart when the configuration and comfort
+level still match. It remains display-only and stale until a valid calculation is available. Older
+installations without such a snapshot can still show `restored_stale` entity values until the first
+new valid calculation. The outdoor-history collector retains its separate two-hour maximum hold
+and builds adaptation only from completed local calendar days.
 
 When another input changes, ATHB may re-evaluate using the same already accepted primary report
 while it remains inside its freshness window. An identical value and timestamp are reuse of one
 observation, not a fabricated new report, and never count as a second recovery sample. An older
 timestamp or a different value carrying the same timestamp remains invalid.
+
+Age-only staleness clears on the first genuinely newer, valid timestamp. Recovery from unavailable,
+missing, malformed, out-of-range or implausibly jumping input remains subject to the stricter
+multi-report stability gate.
 
 ### Stale-measurement safety
 

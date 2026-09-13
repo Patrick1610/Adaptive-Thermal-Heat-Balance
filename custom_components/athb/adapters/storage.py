@@ -7,7 +7,7 @@ import json
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from hashlib import sha256
-from typing import Protocol
+from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -15,6 +15,19 @@ from homeassistant.helpers.storage import Store
 from .broker import PendingCommand, service_payload
 
 CONTROL_STORAGE_VERSION = 1
+LAST_VALID_OUTPUT_KEYS = (
+    "thermal_sensation",
+    "heating_control_target",
+    "thermal_neutral",
+    "cooling_control_target",
+    "comfort_status",
+    "surface_temperature",
+    "surface_relative_humidity",
+    "surface_saturation",
+    "effective_targets",
+    "effective_target_details",
+    "target_scenarios",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +76,8 @@ class ControlStoreState:
     boost_expiry_utc: str | None = None
     boost_mode: str = "off"
     rapid_boost_reached: bool = False
+    last_valid_values_json: str | None = None
+    last_valid_at: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,6 +215,7 @@ def serialize_control_state(state: ControlStoreState) -> str:
         boost_expiry = datetime.fromisoformat(state.boost_expiry_utc)
         if boost_expiry.tzinfo is None or boost_expiry.utcoffset() is None:
             raise ValueError("invalid boost expiry")
+    _validate_last_valid_output(state.last_valid_values_json, state.last_valid_at)
     if not state.run_id or not state.configuration_fingerprint or not state.strategy:
         raise ValueError("control state identity fields are required")
     identities = [actuator.target_identity for actuator in state.actuators]
@@ -239,6 +255,8 @@ def load_control_state(serialized: str | None) -> ControlLoadResult:
                 "adaptive" if raw.get("selected_profile") == "boost" else "off",
             ),
             rapid_boost_reached=raw.get("rapid_boost_reached", False),
+            last_valid_values_json=raw.get("last_valid_values_json"),
+            last_valid_at=raw.get("last_valid_at"),
         )
         serialize_control_state(state)
     except KeyError, TypeError, ValueError, json.JSONDecodeError:
@@ -433,6 +451,26 @@ class ZoneCommandPersistence:
             )
             return (await self._verified.async_write_critical(self.state)).verified
 
+    async def async_update_last_valid_output(self, *, values_json: str, observed_at: str) -> bool:
+        """Persist a display-only last-valid output snapshot."""
+
+        _validate_last_valid_output(values_json, observed_at)
+        async with self._lock:
+            if self.state is None:
+                return False
+            if self.state.last_valid_at is not None:
+                stored_at = datetime.fromisoformat(self.state.last_valid_at)
+                candidate_at = datetime.fromisoformat(observed_at)
+                if candidate_at < stored_at:
+                    return True
+            self.state = replace(
+                self.state,
+                storage_generation=self.state.storage_generation + 1,
+                last_valid_values_json=values_json,
+                last_valid_at=observed_at,
+            )
+            return (await self._verified.async_write_critical(self.state)).verified
+
     async def async_update_actuator(
         self,
         identity: str,
@@ -534,6 +572,10 @@ def prepare_startup_recovery(
         boost_expiry_utc=prior.boost_expiry_utc,
         boost_mode=prior.boost_mode,
         rapid_boost_reached=prior.rapid_boost_reached,
+        last_valid_values_json=(
+            None if configuration_changed or strategy_changed else prior.last_valid_values_json
+        ),
+        last_valid_at=(None if configuration_changed or strategy_changed else prior.last_valid_at),
     )
     return StartupRecovery(state, requires_resume, reason)
 
@@ -546,3 +588,22 @@ def mark_clean_shutdown(state: ControlStoreState, *, now: datetime) -> ControlSt
     if any(actuator.pending_command is not None for actuator in state.actuators):
         raise ValueError("cannot mark clean with unresolved commands")
     return replace(state, storage_generation=state.storage_generation + 1, clean_shutdown=True)
+
+
+def _validate_last_valid_output(values_json: str | None, observed_at: str | None) -> None:
+    """Validate the bounded display snapshot without trusting executable state."""
+
+    if (values_json is None) != (observed_at is None):
+        raise ValueError("last valid output fields must be present together")
+    if values_json is None:
+        return
+    try:
+        values: Any = json.loads(values_json)
+        timestamp = datetime.fromisoformat(observed_at or "")
+        if not isinstance(values, dict) or not set(values) <= set(LAST_VALID_OUTPUT_KEYS):
+            raise ValueError("invalid last valid output keys")
+        json.dumps(values, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    except (json.JSONDecodeError, TypeError, ValueError, OverflowError) as err:
+        raise ValueError("invalid last valid output") from err
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        raise ValueError("invalid last valid output timestamp")

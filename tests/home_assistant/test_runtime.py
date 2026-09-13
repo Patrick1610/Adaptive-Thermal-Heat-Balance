@@ -252,6 +252,74 @@ def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
     assert guarded["effective_target_details"] == {"target-living-room": {"mode": "stale_safety"}}
 
 
+def test_persisted_last_valid_outputs_are_used_after_runtime_reload() -> None:
+    scenario = load_scenarios()[0]
+    snapshot = _captured(scenario)
+    valid = calculate_runtime_snapshot(snapshot)
+    prior = _runtime(target_identity="registry-climate-living-room")
+    prior_values = prior._observable_values(valid)
+
+    reloaded = _runtime(target_identity="registry-climate-living-room")
+    reloaded.last_valid_values = dict(prior.last_valid_values)
+    reloaded.last_valid_at = prior.last_valid_at
+    stale = calculate_runtime_snapshot(
+        replace(
+            snapshot,
+            now=snapshot.now + timedelta(hours=1),
+            source_states=valid.source_states,
+        )
+    )
+
+    restored = reloaded._observable_values(stale)
+
+    assert restored["thermal_sensation"] == prior_values["thermal_sensation"]
+    assert restored["effective_targets"] == prior_values["effective_targets"]
+    assert restored["data_quality"] == "stale"
+    assert restored["input_status"] == "primary_temperature_stale"
+
+
+async def test_changed_last_valid_output_is_persisted_once() -> None:
+    class Persistence:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        async def async_update_last_valid_output(
+            self, *, values_json: str, observed_at: str
+        ) -> bool:
+            self.calls.append((values_json, observed_at))
+            return True
+
+    runtime = _runtime()
+    runtime.hass.async_create_task = asyncio.create_task
+    persistence = Persistence()
+    runtime.persistence = cast(Any, persistence)
+    runtime.last_valid_values = {"thermal_sensation": -0.2}
+    runtime.last_valid_at = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
+
+    runtime._schedule_last_valid_persistence()
+    await asyncio.gather(*tuple(runtime.background_tasks))
+    runtime._schedule_last_valid_persistence()
+
+    assert persistence.calls == [('{"thermal_sensation":-0.2}', "2026-09-13T12:00:00+00:00")]
+
+
+async def test_failed_last_valid_output_persistence_can_retry() -> None:
+    class Persistence:
+        async def async_update_last_valid_output(self, **_kwargs: Any) -> bool:
+            return False
+
+    runtime = _runtime()
+    runtime.persistence = cast(Any, Persistence())
+    runtime.last_valid_persistence_payload = '{"thermal_sensation":-0.2}'
+
+    await runtime._async_persist_last_valid_output(
+        runtime.last_valid_persistence_payload,
+        datetime(2026, 9, 13, 12, 0, tzinfo=UTC),
+    )
+
+    assert runtime.last_valid_persistence_payload is None
+
+
 async def test_stale_safety_uses_configured_fallback_without_hvac_command(
     hass: HomeAssistant,
 ) -> None:
@@ -1519,6 +1587,54 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
     assert future.controller is not None
     await future.controller.async_wait_idle()
     await future.async_unload()
+
+
+async def test_startup_restores_persisted_display_values_before_stale_calculation(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Persistence:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self.state = SimpleNamespace(
+                boost_expiry_utc=None,
+                rapid_boost_reached=False,
+                actuators=(),
+                last_valid_values_json='{"thermal_sensation":-0.2}',
+                last_valid_at="2026-09-13T12:00:00+00:00",
+            )
+            self.requires_resume = False
+
+        async def async_start(self) -> bool:
+            return True
+
+        async def async_mark_clean(self, *, now: datetime) -> bool:
+            return True
+
+    monkeypatch.setattr(runtime_module, "ZoneCommandPersistence", Persistence)
+    entry = MockConfigEntry(
+        domain="athb",
+        entry_id="startup-restored-output",
+        data={"zone_uuid": "startup-restored-output", "targets": []},
+        options={"control_enabled": False},
+    )
+    entry.add_to_hass(hass)
+    runtime = ZoneRuntime(
+        hass,
+        cast(Any, entry),
+        "startup-restored-output",
+        "balanced",
+        "off",
+        False,
+    )
+
+    await runtime.async_start()
+    assert runtime.controller is not None
+    await runtime.controller.async_wait_idle()
+
+    assert runtime.values["thermal_sensation"] == -0.2
+    assert runtime.values["data_quality"] == "stale"
+    assert runtime.last_valid_at == datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
+
+    await runtime.async_unload()
 
 
 def test_readiness_radiant_modes_and_noop_timer_paths() -> None:

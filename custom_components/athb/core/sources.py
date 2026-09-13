@@ -211,7 +211,9 @@ def validate_measured_source(
             ObservationValidity.STALE,
             ("source_stale",),
         )
-        return SourceUpdate(observation, SourceState(state.last_accepted, recovering=True))
+        # A fresh timestamp is sufficient to recover from age alone. Availability,
+        # invalid-value and jump failures retain the stricter multi-report gate.
+        return SourceUpdate(observation, SourceState(state.last_accepted, recovering=False))
 
     last = state.last_accepted
     if last is not None and last.observed_at is not None:

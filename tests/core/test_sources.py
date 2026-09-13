@@ -142,6 +142,36 @@ def test_configured_freshness_can_extend_but_not_disable_stale_screening() -> No
         _update(freshness=timedelta(0))
 
 
+def test_age_only_staleness_recovers_on_one_genuinely_new_report() -> None:
+    stale = _update(observed_at=NOW - timedelta(minutes=31))
+    assert stale.observation.validity is ObservationValidity.STALE
+    assert not stale.state.recovering
+
+    recovered = _update(
+        stale.state,
+        observed_at=NOW + timedelta(seconds=1),
+        received_at=NOW + timedelta(seconds=1),
+    )
+
+    assert recovered.observation.validity is ObservationValidity.VALID
+    assert not recovered.state.recovering
+
+
+def test_unavailable_source_keeps_strict_multi_report_recovery() -> None:
+    unavailable = _update(available=False)
+    assert unavailable.state.recovering
+
+    first = _update(
+        unavailable.state,
+        observed_at=NOW + timedelta(seconds=1),
+        received_at=NOW + timedelta(seconds=1),
+    )
+
+    assert first.observation.validity is ObservationValidity.VALID
+    assert first.state.recovering
+    assert not primary_recovery_ready(first.state)
+
+
 def test_jump_quarantine_requires_three_consistent_reports_spanning_a_minute() -> None:
     accepted = _update()
     first = _update(
