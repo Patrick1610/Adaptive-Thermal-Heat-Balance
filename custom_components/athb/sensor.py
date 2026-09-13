@@ -5,13 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.climate.const import ClimateEntityFeature
+from homeassistant.components.climate.const import ATTR_CURRENT_TEMPERATURE, ClimateEntityFeature
 from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .adapters.climate import capability_from_state
+from .core.climate import (
+    TARGET_TEMPERATURE,
+    TARGET_TEMPERATURE_RANGE,
+    AutoMapping,
+    infer_auto_mapping,
+)
 from .entity import AthbEntity
 from .runtime import AthbConfigEntry, ZoneRuntime
 
@@ -54,6 +61,7 @@ DESCRIPTIONS = (
 )
 
 TARGET_ENDPOINTS = ("temperature", "target_low", "target_high")
+TARGET_SCENARIOS = ("current", "occupied", "unoccupied")
 
 
 class AthbSensor(AthbEntity, RestoreSensor):
@@ -94,6 +102,7 @@ class AthbSensor(AthbEntity, RestoreSensor):
         if self._restored_native_value is not None and data_quality in {None, "unavailable"}:
             data_quality = "restored_stale"
         return {
+            **super().extra_state_attributes,
             "comfort_level": self.runtime.strategy,
             "boost_mode": self.runtime.boost_mode,
             "occupancy_status": self.runtime.values.get("occupancy_status"),
@@ -108,6 +117,54 @@ class AthbSensor(AthbEntity, RestoreSensor):
             "data_age_minutes": self.runtime.values.get("data_age_minutes"),
             "stale_safety_active": self.runtime.values.get("stale_safety_active", False),
         }
+
+
+class ZoneTargetSensor(AthbEntity, RestoreSensor):
+    """One room-coordinate target with exact per-climate context on Current."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, runtime: ZoneRuntime, scenario: str) -> None:
+        super().__init__(runtime, f"target_{scenario}")
+        self.scenario = scenario
+        self._restored_native_value: Any = None
+        self._attr_translation_key = f"target_{scenario}"
+
+    @property
+    def native_value(self) -> Any:
+        values: list[float] = []
+        for target in self.runtime.values.get("target_scenarios", {}).values():
+            room = target.get(self.scenario, {}).get("room", {})
+            value = room.get("temperature")
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                values.append(float(value))
+        if values and max(values) - min(values) <= 1e-6:
+            return values[0]
+        return self._restored_native_value
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.native_value is None:
+            restored = await self.async_get_last_sensor_data()
+            if restored is not None:
+                self._restored_native_value = restored.native_value
+
+    @property
+    def available(self) -> bool:
+        return self.native_value is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attributes = {
+            **super().extra_state_attributes,
+            "target_basis": "room_policy_before_actuator_adjustments",
+            "scenario": self.scenario,
+        }
+        if self.scenario == "current":
+            attributes["per_climate"] = _per_climate_context(self.runtime)
+        return attributes
 
 
 class TargetSensor(AthbEntity, RestoreSensor):
@@ -160,6 +217,7 @@ class TargetSensor(AthbEntity, RestoreSensor):
         if self._restored_native_value is not None and data_quality in {None, "unavailable"}:
             data_quality = "restored_stale"
         return {
+            **super().extra_state_attributes,
             "mode": detail.get("mode", "unavailable"),
             "reason": detail.get("reason"),
             "fallback": detail.get("fallback", False),
@@ -192,16 +250,23 @@ async def async_setup_entry(
     ]
     entities: list[SensorEntity] = [AthbSensor(runtime, item) for item in descriptions]
     desired_unique_ids = {entity.unique_id for entity in entities}
-    for target in entry.data.get("targets", ()):
-        for endpoint in _target_endpoints(hass, target["entity_id"]):
-            entity = TargetSensor(
-                runtime,
-                target,
-                endpoint,
-                _target_display_name(hass, target["entity_id"]),
-            )
-            entities.append(entity)
-            desired_unique_ids.add(entity.unique_id)
+    targets = list(entry.data.get("targets", ()))
+    if _supports_zone_target_sensors(hass, targets):
+        for scenario in TARGET_SCENARIOS:
+            zone_entity = ZoneTargetSensor(runtime, scenario)
+            entities.append(zone_entity)
+            desired_unique_ids.add(zone_entity.unique_id)
+    else:
+        for target in targets:
+            for endpoint in _target_endpoints(hass, target["entity_id"]):
+                target_entity = TargetSensor(
+                    runtime,
+                    target,
+                    endpoint,
+                    _target_display_name(hass, target["entity_id"]),
+                )
+                entities.append(target_entity)
+                desired_unique_ids.add(target_entity.unique_id)
     _remove_stale_sensor_entities(hass, entry, desired_unique_ids)
     async_add_entities(entities)
 
@@ -243,6 +308,69 @@ def _target_endpoints(hass: HomeAssistant, entity_id: str) -> tuple[str, ...]:
     return tuple(endpoints) or ("temperature",)
 
 
+def _supports_zone_target_sensors(hass: HomeAssistant, targets: list[dict[str, str]]) -> bool:
+    """Use the compact three-sensor view only for one scalar control direction."""
+
+    directions: set[str] = set()
+    if not targets:
+        return False
+    for target in targets:
+        capability = capability_from_state(hass.states.get(target["entity_id"]))
+        scalar = bool(capability.supported_features & TARGET_TEMPERATURE)
+        ranged = bool(capability.supported_features & TARGET_TEMPERATURE_RANGE)
+        if not scalar or ranged:
+            return False
+        if capability.hvac_mode in {"heat", "cool"}:
+            directions.add("heating" if capability.hvac_mode == "heat" else "cooling")
+            continue
+        inferred = infer_auto_mapping(capability)
+        if inferred in {AutoMapping.HEATING, AutoMapping.COOLING}:
+            directions.add(inferred.value)
+            continue
+        advertised = set(capability.advertised_hvac_modes)
+        if "heat" in advertised and "cool" not in advertised:
+            directions.add("heating")
+        elif "cool" in advertised and "heat" not in advertised:
+            directions.add("cooling")
+        else:
+            return False
+    return len(directions) == 1
+
+
+def _per_climate_context(runtime: ZoneRuntime) -> dict[str, dict[str, Any]]:
+    """Expose current observations and all three normalized scenario requests."""
+
+    scenarios = runtime.values.get("target_scenarios", {})
+    context: dict[str, dict[str, Any]] = {}
+    for target in runtime.entry.data.get("targets", ()):
+        entity_id = str(target["entity_id"])
+        details = scenarios.get(str(target["target_uuid"]), {})
+        state = runtime.hass.states.get(entity_id)
+        capability = capability_from_state(state)
+        current_temperature = (
+            None if state is None else state.attributes.get(ATTR_CURRENT_TEMPERATURE)
+        )
+        reported_target: dict[str, float] = {}
+        if capability.scalar_target_ha is not None:
+            reported_target["temperature"] = capability.scalar_target_ha
+        if capability.target_temp_low_ha is not None:
+            reported_target["target_low"] = capability.target_temp_low_ha
+        if capability.target_temp_high_ha is not None:
+            reported_target["target_high"] = capability.target_temp_high_ha
+        context[entity_id] = {
+            "hvac_mode": capability.hvac_mode,
+            "hvac_action": None if state is None else state.attributes.get("hvac_action"),
+            "available": capability.available,
+            "unit": capability.temperature_unit.value,
+            "current_temperature": current_temperature,
+            "reported_target": reported_target,
+            "athb_current_target": details.get("current", {}).get("actuator", {}),
+            "athb_occupied_target": details.get("occupied", {}).get("actuator", {}),
+            "athb_unoccupied_target": details.get("unoccupied", {}).get("actuator", {}),
+        }
+    return context
+
+
 def _remove_stale_sensor_entities(
     hass: HomeAssistant,
     entry: AthbConfigEntry,
@@ -251,7 +379,10 @@ def _remove_stale_sensor_entities(
     registry = er.async_get(hass)
     zone_prefix = f"{entry.runtime_data.zone_uuid}_"
     managed_suffixes = tuple(f"_{endpoint}" for endpoint in TARGET_ENDPOINTS)
-    core_ids = {f"{entry.runtime_data.zone_uuid}_{item.key}" for item in DESCRIPTIONS}
+    core_ids = {
+        *(f"{entry.runtime_data.zone_uuid}_{item.key}" for item in DESCRIPTIONS),
+        *(f"{entry.runtime_data.zone_uuid}_target_{scenario}" for scenario in TARGET_SCENARIOS),
+    }
     for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         unique_id = registry_entry.unique_id
         managed = unique_id in core_ids or (

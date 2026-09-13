@@ -67,14 +67,36 @@ and do not reload the config entry.
 
 The diagnostic **Model — heating target**, **Model — neutral reference**, and **Model — cooling
 target** sensors expose the inverse-solved ATHB roots before occupancy or Boost policy. They
-therefore change with comfort level, but not with Setback or Boost. A climate-specific **Target —
-<climate name>** sensor (or its heating/cooling variants) is the final request after
-occupancy/Boost, critical-location policy, calibration, bounds, and device-grid normalization. It
-is a preview even while control is disabled. The actual climate target changes only when adaptive
-control is enabled and ownership, capability, override, and broker gates allow a write. Its state
-attributes distinguish `adaptive`, `fallback`, and `unavailable` mode and give the fallback or
-suppression reason. Consequently a fixed effective target with **Status — inputs** equal to
+therefore change with comfort level, but not with Setback or Boost.
+
+For ordinary scalar heating-only or cooling-only zones, three room-coordinate sensors make the
+policy result explicit:
+
+- **Target — occupied** is the target for the selected comfort level with no occupancy setback and
+  with Boost off.
+- **Target — unoccupied** is the corresponding target with the configured occupancy setback and
+  with Boost off.
+- **Target — current** is the target that applies now, including occupancy, Boost and any ordinary
+  environmental slew limiting.
+
+These sensor states are the common room target before per-actuator calibration, device limits and
+grid rounding. **Target — current** exposes a `per_climate` attribute for every controlled climate,
+including its measured current temperature, reported setpoint, HVAC mode/action, availability and
+the exact normalized ATHB request for all three scenarios. This keeps the device page compact while
+preserving actuator-level evidence. Zones that genuinely mix heating and cooling directions or use
+an atomic temperature range retain separate climate-specific endpoint sensors: one scalar room
+target would be physically ambiguous there.
+
+Targets remain previews while control is disabled. The actual climate target changes only when
+adaptive control is enabled and ownership, capability, override, and broker gates allow a write.
+Fallback or unavailable states and suppression reasons remain explicit in the status context.
+Consequently a fixed effective target with **Status — inputs** equal to
 `running_mean_unavailable` is explicit fallback behaviour, not a responsive ATHB result.
+
+All ATHB entities expose relevant state attributes for traceability. Depending on the entity these
+include measured or declared sources and provenance, selected control settings, related ATHB model
+values, data quality, ownership/readiness and command outcomes. Missing measurements remain `null`;
+the attributes never substitute a plausible value.
 
 ## Radiant and surface models
 

@@ -90,6 +90,10 @@ class PolicyTargets:
     rapid_boost_reached: bool = False
     boost_target_heating_c: float | None = None
     boost_target_cooling_c: float | None = None
+    occupied_heating_c: float | None = None
+    occupied_cooling_c: float | None = None
+    unoccupied_heating_c: float | None = None
+    unoccupied_cooling_c: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -542,6 +546,41 @@ def build_adaptive_policy(
         rapid_cooling_c=inactive_heating_c,
         boost_delta_c=boost_delta_c,
     )
+
+    def occupancy_reference(reference_profile: ControlProfile) -> _PolicyTransform:
+        return _policy_transform(
+            heating=critical.heating_c,
+            cooling=critical.cooling_c,
+            profile=reference_profile,
+            boost_mode=BoostMode.OFF,
+            direction=direction,
+            current_air_temperature_c=current_air_temperature_c,
+            rapid_boost_reached=False,
+            neutral_heating_c=neutral,
+            neutral_cooling_c=neutral,
+            eco_intensity=eco_intensity,
+            minimum_range_gap_c=minimum_range_gap_c,
+            eco_heating_setback_c=eco_heating_setback_c,
+            eco_cooling_setback_c=eco_cooling_setback_c,
+            inactive_heating_c=inactive_heating_c
+            + (
+                critical.heating_contribution.applied_c
+                if critical.heating_contribution is not None
+                else 0.0
+            ),
+            inactive_cooling_c=inactive_cooling_c
+            + (
+                critical.cooling_contribution.applied_c
+                if critical.cooling_contribution is not None
+                else 0.0
+            ),
+            rapid_heating_c=inactive_cooling_c,
+            rapid_cooling_c=inactive_heating_c,
+            boost_delta_c=boost_delta_c,
+        )
+
+    occupied = occupancy_reference(ControlProfile.COMFORT)
+    unoccupied = occupancy_reference(ControlProfile.ECO)
     if explicit_transition:
         requested_heating = transformed.heating_c
         requested_cooling = transformed.cooling_c
@@ -588,6 +627,10 @@ def build_adaptive_policy(
         transformed.rapid_boost_reached,
         transformed.boost_target_heating_c,
         transformed.boost_target_cooling_c,
+        occupied.heating_c,
+        occupied.cooling_c,
+        unoccupied.heating_c,
+        unoccupied.cooling_c,
     )
 
 
@@ -633,6 +676,10 @@ def build_fixed_fallback(
         ("fixed_fallback",),
         BoostMode.OFF,
         "fallback",
+        occupied_heating_c=heating,
+        occupied_cooling_c=cooling,
+        unoccupied_heating_c=heating,
+        unoccupied_cooling_c=cooling,
     )
 
 

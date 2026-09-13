@@ -120,6 +120,7 @@ _HELD_VALUE_KEYS = (
     "surface_saturation",
     "effective_targets",
     "effective_target_details",
+    "target_scenarios",
 )
 
 

@@ -33,8 +33,17 @@ reference](configuration-reference.md) for formulas, supported ranges and policy
 
 The device page groups occupant-facing outputs under semantic names such as **Comfort**, **Target**,
 **Surface**, and **Weather**. Raw inverse roots, input readiness, control state, and eligibility are
-classified as Home Assistant diagnostic entities. Existing unique IDs remain stable, so this
-presentation change does not silently replace entities used by dashboards or automations.
+classified as Home Assistant diagnostic entities. Non-target unique IDs remain stable. The former
+per-climate scalar target entities are deliberately replaced by the three room-target entities
+below; dashboards or automations that referenced an old scalar target must select the new Current
+target once after updating.
+
+For a normal scalar heat-only or cool-only zone, **Target — current**, **Target — occupied** and
+**Target — unoccupied** show the common room target without repeating climate names. Open
+**Target — current** to inspect the actual temperature, reported setpoint and exact normalized ATHB
+request for every controlled climate. Other ATHB entities also expose relevant source, provenance,
+setting and related-value attributes so a displayed result can be traced without adding more
+entities to the device page.
 
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
 normalization. Heating rounds inward upward; cooling rounds inward downward. Ranged targets remain

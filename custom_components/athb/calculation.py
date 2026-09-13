@@ -704,6 +704,45 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
 
     effective: dict[str, dict[str, float]] = {}
     effective_details: dict[str, dict[str, str | bool | float | None]] = {}
+    target_scenarios: dict[str, dict[str, Any]] = {}
+
+    def normalized_values(
+        normalized: NormalizedScalarTarget | NormalizedRangeTarget | None,
+    ) -> dict[str, float]:
+        if isinstance(normalized, NormalizedScalarTarget):
+            return {"temperature": normalized.normalized_actuator_c}
+        if isinstance(normalized, NormalizedRangeTarget):
+            return {
+                "target_low": normalized.heating.normalized_actuator_c,
+                "target_high": normalized.cooling.normalized_actuator_c,
+            }
+        return {}
+
+    def room_values(
+        calculation: ZoneCalculationResult,
+        scenario: str,
+    ) -> dict[str, float]:
+        policy = calculation.policy
+        if policy is None:
+            return {}
+        if scenario == "current":
+            heating, cooling = policy.heating_c, policy.cooling_c
+        elif scenario == "occupied":
+            heating, cooling = policy.occupied_heating_c, policy.occupied_cooling_c
+        else:
+            heating, cooling = policy.unoccupied_heating_c, policy.unoccupied_cooling_c
+        if calculation.normalized is not None and isinstance(
+            calculation.normalized, NormalizedScalarTarget
+        ):
+            value = heating if heating is not None else cooling
+            return {"temperature": value} if value is not None else {}
+        values: dict[str, float] = {}
+        if heating is not None:
+            values["target_low"] = heating
+        if cooling is not None:
+            values["target_high"] = cooling
+        return values
+
     for target in result.targets:
         calculation = target.result
         if calculation is None or calculation.normalized is None:
@@ -730,6 +769,21 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
                 "target_low": normalized.heating.normalized_actuator_c,
                 "target_high": normalized.cooling.normalized_actuator_c,
             }
+        target_scenarios[target.target_uuid] = {
+            "entity_id": target.entity_id,
+            "current": {
+                "room": room_values(calculation, "current"),
+                "actuator": normalized_values(calculation.normalized),
+            },
+            "occupied": {
+                "room": room_values(calculation, "occupied"),
+                "actuator": normalized_values(calculation.occupied_normalized),
+            },
+            "unoccupied": {
+                "room": room_values(calculation, "unoccupied"),
+                "actuator": normalized_values(calculation.unoccupied_normalized),
+            },
+        }
     current = numerical.current if numerical is not None else None
     sensation = current.public_sensation_vote if isinstance(current, AthbSuccess) else None
     comfort_status = (
@@ -752,6 +806,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         "outdoor_running_mean": result.running_mean_c,
         "effective_targets": effective,
         "effective_target_details": effective_details,
+        "target_scenarios": target_scenarios,
         "quality_reasons": result.quality_reasons,
         "suppression_reason": result.suppression_reason,
         "rh_provenance": result.relative_humidity_provenance,

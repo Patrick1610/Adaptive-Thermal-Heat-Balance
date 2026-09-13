@@ -116,7 +116,14 @@ def test_snapshot_adapter_preserves_declared_rh_and_adaptive_root_path() -> None
     assert result.relative_humidity_provenance == "declared"
     assert dict(result.provenance)["air_speed"] == "declared"
     assert dict(result.provenance)["rh"] == "declared"
-    assert result_values(result)["effective_targets"] == {"target-1": {"temperature": 19.5}}
+    values = result_values(result)
+    assert values["effective_targets"] == {"target-1": {"temperature": 19.5}}
+    scenarios = values["target_scenarios"]["target-1"]
+    assert scenarios["current"]["room"]["temperature"] == pytest.approx(19.362709, abs=0.005)
+    assert scenarios["current"]["actuator"] == {"temperature": 19.5}
+    assert scenarios["occupied"] == scenarios["current"]
+    assert scenarios["unoccupied"]["room"]["temperature"] == pytest.approx(17.362709, abs=0.005)
+    assert scenarios["unoccupied"]["actuator"] == {"temperature": 18.0}
 
 
 def test_primary_freshness_option_supports_slow_reporting_sensor() -> None:
@@ -684,6 +691,10 @@ def test_result_projection_includes_ranged_target_and_cold_warm_statuses() -> No
     )
     values = result_values(ranged)
     assert values["effective_targets"] == {"target-1": {"target_low": 19.5, "target_high": 23.0}}
+    scenarios = values["target_scenarios"]["target-1"]
+    assert scenarios["current"]["actuator"] == {"target_low": 19.5, "target_high": 23.0}
+    assert set(scenarios["occupied"]["room"]) == {"target_low", "target_high"}
+    assert set(scenarios["unoccupied"]["room"]) == {"target_low", "target_high"}
     cold = calculate_runtime_snapshot(
         CapturedZoneSnapshot(
             NOW,

@@ -92,10 +92,27 @@ def test_ranged_path_uses_control_roots_and_atomic_normalization() -> None:
     assert isinstance(result.normalized, NormalizedRangeTarget)
     assert result.normalized.heating.normalized_ha == 19.5
     assert result.normalized.cooling.normalized_ha == 23.0
+    assert isinstance(result.occupied_normalized, NormalizedRangeTarget)
+    assert isinstance(result.unoccupied_normalized, NormalizedRangeTarget)
     assert (
         result.normalized.cooling.normalized_room_c - result.normalized.heating.normalized_room_c
         >= 1
     )
+
+
+def test_cooling_policy_exposes_normalized_occupancy_references() -> None:
+    result = calculate_zone(
+        _input(
+            direction=ActuationDirection.COOLING_ONLY,
+            hvac_mode="cool",
+            features=1,
+        )
+    )
+
+    assert isinstance(result.occupied_normalized, NormalizedScalarTarget)
+    assert isinstance(result.unoccupied_normalized, NormalizedScalarTarget)
+    assert result.occupied_normalized.normalized_actuator_c == 23.0
+    assert result.unoccupied_normalized.normalized_actuator_c == 25.0
 
 
 def test_missing_history_is_explicit_fixed_fallback_not_adaptive_output() -> None:
@@ -212,6 +229,27 @@ def test_boost_bypasses_occupancy_setback_without_mutating_raw_roots() -> None:
     assert boosted.policy is not None
     assert unoccupied.policy.heating_c == pytest.approx(occupied.policy.heating_c - 2.0)
     assert boosted.policy.heating_c > occupied.policy.heating_c
+
+
+def test_policy_exposes_stable_occupied_and_unoccupied_reference_targets() -> None:
+    result = calculate_zone(
+        replace(
+            _input(),
+            profile=ControlProfile.ECO,
+            eco_intensity=EcoIntensity.MILD,
+            boost_mode=BoostMode.ADAPTIVE,
+            grid=GridOptions(16.0, 26.0),
+        )
+    )
+
+    assert result.policy is not None
+    assert result.policy.heating_c > result.policy.occupied_heating_c
+    assert result.policy.occupied_heating_c == pytest.approx(19.362709, abs=0.005)
+    assert result.policy.unoccupied_heating_c == pytest.approx(17.362709, abs=0.005)
+    assert isinstance(result.occupied_normalized, NormalizedScalarTarget)
+    assert result.occupied_normalized.normalized_actuator_c == 19.5
+    assert isinstance(result.unoccupied_normalized, NormalizedScalarTarget)
+    assert result.unoccupied_normalized.normalized_actuator_c == 17.5
 
 
 def test_invalid_moisture_speed_and_strategy_fail_before_actuation() -> None:

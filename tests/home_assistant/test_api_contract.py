@@ -32,7 +32,11 @@ from custom_components.athb.sensor import (
     DESCRIPTIONS,
     AthbSensor,
     TargetSensor,
+    ZoneTargetSensor,
+    _per_climate_context,
+    _supports_zone_target_sensors,
     _target_display_name,
+    _target_endpoints,
 )
 from custom_components.athb.sensor import async_setup_entry as async_setup_sensor_entry
 from custom_components.athb.switch import AdaptiveControlSwitch
@@ -176,6 +180,20 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
     assert effective.unique_id == "zone-1_target-1_temperature"
     assert effective.translation_key == "effective_target"
     assert effective.translation_placeholders == {"target": "Living Room"}
+
+    compact = [
+        ZoneTargetSensor(runtime, scenario) for scenario in ("current", "occupied", "unoccupied")
+    ]
+    assert [entity.unique_id for entity in compact] == [
+        "zone-1_target_current",
+        "zone-1_target_occupied",
+        "zone-1_target_unoccupied",
+    ]
+    assert [entity.translation_key for entity in compact] == [
+        "target_current",
+        "target_occupied",
+        "target_unoccupied",
+    ]
 
 
 def test_target_display_names_prefer_state_then_registry_and_never_show_raw_ids(hass: Any) -> None:
@@ -344,17 +362,283 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
         config_entry=entry,
         suggested_object_id="obsolete_surface",
     )
+    obsolete_scalar = registry.async_get_or_create(
+        "sensor",
+        "athb",
+        "zone-1_target-1_temperature",
+        config_entry=entry,
+        suggested_object_id="obsolete_scalar",
+    )
     added: list[Any] = []
     await async_setup_sensor_entry(hass, cast(Any, entry), added.extend)
 
     unique_ids = {entity.unique_id for entity in added}
-    assert "zone-1_target-1_temperature" in unique_ids
+    assert {
+        "zone-1_target_current",
+        "zone-1_target_occupied",
+        "zone-1_target_unoccupied",
+    } <= unique_ids
+    assert "zone-1_target-1_temperature" not in unique_ids
     assert "zone-1_target-1_target_low" not in unique_ids
     assert "zone-1_target-1_target_high" not in unique_ids
     assert "zone-1_surface_temperature" not in unique_ids
     assert registry.async_get(obsolete_range.entity_id) is None
     assert registry.async_get(obsolete_surface.entity_id) is None
+    assert registry.async_get(obsolete_scalar.entity_id) is None
     assert "zone-1_input_status" in unique_ids
+
+
+def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: Any) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.data["targets"] = [
+        {
+            "target_uuid": "target-1",
+            "entity_id": "climate.roommind_override",
+            "registry_identity": "registry-1",
+        }
+    ]
+    hass.states.async_set(
+        "climate.roommind_override",
+        "heat",
+        {
+            "supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE),
+            "unit_of_measurement": "°C",
+            "temperature": 19.5,
+            "current_temperature": 21.8,
+            "hvac_action": "idle",
+        },
+    )
+    runtime.publish(
+        {
+            "target_scenarios": {
+                "target-1": {
+                    "entity_id": "climate.roommind_override",
+                    "current": {
+                        "room": {"temperature": 19.37},
+                        "actuator": {"temperature": 19.5},
+                    },
+                    "occupied": {
+                        "room": {"temperature": 21.37},
+                        "actuator": {"temperature": 21.5},
+                    },
+                    "unoccupied": {
+                        "room": {"temperature": 19.37},
+                        "actuator": {"temperature": 19.5},
+                    },
+                }
+            },
+            "occupancy_status": "eco",
+            "setback_active": True,
+        }
+    )
+
+    sensor = ZoneTargetSensor(runtime, "current")
+    assert sensor.native_value == 19.37
+    climate = sensor.extra_state_attributes["per_climate"]["climate.roommind_override"]
+    assert climate == {
+        "hvac_mode": "heat",
+        "hvac_action": "idle",
+        "available": True,
+        "unit": "°C",
+        "current_temperature": 21.8,
+        "reported_target": {"temperature": 19.5},
+        "athb_current_target": {"temperature": 19.5},
+        "athb_occupied_target": {"temperature": 21.5},
+        "athb_unoccupied_target": {"temperature": 19.5},
+    }
+
+    occupied = ZoneTargetSensor(runtime, "occupied")
+    assert occupied.native_value == 21.37
+    assert occupied.available
+    assert "per_climate" not in occupied.extra_state_attributes
+
+
+def test_zone_target_requires_one_numeric_common_room_value() -> None:
+    runtime = _runtime()
+    sensor = ZoneTargetSensor(runtime, "current")
+    assert sensor.native_value is None
+    assert not sensor.available
+
+    runtime.publish(
+        {
+            "target_scenarios": {
+                "one": {"current": {"room": {"temperature": 19.0}}},
+                "two": {"current": {"room": {"temperature": 20.0}}},
+                "invalid": {"current": {"room": {"temperature": True}}},
+            }
+        }
+    )
+    assert sensor.native_value is None
+    sensor._restored_native_value = 18.5
+    assert sensor.native_value == 18.5
+    assert sensor.available
+
+
+def test_compact_target_capability_gate_and_endpoint_projection(hass: Any) -> None:
+    target = {"target_uuid": "target-1", "entity_id": "climate.test"}
+    assert not _supports_zone_target_sensors(hass, [])
+    assert _target_endpoints(hass, "climate.missing") == ("temperature",)
+
+    hass.states.async_set("climate.test", "heat", {"supported_features": "invalid"})
+    assert _target_endpoints(hass, "climate.test") == ("temperature",)
+    hass.states.async_set("climate.test", "heat", {"supported_features": 0})
+    assert not _supports_zone_target_sensors(hass, [target])
+
+    hass.states.async_set(
+        "climate.test",
+        "heat_cool",
+        {"supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE_RANGE)},
+    )
+    assert _target_endpoints(hass, "climate.test") == ("target_low", "target_high")
+    assert not _supports_zone_target_sensors(hass, [target])
+
+    hass.states.async_set(
+        "climate.test",
+        "heat",
+        {
+            "supported_features": int(
+                ClimateEntityFeature.TARGET_TEMPERATURE
+                | ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+            )
+        },
+    )
+    assert _target_endpoints(hass, "climate.test") == (
+        "temperature",
+        "target_low",
+        "target_high",
+    )
+
+    hass.states.async_set(
+        "climate.test",
+        "cool",
+        {"supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE)},
+    )
+    assert _supports_zone_target_sensors(hass, [target])
+
+    hass.states.async_set(
+        "climate.test",
+        "auto",
+        {
+            "supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE),
+            "hvac_modes": ["off", "heat"],
+        },
+    )
+    assert _supports_zone_target_sensors(hass, [target])
+
+    hass.states.async_set(
+        "climate.test",
+        "auto",
+        {
+            "supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE),
+            "hvac_modes": ["off", "heat", "cool"],
+        },
+    )
+    assert not _supports_zone_target_sensors(hass, [target])
+
+    hass.states.async_set(
+        "climate.test",
+        "dry",
+        {
+            "supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE),
+            "hvac_modes": ["off", "heat"],
+        },
+    )
+    assert _supports_zone_target_sensors(hass, [target])
+
+
+def test_per_climate_context_handles_ranges_and_missing_states(hass: Any) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.data["targets"] = [
+        {"target_uuid": "range", "entity_id": "climate.range"},
+        {"target_uuid": "missing", "entity_id": "climate.missing"},
+    ]
+    hass.states.async_set(
+        "climate.range",
+        "heat_cool",
+        {
+            "supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE_RANGE),
+            "target_temp_low": 19.0,
+            "target_temp_high": 24.0,
+        },
+    )
+
+    context = _per_climate_context(runtime)
+    assert context["climate.range"]["reported_target"] == {
+        "target_low": 19.0,
+        "target_high": 24.0,
+    }
+    assert context["climate.range"]["current_temperature"] is None
+    assert context["climate.missing"]["available"] is False
+    assert context["climate.missing"]["hvac_action"] is None
+
+
+def test_entity_attributes_explain_sources_controls_settings_and_related_values() -> None:
+    runtime = _runtime()
+    runtime.entry.data.update(
+        {
+            "primary_temperature": "sensor.room",
+            "outdoor_source": "sensor.outdoor",
+            "rh_mode": "declared",
+            "rh_declared": 48.0,
+        }
+    )
+    runtime.entry.options.update(
+        {
+            "occupancy_entity": "binary_sensor.occupied",
+            "eco_intensity": "mild",
+            "boost_delta_c": 1.5,
+            "boost_duration_minutes": 45.0,
+        }
+    )
+    runtime.publish(
+        {
+            "thermal_sensation": -0.16,
+            "comfort_status": "comfortable",
+            "heating_control_target": 21.3,
+            "thermal_neutral": 23.3,
+            "cooling_control_target": 25.2,
+            "occupancy_status": "eco",
+            "setback_active": True,
+            "data_quality": "current",
+            "input_status": "ready",
+            "control_status": "ready",
+        }
+    )
+
+    sensation = AthbSensor(runtime, DESCRIPTIONS[0]).extra_state_attributes
+    assert sensation["sources"]["primary_temperature"]["entity_id"] == "sensor.room"
+    assert sensation["sources"]["relative_humidity"]["provenance"] == "declared"
+    assert sensation["control_context"]["occupancy_entity"] == "binary_sensor.occupied"
+    assert sensation["related_values"]["neutral_reference"] == 23.3
+    assert sensation["settings"]["radiant_model"] == "uniform"
+
+    boost = BoostModeSelect(runtime).extra_state_attributes
+    assert boost["settings"] == {"boost_delta_c": 1.5, "boost_duration_minutes": 45.0}
+    assert (
+        AdaptiveControlSwitch(runtime).extra_state_attributes["status_context"]["control_status"]
+        == "ready"
+    )
+    assert AthbSensor(
+        runtime, next(item for item in DESCRIPTIONS if item.key == "outdoor_running_mean")
+    ).extra_state_attributes["settings"] == {"running_mean_alpha": 0.8}
+    assert (
+        EcoIntensitySelect(runtime).extra_state_attributes["settings"][
+            "minimum_control_temperature"
+        ]
+        == 18.0
+    )
+    assert (
+        AthbSensor(
+            runtime, next(item for item in DESCRIPTIONS if item.key == "input_status")
+        ).extra_state_attributes["settings"]["fallback_mode"]
+        == "fixed"
+    )
+    surface = AthbSensor(
+        runtime, next(item for item in DESCRIPTIONS if item.key == "surface_temperature")
+    )
+    assert surface.extra_state_attributes["settings"]["surface_rh_threshold_pct"] == 80.0
 
 
 async def test_mold_indicator_mode_exposes_surface_diagnostic_entities(hass: Any) -> None:

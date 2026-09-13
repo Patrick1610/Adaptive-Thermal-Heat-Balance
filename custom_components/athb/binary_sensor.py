@@ -43,6 +43,7 @@ class SurfaceSaturationBinarySensor(AthbEntity, BinarySensorEntity, RestoreEntit
         if self._restored_is_on is not None and data_quality in {None, "unavailable"}:
             data_quality = "restored_stale"
         return {
+            **super().extra_state_attributes,
             "data_quality": data_quality,
             "last_valid_at": self.runtime.values.get("last_valid_at"),
             "data_age_minutes": self.runtime.values.get("data_age_minutes"),

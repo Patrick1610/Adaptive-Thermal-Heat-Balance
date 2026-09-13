@@ -107,6 +107,8 @@ class ZoneCalculationResult:
     eligibility: DirectionalEligibility | None = None
     critical_locations: tuple[CriticalLocationSolution, ...] = ()
     hold_condition: str | None = None
+    occupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
+    unoccupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
 
 
 def _fixed_fallback(
@@ -437,6 +439,16 @@ def _normalize_policy(
                     eligibility,
                     critical_locations,
                 )
+    occupied_normalized = _normalize_reference_policy(
+        inputs,
+        policy.occupied_heating_c,
+        policy.occupied_cooling_c,
+    )
+    unoccupied_normalized = _normalize_reference_policy(
+        inputs,
+        policy.unoccupied_heating_c,
+        policy.unoccupied_cooling_c,
+    )
     return ZoneCalculationResult(
         current,
         roots,
@@ -447,4 +459,44 @@ def _normalize_policy(
         votes,
         eligibility,
         critical_locations,
+        occupied_normalized=occupied_normalized,
+        unoccupied_normalized=unoccupied_normalized,
     )
+
+
+def _normalize_reference_policy(
+    inputs: ZoneCalculationInput,
+    heating_c: float | None,
+    cooling_c: float | None,
+) -> NormalizedScalarTarget | NormalizedRangeTarget | None:
+    """Normalize a hypothetical occupancy target without affecting control eligibility."""
+
+    normalized: NormalizedScalarTarget | NormalizedRangeTarget | ClimateFailure
+    if inputs.direction is ActuationDirection.HEATING_ONLY:
+        if heating_c is None:
+            return None
+        normalized = normalize_scalar_target(
+            requested_room_c=heating_c,
+            direction=inputs.direction,
+            snapshot=inputs.climate,
+            options=inputs.grid,
+        )
+    elif inputs.direction is ActuationDirection.COOLING_ONLY:
+        if cooling_c is None:
+            return None
+        normalized = normalize_scalar_target(
+            requested_room_c=cooling_c,
+            direction=inputs.direction,
+            snapshot=inputs.climate,
+            options=inputs.grid,
+        )
+    else:
+        if heating_c is None or cooling_c is None:
+            return None
+        normalized = normalize_range_target(
+            requested_heating_room_c=heating_c,
+            requested_cooling_room_c=cooling_c,
+            snapshot=inputs.climate,
+            options=inputs.grid,
+        )
+    return None if isinstance(normalized, ClimateFailure) else normalized
