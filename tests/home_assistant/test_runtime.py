@@ -243,6 +243,7 @@ def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
     assert held["upper_comfort_boundary"] == current["upper_comfort_boundary"]
     assert held["root_sensation_votes"] == current["root_sensation_votes"]
     assert held["effective_targets"] == current["effective_targets"]
+    assert held["target_scenarios"] == current["target_scenarios"]
     assert held["input_status"] == "primary_temperature_stale"
     assert held["data_quality"] == "stale"
     assert all(
@@ -256,6 +257,35 @@ def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
     guarded = runtime._observable_values(stale)
     assert guarded["effective_targets"] == {"target-living-room": {"temperature": 18.0}}
     assert guarded["effective_target_details"] == {"target-living-room": {"mode": "stale_safety"}}
+
+
+def test_stale_secondary_source_cannot_replace_fully_valid_snapshot() -> None:
+    scenario = load_scenarios()[0]
+    snapshot = _captured(scenario)
+    valid = calculate_runtime_snapshot(snapshot)
+    runtime = _runtime(target_identity="registry-climate-living-room")
+    current = runtime._observable_values(valid)
+    saved_values = dict(runtime.last_valid_values)
+    saved_at = runtime.last_valid_at
+    assert snapshot.primary is not None
+    assert snapshot.relative_humidity is not None
+
+    stale_now = snapshot.now + timedelta(hours=1)
+    stale_rh = calculate_runtime_snapshot(
+        replace(
+            snapshot,
+            now=stale_now,
+            primary=replace(snapshot.primary, observed_at=stale_now),
+            source_states=valid.source_states,
+        )
+    )
+    held = runtime._observable_values(stale_rh)
+
+    assert stale_rh.hold_condition == "primary_rh_stale"
+    assert runtime.last_valid_values == saved_values
+    assert runtime.last_valid_at == saved_at
+    assert held["target_scenarios"] == current["target_scenarios"]
+    assert held["data_quality"] == "stale"
 
 
 def test_persisted_last_valid_outputs_are_used_after_runtime_reload() -> None:

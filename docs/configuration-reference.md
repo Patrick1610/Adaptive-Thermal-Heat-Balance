@@ -159,6 +159,10 @@ installations without such a snapshot can still show `restored_stale` entity val
 new valid calculation. The outdoor-history collector retains its separate two-hour maximum hold
 and builds adaptation only from completed local calendar days.
 
+Only a calculation for which every mandatory environmental input is valid may replace this stored
+snapshot. A fresh room temperature combined with stale humidity, radiant data or another mandatory
+source therefore cannot erase previously valid room-target scenarios during startup.
+
 When another input changes, ATHB may re-evaluate using the same already accepted primary report
 while it remains inside its freshness window. An identical value and timestamp are reuse of one
 observation, not a fabricated new report, and never count as a second recovery sample. An older

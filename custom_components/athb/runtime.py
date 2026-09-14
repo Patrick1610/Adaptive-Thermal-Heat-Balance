@@ -917,7 +917,12 @@ class ZoneRuntime:
             and accepted is not None
             and accepted.observed_at is not None
         )
-        if primary_fresh and projected.get("thermal_sensation") is not None:
+        outputs_current = (
+            primary_fresh
+            and result.hold_condition is None
+            and projected.get("thermal_sensation") is not None
+        )
+        if outputs_current:
             assert accepted is not None
             self.last_valid_values = {
                 key: deepcopy(projected[key])
@@ -933,7 +938,12 @@ class ZoneRuntime:
                     projected_value is None
                     or projected_value == "unknown"
                     or (
-                        key in {"effective_targets", "effective_target_details"}
+                        key
+                        in {
+                            "effective_targets",
+                            "effective_target_details",
+                            "target_scenarios",
+                        }
                         and not projected_value
                     )
                     or (
@@ -970,7 +980,7 @@ class ZoneRuntime:
         now = dt_util.utcnow()
         projected["data_quality"] = (
             "current"
-            if primary_fresh and projected.get("thermal_sensation") is not None
+            if outputs_current
             else "stale"
             if self.last_valid_values and result.hold_condition is not None
             else "unavailable"
