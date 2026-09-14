@@ -65,9 +65,10 @@ Rapid falls back explicitly to Adaptive for an atomic range or a zone with separ
 cooling targets. Boost expires to Off. Comfort-level, Setback and Boost changes are lightweight
 and do not reload the config entry.
 
-The diagnostic **Model — heating target**, **Model — neutral reference**, and **Model — cooling
-target** sensors expose the inverse-solved ATHB roots before occupancy or Boost policy. They
-therefore change with comfort level, but not with Setback or Boost.
+The diagnostic **Comfort — heating boundary**, **Comfort — neutral reference**, and **Comfort —
+cooling boundary** sensors expose the inverse-solved sensation roots before occupancy or Boost
+policy. They define the selected comfort interval and its neutral reference; they are not all
+operational targets. They therefore change with comfort level, but not with Setback or Boost.
 
 For ordinary scalar heating-only or cooling-only zones, three room-coordinate sensors make the
 policy result explicit:
@@ -163,7 +164,9 @@ timestamp or a different value carrying the same timestamp remains invalid.
 
 Home Assistant's unchanged-state `state_reported` event is tracked for measured inputs. A sensor
 may therefore renew its freshness by reporting the same physical value with a genuinely newer
-`last_reported` timestamp; climate-target reports remain on the separate target-feedback path.
+`last_reported` timestamp. Climate targets use a separate handler: an unchanged report can only
+acknowledge an already pending ATHB command and is never interpreted as fresh room data or as an
+external target intervention.
 
 Age-only staleness clears on the first genuinely newer, valid timestamp. Recovery from unavailable,
 missing, malformed, out-of-range or implausibly jumping input remains subject to the stricter

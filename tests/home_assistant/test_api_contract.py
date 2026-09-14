@@ -317,6 +317,11 @@ def test_restored_values_are_visible_but_explicitly_stale() -> None:
     assert effective.native_value == 19.5
     assert effective.extra_state_attributes["data_quality"] == "restored_stale"
 
+    current = ZoneTargetSensor(runtime, "current")
+    current._restored_native_value = 19.5
+    assert current.native_value == 19.5
+    assert current.extra_state_attributes["data_quality"] == "restored_stale"
+
     saturation = SurfaceSaturationBinarySensor(runtime)
     saturation._restored_is_on = True
     assert saturation.is_on is True

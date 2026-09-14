@@ -132,8 +132,7 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
         self._restored_native_value: Any = None
         self._attr_translation_key = f"target_{scenario}"
 
-    @property
-    def native_value(self) -> Any:
+    def _live_value(self) -> float | None:
         values: list[float] = []
         for target in self.runtime.values.get("target_scenarios", {}).values():
             room = target.get(self.scenario, {}).get("room", {})
@@ -142,7 +141,12 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
                 values.append(float(value))
         if values and max(values) - min(values) <= 1e-6:
             return values[0]
-        return self._restored_native_value
+        return None
+
+    @property
+    def native_value(self) -> Any:
+        live_value = self._live_value()
+        return live_value if live_value is not None else self._restored_native_value
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -157,10 +161,17 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        live_value = self._live_value()
+        data_quality = self.runtime.values.get("data_quality")
+        if live_value is None and self._restored_native_value is not None:
+            data_quality = "restored_stale"
         attributes = {
             **super().extra_state_attributes,
             "target_basis": "room_policy_before_actuator_adjustments",
             "scenario": self.scenario,
+            "data_quality": data_quality,
+            "last_valid_at": self.runtime.values.get("last_valid_at"),
+            "suppression_reason": self.runtime.values.get("suppression_reason"),
         }
         if self.scenario == "current":
             attributes["per_climate"] = _per_climate_context(self.runtime)

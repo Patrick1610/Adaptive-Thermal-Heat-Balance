@@ -66,6 +66,18 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
         "missing_history_24h",
         "mandatory_input_unavailable_1h",
     }
+    english_entities = documents[1]["entity"]
+    assert english_entities["sensor"]["heating_control_target"]["name"] == (
+        "Comfort — heating boundary"
+    )
+    assert english_entities["sensor"]["cooling_control_target"]["name"] == (
+        "Comfort — cooling boundary"
+    )
+    assert all(
+        not definition["name"].startswith("Control — ")
+        for platform in ("switch", "select", "button")
+        for definition in english_entities[platform].values()
+    )
 
 
 def test_hacs_metadata_is_minimal_and_points_to_integration_subdirectory() -> None:

@@ -243,6 +243,15 @@ class ZoneRuntime:
                     self._handle_source_report_event,
                 )
             )
+        reported_targets = self._reported_target_entity_ids()
+        if reported_targets:
+            self.listeners.append(
+                async_track_state_report_event(
+                    self.hass,
+                    reported_targets,
+                    self._handle_target_report_event,
+                )
+            )
         self.listeners.append(self.hass.bus.async_listen(EVENT_CALL_SERVICE, self._service_event))
         self.listeners.append(
             self.hass.bus.async_listen(
@@ -308,6 +317,15 @@ class ZoneRuntime:
         ids.discard("")
         return ids
 
+    def _reported_target_entity_ids(self) -> set[str]:
+        """Return climate targets whose unchanged reports may acknowledge a command."""
+
+        return {
+            str(target["entity_id"])
+            for target in self.entry.data.get("targets", ())
+            if target.get("entity_id")
+        }
+
     @callback
     def _handle_state_event(self, event: Event[Any]) -> None:
         entity_id = str(event.data.get("entity_id", ""))
@@ -333,6 +351,30 @@ class ZoneRuntime:
         self.input_generation += 1
         self._update_critical_delta(entity_id, new_state)
         self.schedule_environmental_snapshot()
+
+    @callback
+    def _handle_target_report_event(self, event: Event[Any]) -> None:
+        """Use an unchanged target report only to acknowledge a pending command."""
+
+        entity_id = str(event.data.get("entity_id", ""))
+        target = next(
+            (item for item in self.entry.data.get("targets", ()) if item["entity_id"] == entity_id),
+            None,
+        )
+        if target is None or self.broker is None:
+            return
+        identity = str(target["registry_identity"])
+        pending, _queued = self.broker.state_counts(identity)
+        if not pending:
+            return
+        self._create_task(
+            self._async_handle_target_report(
+                target,
+                cast(State | None, event.data.get("new_state")),
+                event.context.id,
+                event.context.parent_id,
+            )
+        )
 
     @callback
     def _history_updated(self) -> None:
@@ -445,6 +487,14 @@ class ZoneRuntime:
                     self._handle_source_report_event,
                 )
             )
+        if entity_id in self._reported_target_entity_ids():
+            self.listeners.append(
+                async_track_state_report_event(
+                    self.hass,
+                    {entity_id},
+                    self._handle_target_report_event,
+                )
+            )
         self.input_generation += 1
         self.schedule_environmental_snapshot()
 
@@ -472,7 +522,19 @@ class ZoneRuntime:
         identity = str(target["registry_identity"])
         old_capability = capability_from_state(old)
         capability = capability_from_state(new)
-        if old is not None and old_capability.hvac_mode != capability.hvac_mode:
+        availability_changed = old_capability.available != capability.available
+        if availability_changed:
+            self.capability_generations[identity] += 1
+            self._transition(
+                identity,
+                (
+                    OwnershipEvent.TARGET_RETURNED
+                    if capability.available
+                    else OwnershipEvent.TARGET_UNAVAILABLE
+                ),
+                target_readiness=self._target_readiness(capability),
+            )
+        elif old is not None and old_capability.hvac_mode != capability.hvac_mode:
             self.capability_generations[identity] += 1
             self._transition(
                 identity,
@@ -484,12 +546,54 @@ class ZoneRuntime:
         self.last_target_fingerprints[identity] = fingerprint
         if prior == fingerprint or self.broker is None:
             return
-        state = self.ownership[identity]
-        feedback = FeedbackObservation(
+        if availability_changed and not self.broker.state_counts(identity)[0]:
+            return
+        await self._async_process_target_feedback(
             identity,
             fingerprint,
             new.context.id if new is not None else None,
             new.context.parent_id if new is not None else None,
+        )
+
+    async def _async_handle_target_report(
+        self,
+        target: dict[str, str],
+        new: State | None,
+        context_id: str | None,
+        parent_context_id: str | None,
+    ) -> None:
+        """Acknowledge a pending command from a same-value climate report."""
+
+        identity = str(target["registry_identity"])
+        if self.broker is None or not self.broker.state_counts(identity)[0]:
+            return
+        capability = capability_from_state(new)
+        if not capability.available:
+            return
+        await self._async_process_target_feedback(
+            identity,
+            self._fingerprint(capability),
+            context_id,
+            parent_context_id,
+        )
+
+    async def _async_process_target_feedback(
+        self,
+        identity: str,
+        fingerprint: TargetFingerprint,
+        context_id: str | None,
+        parent_context_id: str | None,
+    ) -> None:
+        """Classify one target observation and apply its broker outcome."""
+
+        if self.broker is None:
+            return
+        state = self.ownership[identity]
+        feedback = FeedbackObservation(
+            identity,
+            fingerprint,
+            context_id,
+            parent_context_id,
             self.configuration_generation,
             self.input_generation,
             self.capability_generations[identity],

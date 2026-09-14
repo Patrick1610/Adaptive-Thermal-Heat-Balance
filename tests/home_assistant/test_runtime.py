@@ -18,7 +18,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, async_
 
 from custom_components.athb import runtime as runtime_module
 from custom_components.athb.adapters.broker import CommandBroker, CommandOutcome
-from custom_components.athb.adapters.climate import HomeAssistantClimateService
+from custom_components.athb.adapters.climate import (
+    HomeAssistantClimateService,
+    capability_from_state,
+)
 from custom_components.athb.calculation import CapturedTarget, calculate_runtime_snapshot
 from custom_components.athb.core.climate import (
     ClimateCapabilitySnapshot,
@@ -933,6 +936,66 @@ async def test_runtime_uses_pipeline_and_broker_for_exact_target_only_service(
     await runtime.async_unload()
 
 
+async def test_same_value_climate_report_acknowledges_command_end_to_end(
+    hass: HomeAssistant,
+) -> None:
+    target_attributes = {
+        "hvac_modes": ["off", "heat"],
+        "supported_features": 1,
+        "min_temp": 16.0,
+        "max_temp": 30.0,
+        "target_temp_step": 0.5,
+        "temperature": 18.0,
+        "unit_of_measurement": "°C",
+    }
+    calls: list[ServiceCall] = []
+
+    async def report_unchanged(call: ServiceCall) -> None:
+        calls.append(call)
+        hass.states.async_set("climate.target", "heat", target_attributes, context=call.context)
+
+    hass.services.async_register("climate", "set_temperature", report_unchanged)
+    hass.states.async_set("sensor.room", "20", {"unit_of_measurement": "°C"})
+    hass.states.async_set("sensor.outdoor", "5", {"unit_of_measurement": "°C"})
+    hass.states.async_set("climate.target", "heat", target_attributes)
+    entry = MockConfigEntry(
+        domain="athb",
+        title="Zone",
+        data={
+            "zone_uuid": "zone-same-value",
+            "primary_temperature": "sensor.room",
+            "outdoor_source": "sensor.outdoor",
+            "rh_mode": "declared",
+            "rh_declared": 50.0,
+            "targets": [
+                {
+                    "target_uuid": "target-1",
+                    "entity_id": "climate.target",
+                    "registry_identity": "registry-1",
+                }
+            ],
+        },
+        options={
+            "comfort_strategy": "balanced",
+            "control_enabled": True,
+            "minimum_control_temperature": 18.0,
+            "maximum_control_temperature": 26.0,
+        },
+    )
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-same-value", "balanced", "off", True)
+
+    await runtime.async_start()
+    assert runtime.controller is not None
+    await runtime.controller.async_wait_idle()
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert runtime.broker is not None
+    assert runtime.broker.state_counts("registry-1") == (0, 0)
+    assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+    await runtime.async_unload()
+
+
 async def test_manual_override_and_boost_deadlines_expire_without_polling(
     hass: HomeAssistant,
 ) -> None:
@@ -1430,11 +1493,17 @@ def test_external_temperature_target_all_selector_is_not_missed(hass: HomeAssist
 
 
 class _FeedbackBroker:
-    def __init__(self, outcomes: list[CommandOutcome]) -> None:
+    def __init__(self, outcomes: list[CommandOutcome], *, pending: int = 0) -> None:
         self.outcomes = outcomes
+        self.pending = pending
+        self.feedbacks: list[Any] = []
         self.invalidated: list[str] = []
 
-    async def async_feedback(self, _feedback: Any, *, now: datetime) -> CommandOutcome:
+    def state_counts(self, _identity: str) -> tuple[int, int]:
+        return (self.pending, 0)
+
+    async def async_feedback(self, feedback: Any, *, now: datetime) -> CommandOutcome:
+        self.feedbacks.append(feedback)
         return self.outcomes.pop(0)
 
     def invalidate(self, identity: str) -> None:
@@ -1442,6 +1511,92 @@ class _FeedbackBroker:
 
     async def async_drain_queued(self, _identity: str, *, now: datetime) -> CommandOutcome | None:
         return None
+
+
+async def test_target_return_after_startup_is_reconciled_not_manual_override(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.RECONCILING,
+        DataReadiness.READY,
+        TargetReadiness.UNAVAILABLE,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    unavailable = State("climate.target", "unavailable")
+    runtime.last_target_fingerprints["registry-1"] = runtime._fingerprint(
+        capability_from_state(unavailable)
+    )
+    broker = _FeedbackBroker([])
+    runtime.broker = cast(Any, broker)
+    available = State(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "temperature": 19.5,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    await runtime._async_handle_target_state(
+        runtime.entry.data["targets"][0], unavailable, available
+    )
+
+    state = runtime.ownership["registry-1"]
+    assert state.ownership is Ownership.RECONCILING
+    assert state.target_readiness is TargetReadiness.AVAILABLE_SUPPORTED
+    assert state.external_revision == 0
+    assert runtime.capability_generations["registry-1"] == 2
+    assert broker.feedbacks == []
+
+
+async def test_unchanged_target_report_acknowledges_pending_command_without_recalculation(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.READY,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    acknowledged = CommandOutcome(
+        "command",
+        DispatchStatus.DISPATCHED,
+        AcknowledgementStatus.ACKNOWLEDGED,
+        "own_context_match",
+    )
+    broker = _FeedbackBroker([acknowledged], pending=1)
+    runtime.broker = cast(Any, broker)
+    generation = runtime.input_generation
+    current = State(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "temperature": 19.5,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    await runtime._async_handle_target_report(
+        runtime.entry.data["targets"][0], current, "athb-context", None
+    )
+    await hass.async_block_till_done()
+
+    assert len(broker.feedbacks) == 1
+    assert broker.feedbacks[0].context_id == "athb-context"
+    assert broker.feedbacks[0].observed.temperature_ha == 19.5
+    assert runtime.input_generation == generation
+    assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
 
 
 async def test_target_feedback_rejection_repair_and_hvac_mode_reconciliation(
