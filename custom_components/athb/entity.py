@@ -128,8 +128,13 @@ class AthbEntity(Entity):
                 "target_readiness": values.get("target_readiness", {}),
                 "data_readiness": values.get("data_readiness", {}),
                 "command_outcomes": values.get("command_outcomes", {}),
+                "recovery_reason": values.get("recovery_reason"),
+                "resume_required": values.get("resume_required", False),
+                "transition_reasons": values.get("transition_reasons", ()),
             },
         }
+        if primary_id and primary_id.startswith("climate."):
+            attributes["sources"]["primary_temperature"]["attribute"] = "current_temperature"
         if settings:
             attributes["settings"] = settings
         return attributes

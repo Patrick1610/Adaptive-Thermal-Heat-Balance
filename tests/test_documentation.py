@@ -65,6 +65,7 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
         "incompatible_auto_mapping",
         "missing_history_24h",
         "mandatory_input_unavailable_1h",
+        "resume_required",
     }
     english_entities = documents[1]["entity"]
     assert english_entities["sensor"]["lower_comfort_boundary"]["name"] == (

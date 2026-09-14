@@ -11,7 +11,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.athb import async_migrate_entry
-from custom_components.athb.config_flow import AthbOptionsFlow
+from custom_components.athb.config_flow import PRIMARY_TEMPERATURE, AthbOptionsFlow
 from custom_components.athb.const import DOMAIN, PLATFORMS
 
 
@@ -22,6 +22,75 @@ def _schema_keys(result: config_entries.ConfigFlowResult) -> set[str]:
 def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
     marker = next(item for item in result["data_schema"].schema if str(item.schema) == key)
     return marker.description["suggested_value"]
+
+
+def test_primary_temperature_selector_accepts_temperature_sensors_and_climates() -> None:
+    assert PRIMARY_TEMPERATURE.config["filter"] == [
+        {"domain": ["sensor"], "device_class": ["temperature"]},
+        {"domain": ["sensor"], "unit_of_measurement": ["°C", "°F", "K"]},
+        {"domain": ["climate"]},
+    ]
+
+
+async def test_setup_rejects_available_malformed_primary_source(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    hass.states.async_set("sensor.power", "125", {"unit_of_measurement": "W"})
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Zone"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "primary_temperature": "sensor.power",
+            "rh_mode": "declared",
+            "outdoor_source": "sensor.outdoor",
+        },
+    )
+    assert result["step_id"] == "environment"
+    assert result["errors"] == {"primary_temperature": "invalid_primary_source"}
+
+
+async def test_setup_allows_temporarily_unavailable_primary_climate(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    hass.states.async_set("climate.zone", "unavailable")
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Zone"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "primary_temperature": "climate.zone",
+            "rh_mode": "declared",
+            "outdoor_source": "sensor.outdoor",
+        },
+    )
+    assert result["step_id"] == "humidity"
+
+
+async def test_setup_accepts_available_primary_climate_without_unit_attribute(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    hass.states.async_set("climate.zone", "heat", {"current_temperature": 21.5})
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"name": "Zone"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "primary_temperature": "climate.zone",
+            "rh_mode": "declared",
+            "outdoor_source": "sensor.outdoor",
+        },
+    )
+    assert result["step_id"] == "humidity"
 
 
 async def _open_options_section(

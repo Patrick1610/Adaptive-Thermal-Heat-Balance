@@ -25,6 +25,34 @@ class ControlEligibleBinarySensor(AthbEntity, BinarySensorEntity):
         return bool(self.runtime.values.get("control_eligible", False))
 
 
+class OccupancyBinarySensor(AthbEntity, BinarySensorEntity):
+    """Resolved occupancy, including the bounded unknown-state hold."""
+
+    _attr_translation_key = "occupancy"
+
+    def __init__(self, runtime: ZoneRuntime) -> None:
+        super().__init__(runtime, "occupancy")
+
+    @property
+    def available(self) -> bool:
+        return bool(self.runtime.values.get("occupancy_available", False))
+
+    @property
+    def is_on(self) -> bool | None:
+        if not self.available:
+            return None
+        return self.runtime.values.get("occupancy_status") == "comfort"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        return {
+            **super().extra_state_attributes,
+            "source_entity": self.runtime.entry.options.get("occupancy_entity"),
+            "source_state": self.runtime.values.get("occupancy_source_state"),
+            "held": bool(self.runtime.values.get("occupancy_held", False)),
+        }
+
+
 class SurfaceSaturationBinarySensor(AthbEntity, BinarySensorEntity, RestoreEntity):
     _attr_translation_key = "surface_saturation"
 
@@ -64,6 +92,9 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     entities: list[BinarySensorEntity] = [ControlEligibleBinarySensor(entry.runtime_data)]
+    occupancy_enabled = bool(entry.options.get("occupancy_entity"))
+    if occupancy_enabled:
+        entities.append(OccupancyBinarySensor(entry.runtime_data))
     surface_enabled = entry.options.get("radiant_model", "uniform") in {
         "surface",
         "mold_indicator",
@@ -73,6 +104,15 @@ async def async_setup_entry(
     else:
         registry = er.async_get(hass)
         obsolete_unique_id = f"{entry.runtime_data.zone_uuid}_surface_saturation"
+        for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if (
+                registry_entry.domain == "binary_sensor"
+                and registry_entry.unique_id == obsolete_unique_id
+            ):
+                registry.async_remove(registry_entry.entity_id)
+    if not occupancy_enabled:
+        registry = er.async_get(hass)
+        obsolete_unique_id = f"{entry.runtime_data.zone_uuid}_occupancy"
         for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if (
                 registry_entry.domain == "binary_sensor"

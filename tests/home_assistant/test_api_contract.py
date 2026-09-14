@@ -21,6 +21,7 @@ from custom_components.athb.adapters.climate import HomeAssistantClimateService
 from custom_components.athb.adapters.storage import HomeAssistantControlStorageBackend
 from custom_components.athb.binary_sensor import (
     ControlEligibleBinarySensor,
+    OccupancyBinarySensor,
     SurfaceSaturationBinarySensor,
 )
 from custom_components.athb.binary_sensor import async_setup_entry as async_setup_binary_entry
@@ -320,6 +321,29 @@ def test_surface_values_and_inapplicable_target_endpoints_remain_truthful() -> N
     assert effective.extra_state_attributes["reason"] == "running_mean_unavailable"
 
 
+def test_resolved_occupancy_sensor_exposes_held_and_unavailable_states() -> None:
+    runtime = _runtime()
+    runtime.entry.options["occupancy_entity"] = "binary_sensor.room"
+    sensor = OccupancyBinarySensor(runtime)
+
+    runtime.publish(
+        {
+            "occupancy_available": True,
+            "occupancy_status": "eco",
+            "occupancy_source_state": "unknown",
+            "occupancy_held": True,
+        }
+    )
+    assert sensor.available
+    assert sensor.is_on is False
+    assert sensor.extra_state_attributes["held"] is True
+    assert sensor.extra_state_attributes["source_entity"] == "binary_sensor.room"
+
+    runtime.publish({"occupancy_available": False, "occupancy_status": "comfort"})
+    assert not sensor.available
+    assert sensor.is_on is None
+
+
 def test_restored_values_are_visible_but_explicitly_stale() -> None:
     runtime = _runtime()
     runtime.publish({"data_quality": "unavailable"})
@@ -461,7 +485,8 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
 
     sensor = ZoneTargetSensor(runtime, "current")
     assert sensor.native_value == 19.37
-    climate = sensor.extra_state_attributes["per_climate"]["climate.roommind_override"]
+    attributes = sensor.extra_state_attributes
+    climate = attributes["per_climate"]["climate.roommind_override"]
     assert climate == {
         "hvac_mode": "heat",
         "hvac_action": "idle",
@@ -469,9 +494,39 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
         "unit": "°C",
         "current_temperature": 21.8,
         "reported_target": {"temperature": 19.5},
+        "calibration_offset_c": 0.0,
+        "minimum_temperature": None,
+        "maximum_temperature": None,
+        "temperature_step": None,
         "athb_current_target": {"temperature": 19.5},
         "athb_occupied_target": {"temperature": 21.5},
         "athb_unoccupied_target": {"temperature": 19.5},
+        "command_outcome": None,
+        "ownership": None,
+        "target_readiness": None,
+    }
+    assert attributes["decision"] == {
+        "scenario": "eco",
+        "comfort_level": "balanced",
+        "occupancy_source_state": None,
+        "occupancy_held": False,
+        "setback": None,
+        "setback_active": True,
+        "boost_mode": "off",
+        "boost_phase": None,
+        "governing_heating": None,
+        "governing_cooling": None,
+        "pre_slew_heating_c": None,
+        "pre_slew_cooling_c": None,
+        "requested_heating_c": None,
+        "requested_cooling_c": None,
+        "explicit_transition": False,
+        "transition_reasons": (),
+        "data_quality": None,
+        "quality_reasons": (),
+        "suppression_reason": None,
+        "recovery_reason": None,
+        "resume_required": False,
     }
 
     occupied = ZoneTargetSensor(runtime, "occupied")

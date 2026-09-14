@@ -206,6 +206,7 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
         }
         if self.scenario == "current":
             attributes["per_climate"] = _per_climate_context(self.runtime)
+            attributes["decision"] = _target_decision_context(self.runtime)
         return attributes
 
 
@@ -406,11 +407,60 @@ def _per_climate_context(runtime: ZoneRuntime) -> dict[str, dict[str, Any]]:
             "unit": capability.temperature_unit.value,
             "current_temperature": current_temperature,
             "reported_target": reported_target,
+            "calibration_offset_c": runtime.entry.options.get(
+                f"calibration_{target['target_uuid']}", 0.0
+            ),
+            "minimum_temperature": capability.min_temp_ha,
+            "maximum_temperature": capability.max_temp_ha,
+            "temperature_step": capability.target_temp_step_ha,
             "athb_current_target": details.get("current", {}).get("actuator", {}),
             "athb_occupied_target": details.get("occupied", {}).get("actuator", {}),
             "athb_unoccupied_target": details.get("unoccupied", {}).get("actuator", {}),
+            "command_outcome": runtime.values.get("command_outcomes", {}).get(
+                str(target["target_uuid"])
+            ),
+            "ownership": runtime.values.get("ownership", {}).get(
+                str(target.get("registry_identity", ""))
+            ),
+            "target_readiness": runtime.values.get("target_readiness", {}).get(
+                str(target.get("registry_identity", ""))
+            ),
         }
     return context
+
+
+def _target_decision_context(runtime: ZoneRuntime) -> dict[str, Any]:
+    """Return a compact structured explanation of the current room target."""
+
+    calculation = runtime.values.get("calculation")
+    targets = getattr(calculation, "targets", ())
+    numerical = next(
+        (item.result for item in targets if getattr(item, "result", None) is not None), None
+    )
+    policy = getattr(numerical, "policy", None)
+    return {
+        "scenario": runtime.values.get("occupancy_status"),
+        "comfort_level": runtime.strategy,
+        "occupancy_source_state": runtime.values.get("occupancy_source_state"),
+        "occupancy_held": runtime.values.get("occupancy_held", False),
+        "setback": runtime.eco_intensity if runtime.entry.options.get("occupancy_entity") else None,
+        "setback_active": runtime.values.get("setback_active", False),
+        "boost_mode": runtime.boost_mode,
+        "boost_phase": getattr(policy, "boost_phase", None),
+        "governing_heating": getattr(policy, "governing_heating", None),
+        "governing_cooling": getattr(policy, "governing_cooling", None),
+        "pre_slew_heating_c": getattr(policy, "pre_slew_heating_c", None),
+        "pre_slew_cooling_c": getattr(policy, "pre_slew_cooling_c", None),
+        "requested_heating_c": getattr(policy, "heating_c", None),
+        "requested_cooling_c": getattr(policy, "cooling_c", None),
+        "explicit_transition": getattr(calculation, "explicit_transition", False),
+        "transition_reasons": runtime.values.get("transition_reasons", ()),
+        "data_quality": runtime.values.get("data_quality"),
+        "quality_reasons": runtime.values.get("quality_reasons", ()),
+        "suppression_reason": runtime.values.get("suppression_reason"),
+        "recovery_reason": runtime.values.get("recovery_reason"),
+        "resume_required": runtime.values.get("resume_required", False),
+    }
 
 
 def _remove_stale_sensor_entities(

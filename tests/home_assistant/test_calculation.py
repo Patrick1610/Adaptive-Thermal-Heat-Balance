@@ -6,8 +6,13 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from homeassistant.core import State
 
-from custom_components.athb.adapters.sources import StateValue, validate_state_value
+from custom_components.athb.adapters.sources import (
+    StateValue,
+    snapshot_primary_temperature,
+    validate_state_value,
+)
 from custom_components.athb.calculation import (
     CapturedTarget,
     CapturedZoneSnapshot,
@@ -88,6 +93,68 @@ def test_registry_identity_change_starts_a_new_source_lineage() -> None:
 
     assert changed.source_identity == "registry:new-registry"
     assert changed_state.recovering is False
+
+
+@pytest.mark.parametrize(
+    ("unit", "raw", "expected"),
+    [("°C", 21.5, 21.5), ("°F", 68.0, 20.0), ("K", 293.15, 20.0)],
+)
+def test_climate_current_temperature_is_a_valid_primary_source(
+    unit: str, raw: float, expected: float
+) -> None:
+    captured = snapshot_primary_temperature(
+        State(
+            "climate.room",
+            "heat",
+            {"current_temperature": raw, "unit_of_measurement": unit},
+            last_reported=NOW,
+        ),
+        registry_identity="climate-registry",
+    )
+
+    observation, source_state = validate_state_value(captured, kind=SourceKind.PRIMARY_AIR, now=NOW)
+
+    assert observation.value == pytest.approx(expected)
+    assert observation.source_identity == "registry:climate-registry:current_temperature"
+    assert source_state.last_accepted == observation
+
+
+def test_climate_primary_uses_home_assistant_system_unit_when_state_omits_unit() -> None:
+    captured = snapshot_primary_temperature(
+        State(
+            "climate.room",
+            "heat",
+            {"current_temperature": 68.0},
+            last_reported=NOW,
+        ),
+        climate_unit="°F",
+    )
+
+    observation, _source_state = validate_state_value(
+        captured, kind=SourceKind.PRIMARY_AIR, now=NOW
+    )
+
+    assert observation.value == pytest.approx(20.0)
+    assert observation.unit == "°C"
+
+
+@pytest.mark.parametrize("raw", [None, "unknown", float("nan")])
+def test_climate_without_finite_current_temperature_is_invalid(raw: object) -> None:
+    captured = snapshot_primary_temperature(
+        State(
+            "climate.room",
+            "heat",
+            {"current_temperature": raw, "unit_of_measurement": "°C"},
+            last_reported=NOW,
+        )
+    )
+
+    observation, _source_state = validate_state_value(
+        captured, kind=SourceKind.PRIMARY_AIR, now=NOW
+    )
+
+    assert observation.validity.value == "invalid"
+    assert observation.reasons == ("invalid_numeric_or_unit",)
 
 
 def test_snapshot_adapter_preserves_declared_rh_and_adaptive_root_path() -> None:

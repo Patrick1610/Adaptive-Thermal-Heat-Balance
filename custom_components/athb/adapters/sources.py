@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from homeassistant.components.climate.const import ATTR_CURRENT_TEMPERATURE
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import State
 
@@ -36,6 +37,7 @@ class StateValue:
     parent_context_id: str | None
     registry_identity: str | None = None
     source_generation: int = 1
+    source_attribute: str | None = None
 
 
 FRESHNESS_OPTION_KEYS = {
@@ -91,6 +93,31 @@ def snapshot_state(
     )
 
 
+def snapshot_primary_temperature(
+    state: State | None,
+    *,
+    climate_unit: str | None = None,
+    registry_identity: str | None = None,
+    source_generation: int = 1,
+) -> StateValue | None:
+    """Capture a sensor state or a climate's public current-temperature attribute."""
+
+    captured = snapshot_state(
+        state,
+        attributes=(ATTR_CURRENT_TEMPERATURE,),
+        registry_identity=registry_identity,
+        source_generation=source_generation,
+    )
+    if captured is None or not captured.entity_id.startswith("climate."):
+        return captured
+    return replace(
+        captured,
+        raw_state=captured.attributes.get(ATTR_CURRENT_TEMPERATURE),
+        unit=captured.unit or str(climate_unit or ""),
+        source_attribute=ATTR_CURRENT_TEMPERATURE,
+    )
+
+
 def validate_state_value(
     value: StateValue | None,
     *,
@@ -117,7 +144,7 @@ def validate_state_value(
         return update.observation, update.state
     identity = SourceIdentity(
         value.entity_id,
-        None,
+        value.source_attribute,
         value.registry_identity,
         value.source_generation if value.source_generation > 0 else generation,
     )

@@ -68,9 +68,10 @@ class SourceIdentity:
 
     @property
     def lineage_identity(self) -> str:
+        attribute = f":{self.attribute}" if self.attribute else ""
         if self.registry_id:
-            return f"registry:{self.registry_id}"
-        return f"unregistered:{self.entity_id}:{self.source_generation}"
+            return f"registry:{self.registry_id}{attribute}"
+        return f"unregistered:{self.entity_id}:{self.source_generation}{attribute}"
 
 
 @dataclass(frozen=True, slots=True)

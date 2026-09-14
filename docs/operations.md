@@ -6,7 +6,9 @@ and only the newest queued snapshot survives an event burst.
 
 ## Status and “Why this temperature?”
 
-Entity state stays compact. Downloaded diagnostics contain the latest coherent decision and at
+Entity state stays compact. **Target — current** exposes the active scenario, comfort/setback/Boost
+policy, pre-slew and requested values, quality/recovery state, and per-climate temperature,
+setpoint, bounds, grid, normalized command and outcome as native attributes. Downloaded diagnostics contain the latest coherent decision and at
 most 20 material traces: source provenance and validity, history quality, radiant assumptions,
 comfort-level votes, attempted roots, occupancy/Boost and critical transforms, normalized target, ownership and
 the command or exact suppression reason. Household identifiers are consistently pseudonymized;
@@ -34,6 +36,9 @@ are never replayed. Ambiguous or corrupt control state requires Resume. Disablin
 closes the dispatch gate and releases listeners, timers, tasks, leases and shared-source references;
 it does not turn climate equipment off. Removing a zone removes only its zone state and never
 unrelated Recorder/helper data.
+
+When Resume remains required for one hour, ATHB creates a Repair with the recovery context and a
+recommended check. It is removed automatically after safe reconciliation.
 
 The environmental slew limiter applies only to ordinary measured changes. A start or reload, the
 first trustworthy calculation after an invalid mandatory input, an occupancy/setback change, a

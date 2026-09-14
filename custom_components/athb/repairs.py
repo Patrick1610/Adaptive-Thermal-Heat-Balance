@@ -18,6 +18,7 @@ REPAIR_TYPES = {
     "incompatible_auto_mapping",
     "missing_history_24h",
     "mandatory_input_unavailable_1h",
+    "resume_required",
 }
 
 

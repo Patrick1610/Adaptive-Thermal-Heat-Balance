@@ -7,8 +7,11 @@ targets only. It never changes HVAC mode, power, fan, preset, swing, or humidity
 
 ## Environmental inputs
 
-`primary_temperature` is the representative indoor **air** temperature. A selected source must
-report a finite temperature with a recognised temperature unit and a fresh observation. Indoor
+`primary_temperature` is the representative indoor **air** temperature. It may be a temperature
+or numeric sensor, whose state is used, or a climate entity, whose public `current_temperature`
+attribute is used. Either route must report a finite value in °C, °F or K with a fresh observation.
+Unitless numerics, a missing climate attribute, NaN and malformed values are invalid. Exactly one
+source is selected; ATHB does not average multiple room temperatures. Indoor
 RH is either `measured` from an entity or a fixed `declared` percentage. Declared RH retains that
 provenance throughout calculations and diagnostics. ATHB never invents a replacement value.
 
@@ -53,9 +56,10 @@ target.
 
 An optional binary occupancy or schedule source applies Setback at every comfort level: `on`
 uses the solved roots unchanged and `off` widens them using the selected Setback. Without a source,
-no setback is applied. Unknown input retains the last state for 30 minutes and then assumes
-occupied/no setback with `occupancy_unknown`. The Setback page and entity exist only when a source
-is configured.
+no setback is applied. Unknown input retains the last resolved state for 30 minutes and then
+becomes unavailable while calculation explicitly assumes occupied/no setback with
+`occupancy_unknown`. A native **Occupancy — resolved** binary sensor is created only when a source
+is configured; its attributes show the source state and whether the resolution is held.
 
 Boost is an independent runtime select. **Off** follows comfort level and occupancy. **Adaptive**
 bypasses setback and shifts the directional target by `boost_delta_c` toward, but not past,
@@ -83,10 +87,12 @@ policy result explicit:
   environmental slew limiting.
 
 These sensor states are the common room target before per-actuator calibration, device limits and
-grid rounding. **Target — current** exposes a `per_climate` attribute for every controlled climate,
-including its measured current temperature, reported setpoint, HVAC mode/action, availability and
-the exact normalized ATHB request for all three scenarios. This keeps the device page compact while
-preserving actuator-level evidence. Zones that genuinely mix heating and cooling directions or use
+grid rounding. **Target — current** exposes a structured `decision` attribute with scenario,
+comfort, occupancy/setback, Boost phase, governing control point, pre-slew/requested values,
+transition, quality, suppression and recovery state. Its `per_climate` attribute includes current
+temperature, reported setpoint, calibration, bounds, grid, HVAC mode/action, availability,
+normalized ATHB requests, ownership/readiness and command outcome. This keeps the device page
+compact while preserving actuator-level evidence. Zones that genuinely mix heating and cooling directions or use
 an atomic temperature range retain separate climate-specific endpoint sensors: one scalar room
 target would be physically ambiguous there.
 
@@ -170,9 +176,9 @@ timestamp or a different value carrying the same timestamp remains invalid.
 
 Home Assistant's unchanged-state `state_reported` event is tracked for measured inputs. A sensor
 may therefore renew its freshness by reporting the same physical value with a genuinely newer
-`last_reported` timestamp. Climate targets use a separate handler: an unchanged report can only
-acknowledge an already pending ATHB command and is never interpreted as fresh room data or as an
-external target intervention.
+`last_reported` timestamp. Climate target feedback remains independent from source validation.
+When one climate is both primary source and target, the same Home Assistant report can update its
+public `current_temperature` input and acknowledge its target endpoint without conflating roles.
 
 Age-only staleness clears on the first genuinely newer, valid timestamp. Recovery from unavailable,
 missing, malformed, out-of-range or implausibly jumping input remains subject to the stricter

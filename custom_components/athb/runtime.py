@@ -13,6 +13,7 @@ from hashlib import sha256
 from typing import Any, cast
 from uuid import uuid4
 
+from homeassistant.components.climate.const import ATTR_CURRENT_TEMPERATURE
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ENTITY_MATCH_ALL, EVENT_CALL_SERVICE
 from homeassistant.core import Context, Event, HomeAssistant, State, callback
@@ -43,7 +44,12 @@ from .adapters.outdoor_history import (
     unavailable_history,
 )
 from .adapters.recorder import HomeAssistantRecorderHistoryReader
-from .adapters.sources import StateValue, configured_freshness, snapshot_state
+from .adapters.sources import (
+    StateValue,
+    configured_freshness,
+    snapshot_primary_temperature,
+    snapshot_state,
+)
 from .adapters.storage import (
     LAST_VALID_OUTPUT_KEYS,
     HomeAssistantControlStorageBackend,
@@ -343,7 +349,7 @@ class ZoneRuntime:
         )
         if target is not None:
             self._create_task(self._async_handle_target_state(target, old_state, new_state))
-        else:
+        if target is None or entity_id in self._reported_source_entity_ids():
             self.input_generation += 1
             self._update_critical_delta(entity_id, new_state)
         self.schedule_environmental_snapshot()
@@ -695,7 +701,7 @@ class ZoneRuntime:
         )
         snapshot = CapturedZoneSnapshot(
             now,
-            self._snapshot_state(primary_state),
+            self._snapshot_primary_temperature(primary_state),
             self._snapshot_state(self.hass.states.get(str(self.entry.data.get("rh_entity", "")))),
             (
                 float(self.entry.data["rh_declared"])
@@ -738,8 +744,19 @@ class ZoneRuntime:
                 None
                 if (state := self.hass.states.get(entity_id)) is None
                 else {
-                    "state": state.state,
+                    "state": (
+                        state.attributes.get(ATTR_CURRENT_TEMPERATURE)
+                        if entity_id == str(self.entry.data.get("primary_temperature", ""))
+                        and entity_id.startswith("climate.")
+                        else state.state
+                    ),
                     "unit": state.attributes.get("unit_of_measurement"),
+                    "attribute": (
+                        ATTR_CURRENT_TEMPERATURE
+                        if entity_id == str(self.entry.data.get("primary_temperature", ""))
+                        and entity_id.startswith("climate.")
+                        else None
+                    ),
                     "last_reported": (
                         getattr(state, "last_reported", None) or state.last_updated
                     ).isoformat(),
@@ -805,6 +822,17 @@ class ZoneRuntime:
             source_generation=self.source_generation,
         )
 
+    def _snapshot_primary_temperature(self, state: State | None) -> StateValue | None:
+        if state is None:
+            return None
+        registry_entry = er.async_get(self.hass).async_get(state.entity_id)
+        return snapshot_primary_temperature(
+            state,
+            climate_unit=str(self.hass.config.units.temperature_unit),
+            registry_identity=(registry_entry.id if registry_entry is not None else None),
+            source_generation=self.source_generation,
+        )
+
     def _snapshot_mold_indicator(self, state: State | None) -> StateValue | None:
         """Capture the Mold Indicator critical-point attribute as estimated surface data."""
 
@@ -831,14 +859,25 @@ class ZoneRuntime:
             captured.source_generation,
         )
 
-    @staticmethod
-    def _state_temperature_c(state: State | None, kind: SourceKind) -> float | None:
+    def _state_temperature_c(self, state: State | None, kind: SourceKind) -> float | None:
         if state is None:
             return None
+        raw_value = (
+            state.attributes.get(ATTR_CURRENT_TEMPERATURE)
+            if kind is SourceKind.PRIMARY_AIR and state.entity_id.startswith("climate.")
+            else state.state
+        )
         converted = convert_source_value(
             kind,
-            state.state,
-            str(state.attributes.get("unit_of_measurement", "")),
+            raw_value,
+            str(
+                state.attributes.get("unit_of_measurement")
+                or (
+                    self.hass.config.units.temperature_unit
+                    if kind is SourceKind.PRIMARY_AIR and state.entity_id.startswith("climate.")
+                    else ""
+                )
+            ),
         )
         return converted[0] if converted is not None else None
 
@@ -882,6 +921,10 @@ class ZoneRuntime:
         values["control_status"] = self._control_status()
         values["transition_reasons"] = transition_reasons
         values["resume_required"] = any(state.resume_required for state in self.ownership.values())
+        if values["resume_required"] or "resume_required" in self.repair_condition_started:
+            self._update_delayed_repair(
+                "resume_required", values["resume_required"], timedelta(hours=1)
+            )
         values["control_eligible"] = (
             self.control_enabled
             and bool(result.targets)
@@ -1848,13 +1891,22 @@ class ZoneRuntime:
             if state is not None and state.state == "off"
             else OccupancyState.UNKNOWN
         )
+        previous = self.profile_resolution
         resolution = resolve_occupancy_profile(
             occupancy=occupancy,
             now=now,
-            previous=self.profile_resolution,
+            previous=previous,
         )
-        previous = self.profile_resolution
         self.profile_resolution = resolution
+        held = (
+            occupancy is OccupancyState.UNKNOWN
+            and previous is not None
+            and resolution.resolved_at == previous.resolved_at
+            and "occupancy_unknown" not in resolution.reasons
+        )
+        self.values["occupancy_source_state"] = occupancy.value
+        self.values["occupancy_held"] = held
+        self.values["occupancy_available"] = occupancy is not OccupancyState.UNKNOWN or held
         if previous is not None and previous.resolved is not resolution.resolved:
             self._mark_explicit_transition("occupancy")
         return resolution

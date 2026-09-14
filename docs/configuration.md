@@ -3,7 +3,8 @@
 ## Normal setup
 
 Create one ATHB config entry per zone. Every entry creates one Home Assistant device that groups
-the zone's ATHB entities. Select a primary air-temperature entity, an outdoor temperature source,
+the zone's ATHB entities. Select one primary air-temperature source: a temperature/numeric sensor
+(its state is used) or a climate entity (its `current_temperature` attribute is used), an outdoor temperature source,
 one indoor-RH mode and one to eight registered climate targets. Measured RH is recommended; fixed
 RH may instead be entered directly as a finite 0–100% declaration and needs no helper entity.
 Only the field for the selected RH mode is shown. Balanced is the default comfort level. New entries
@@ -41,8 +42,8 @@ referenced an old scalar target must select the new Current target once after up
 
 For a normal scalar heat-only or cool-only zone, **Target — current**, **Target — occupied** and
 **Target — unoccupied** show the common room target without repeating climate names. Open
-**Target — current** to inspect the actual temperature, reported setpoint and exact normalized ATHB
-request for every controlled climate. Other ATHB entities also expose relevant source, provenance,
+**Target — current** to inspect the decision chain, actual temperature, reported setpoint, limits,
+grid and exact normalized ATHB request for every controlled climate. Other ATHB entities also expose relevant source, provenance,
 setting and related-value attributes so a displayed result can be traced without adding more
 entities to the device page.
 

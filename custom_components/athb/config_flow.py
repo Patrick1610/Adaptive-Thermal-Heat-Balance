@@ -10,10 +10,13 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry, ConfigFlowResult
 from homeassistant.const import CONF_NAME
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
+from homeassistant.util import dt as dt_util
 
+from .adapters.climate import capability_from_state
+from .adapters.sources import snapshot_primary_temperature, valid_value, validate_state_value
 from .config_schema import validate_environment, validate_options, validate_targets
 from .const import (
     CONF_BOOST_MODE,
@@ -33,8 +36,19 @@ from .const import (
     DEFAULT_STRATEGY,
     DOMAIN,
 )
+from .core.climate import CapabilityMapping, ClimateFailure, resolve_capability
+from .core.sources import SourceKind
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig())
+PRIMARY_TEMPERATURE = selector.EntitySelector(
+    selector.EntitySelectorConfig(
+        filter=[
+            {"domain": "sensor", "device_class": "temperature"},
+            {"domain": "sensor", "unit_of_measurement": ["°C", "°F", "K"]},
+            {"domain": "climate"},
+        ]
+    )
+)
 CLIMATES = selector.EntitySelector(selector.EntitySelectorConfig(domain="climate", multiple=True))
 MOLD_INDICATORS = selector.EntitySelector(
     selector.EntitySelectorConfig(domain="sensor", integration="mold_indicator")
@@ -101,6 +115,26 @@ OPTION_DEFAULTS: dict[str, object] = {
 
 def _required_entity(key: str, value: object | None) -> vol.Marker:
     return vol.Required(key, default=value) if value else vol.Required(key)
+
+
+def _primary_source_error(hass: HomeAssistant, entity_id: str) -> str | None:
+    """Reject available malformed sources without treating staleness as configuration failure."""
+
+    if not entity_id.startswith(("sensor.", "climate.")):
+        return "invalid_primary_source"
+    state = hass.states.get(entity_id)
+    if state is None or state.state in {"unknown", "unavailable"}:
+        return None
+    captured = snapshot_primary_temperature(
+        state, climate_unit=str(hass.config.units.temperature_unit)
+    )
+    observation, _source_state = validate_state_value(
+        captured,
+        kind=SourceKind.PRIMARY_AIR,
+        now=(captured.observed_at if captured is not None else None) or dt_util.utcnow(),
+        freshness=None,
+    )
+    return None if valid_value(observation) is not None else "invalid_primary_source"
 
 
 class _OptionsWizardMixin:
@@ -741,6 +775,14 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
+            if error := _primary_source_error(
+                self.hass, str(user_input.get(CONF_PRIMARY_TEMPERATURE, ""))
+            ):
+                return self.async_show_form(
+                    step_id="environment",
+                    data_schema=self._environment_schema(),
+                    errors={CONF_PRIMARY_TEMPERATURE: error},
+                )
             self._data.update(user_input)
             stale_key = (
                 CONF_RH_DECLARED if self._data[CONF_RH_MODE] == "measured" else CONF_RH_ENTITY
@@ -758,7 +800,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             {
                 _required_entity(
                     CONF_PRIMARY_TEMPERATURE, defaults.get(CONF_PRIMARY_TEMPERATURE)
-                ): ENTITY,
+                ): PRIMARY_TEMPERATURE,
                 vol.Required(CONF_RH_MODE, default=defaults.get(CONF_RH_MODE, "measured")): _select(
                     ("measured", "declared"), "rh_mode"
                 ),
@@ -863,6 +905,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
 
     async def async_step_review(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is None:
+            primary_value, primary_unit, primary_age, primary_status = self._primary_preview()
             return self.async_show_form(
                 step_id="review",
                 data_schema=vol.Schema({}),
@@ -872,9 +915,65 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     "outdoor": str(self._data[CONF_OUTDOOR_SOURCE]),
                     "target_count": str(len(self._data[CONF_TARGETS])),
                     "strategy": str(self._pending_options[CONF_COMFORT_STRATEGY]),
+                    "primary_value": primary_value,
+                    "primary_unit": primary_unit,
+                    "primary_age": primary_age,
+                    "primary_status": primary_status,
+                    "occupancy": self._occupancy_preview(),
+                    "target_capabilities": self._target_capability_preview(),
                 },
             )
         return await self._async_commit_config()
+
+    def _primary_preview(self) -> tuple[str, str, str, str]:
+        entity_id = str(self._data.get(CONF_PRIMARY_TEMPERATURE, ""))
+        state = self.hass.states.get(entity_id)
+        registry_entry = er.async_get(self.hass).async_get(entity_id)
+        captured = snapshot_primary_temperature(
+            state,
+            climate_unit=str(self.hass.config.units.temperature_unit),
+            registry_identity=(registry_entry.id if registry_entry is not None else None),
+        )
+        now = dt_util.utcnow()
+        observation, _source_state = validate_state_value(
+            captured,
+            kind=SourceKind.PRIMARY_AIR,
+            now=now,
+            freshness=None,
+        )
+        value = valid_value(observation)
+        age = (
+            max(0.0, (now - observation.observed_at).total_seconds() / 60.0)
+            if observation.observed_at is not None
+            else None
+        )
+        return (
+            "—" if value is None else f"{value:.2f}",
+            observation.unit or "—",
+            "—" if age is None else f"{age:.1f} min",
+            observation.validity.value,
+        )
+
+    def _occupancy_preview(self) -> str:
+        entity_id = str(self._pending_options.get("occupancy_entity", ""))
+        state = self.hass.states.get(entity_id) if entity_id else None
+        return (
+            "not configured" if not entity_id else state.state if state is not None else "missing"
+        )
+
+    def _target_capability_preview(self) -> str:
+        previews = []
+        for target in self._data.get(CONF_TARGETS, ()):
+            entity_id = str(target["entity_id"])
+            capability = capability_from_state(self.hass.states.get(entity_id))
+            mapping = resolve_capability(capability)
+            if isinstance(mapping, CapabilityMapping):
+                outcome = f"{mapping.direction.value}/{mapping.shape.value}"
+            else:
+                assert isinstance(mapping, ClimateFailure)
+                outcome = mapping.reason
+            previews.append(f"{entity_id}: {outcome}")
+        return "; ".join(previews) or "none"
 
     async def _async_commit_config(self) -> ConfigFlowResult:
         if self._is_reconfigure:
@@ -967,6 +1066,14 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         """Edit the zone name and environmental source identities."""
 
         if user_input is not None:
+            if error := _primary_source_error(
+                self.hass, str(user_input.get(CONF_PRIMARY_TEMPERATURE, ""))
+            ):
+                return self.async_show_form(
+                    step_id="sources",
+                    data_schema=self._sources_schema(),
+                    errors={CONF_PRIMARY_TEMPERATURE: error},
+                )
             self._pending_data.update(user_input)
             stale_key = (
                 CONF_RH_DECLARED
@@ -975,26 +1082,26 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             )
             self._pending_data.pop(stale_key, None)
             return await self.async_step_source_humidity()
+        return self.async_show_form(step_id="sources", data_schema=self._sources_schema())
+
+    def _sources_schema(self) -> vol.Schema:
         defaults = self._pending_data
-        return self.async_show_form(
-            step_id="sources",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_NAME, default=defaults[CONF_NAME]): str,
-                    _required_entity(
-                        CONF_PRIMARY_TEMPERATURE,
-                        defaults.get(CONF_PRIMARY_TEMPERATURE),
-                    ): ENTITY,
-                    vol.Required(
-                        CONF_RH_MODE,
-                        default=defaults.get(CONF_RH_MODE, "measured"),
-                    ): _select(("measured", "declared"), "rh_mode"),
-                    _required_entity(
-                        CONF_OUTDOOR_SOURCE,
-                        defaults.get(CONF_OUTDOOR_SOURCE),
-                    ): ENTITY,
-                }
-            ),
+        return vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=defaults[CONF_NAME]): str,
+                _required_entity(
+                    CONF_PRIMARY_TEMPERATURE,
+                    defaults.get(CONF_PRIMARY_TEMPERATURE),
+                ): PRIMARY_TEMPERATURE,
+                vol.Required(
+                    CONF_RH_MODE,
+                    default=defaults.get(CONF_RH_MODE, "measured"),
+                ): _select(("measured", "declared"), "rh_mode"),
+                _required_entity(
+                    CONF_OUTDOOR_SOURCE,
+                    defaults.get(CONF_OUTDOOR_SOURCE),
+                ): ENTITY,
+            }
         )
 
     async def async_step_source_humidity(

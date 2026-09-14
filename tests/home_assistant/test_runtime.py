@@ -1936,6 +1936,43 @@ def test_occupancy_change_is_an_explicit_transition(hass: HomeAssistant) -> None
     assert runtime.pending_transition_reasons == {"occupancy"}
 
 
+async def test_climate_can_be_primary_source_and_target_on_the_same_event(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.data["primary_temperature"] = "climate.target"
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.READY,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    runtime.broker = None
+    old = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 19.0},
+    )
+    new = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.5, "temperature": 19.0},
+    )
+    generation = runtime.input_generation
+    event = SimpleNamespace(
+        data={"entity_id": "climate.target", "old_state": old, "new_state": new}
+    )
+
+    runtime._handle_state_event(cast(Any, event))
+    await hass.async_block_till_done()
+
+    assert runtime.input_generation == generation + 1
+    assert runtime.debounce_cancel is not None
+    runtime.debounce_cancel()
+
+
 async def test_broker_timer_callbacks_cover_timeout_and_queue_paths(
     hass: HomeAssistant,
 ) -> None:
