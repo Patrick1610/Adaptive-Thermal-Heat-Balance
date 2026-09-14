@@ -21,6 +21,7 @@ from homeassistant.helpers.event import (
     async_call_later,
     async_track_point_in_utc_time,
     async_track_state_change_event,
+    async_track_state_report_event,
 )
 from homeassistant.helpers.target import TargetSelection, async_extract_referenced_entity_ids
 from homeassistant.util import dt as dt_util
@@ -233,6 +234,15 @@ class ZoneRuntime:
             self.listeners.append(
                 async_track_state_change_event(self.hass, tracked, self._handle_state_event)
             )
+        reported_sources = self._reported_source_entity_ids()
+        if reported_sources:
+            self.listeners.append(
+                async_track_state_report_event(
+                    self.hass,
+                    reported_sources,
+                    self._handle_source_report_event,
+                )
+            )
         self.listeners.append(self.hass.bus.async_listen(EVENT_CALL_SERVICE, self._service_event))
         self.listeners.append(
             self.hass.bus.async_listen(
@@ -275,10 +285,18 @@ class ZoneRuntime:
         return sha256(payload.encode()).hexdigest()
 
     def _tracked_entity_ids(self) -> set[str]:
+        ids = self._reported_source_entity_ids()
+        ids.add(str(self.entry.options.get("occupancy_entity", "")))
+        ids.update(str(target["entity_id"]) for target in self.entry.data.get("targets", ()))
+        ids.discard("")
+        return ids
+
+    def _reported_source_entity_ids(self) -> set[str]:
+        """Return measured inputs whose unchanged reports renew freshness."""
+
         ids = {
             str(self.entry.data.get("primary_temperature", "")),
             str(self.entry.data.get("rh_entity", "")),
-            str(self.entry.options.get("occupancy_entity", "")),
             str(self.entry.options.get("air_speed_entity", "")),
         }
         for name in ("mrt_entity", "globe_temperature_entity", "surface_temperature_entity"):
@@ -287,7 +305,6 @@ class ZoneRuntime:
         for item in self.entry.options.get("critical_locations", ()):
             if isinstance(item, dict):
                 ids.add(str(item.get("entity_id", "")))
-        ids.update(str(target["entity_id"]) for target in self.entry.data.get("targets", ()))
         ids.discard("")
         return ids
 
@@ -305,6 +322,16 @@ class ZoneRuntime:
         else:
             self.input_generation += 1
             self._update_critical_delta(entity_id, new_state)
+        self.schedule_environmental_snapshot()
+
+    @callback
+    def _handle_source_report_event(self, event: Event[Any]) -> None:
+        """Recalculate when a measured source reports an unchanged value."""
+
+        entity_id = str(event.data.get("entity_id", ""))
+        new_state = cast(State | None, event.data.get("new_state"))
+        self.input_generation += 1
+        self._update_critical_delta(entity_id, new_state)
         self.schedule_environmental_snapshot()
 
     @callback
@@ -410,6 +437,14 @@ class ZoneRuntime:
         self.listeners.append(
             async_track_state_change_event(self.hass, {entity_id}, self._handle_state_event)
         )
+        if entity_id in self._reported_source_entity_ids():
+            self.listeners.append(
+                async_track_state_report_event(
+                    self.hass,
+                    {entity_id},
+                    self._handle_source_report_event,
+                )
+            )
         self.input_generation += 1
         self.schedule_environmental_snapshot()
 

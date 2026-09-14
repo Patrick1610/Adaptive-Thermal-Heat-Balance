@@ -161,6 +161,10 @@ while it remains inside its freshness window. An identical value and timestamp a
 observation, not a fabricated new report, and never count as a second recovery sample. An older
 timestamp or a different value carrying the same timestamp remains invalid.
 
+Home Assistant's unchanged-state `state_reported` event is tracked for measured inputs. A sensor
+may therefore renew its freshness by reporting the same physical value with a genuinely newer
+`last_reported` timestamp; climate-target reports remain on the separate target-feedback path.
+
 Age-only staleness clears on the first genuinely newer, valid timestamp. Recovery from unavailable,
 missing, malformed, out-of-range or implausibly jumping input remains subject to the stricter
 multi-report stability gate.

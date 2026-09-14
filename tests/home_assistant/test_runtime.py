@@ -798,6 +798,77 @@ async def test_runtime_tracks_reports_debounces_and_captures_coherent_snapshot(
     await runtime.async_unload()
 
 
+async def test_unchanged_source_report_renews_freshness_without_target_feedback(
+    hass: HomeAssistant,
+) -> None:
+    attributes = {"unit_of_measurement": "°C"}
+    target_attributes = {
+        "hvac_modes": ["off", "heat"],
+        "supported_features": 1,
+        "temperature": 18.0,
+        "unit_of_measurement": "°C",
+    }
+    hass.states.async_set("sensor.room", "21.5", attributes)
+    hass.states.async_set("climate.target", "heat", target_attributes)
+    entry = MockConfigEntry(
+        domain="athb",
+        title="Zone",
+        data={
+            "zone_uuid": "zone-reported",
+            "primary_temperature": "sensor.room",
+            "rh_mode": "declared",
+            "rh_declared": 50.0,
+            "targets": [
+                {
+                    "target_uuid": "target-1",
+                    "entity_id": "climate.target",
+                    "registry_identity": "registry-1",
+                }
+            ],
+        },
+        options={"comfort_strategy": "balanced", "control_enabled": False},
+    )
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-reported", "balanced", "off", False)
+    await runtime.async_start()
+    assert runtime.controller is not None
+    await runtime.controller.async_wait_idle()
+    initial_generation = runtime.input_generation
+    initial_state = hass.states.get("sensor.room")
+    assert initial_state is not None
+    initial_reported = initial_state.last_reported
+
+    hass.states.async_set("sensor.room", "21.5", attributes)
+    await hass.async_block_till_done()
+
+    reported_state = hass.states.get("sensor.room")
+    assert reported_state is not None
+    assert reported_state.last_reported > initial_reported
+    assert runtime.input_generation == initial_generation + 1
+    assert runtime.debounce_cancel is not None
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=3))
+    await hass.async_block_till_done()
+    await runtime.controller.async_wait_idle()
+
+    assert (
+        runtime.values["source_states"]["sensor.room"]["last_reported"]
+        == reported_state.last_reported.isoformat()
+    )
+    accepted_primary = runtime.source_states["primary"].last_accepted
+    assert accepted_primary is not None
+    assert accepted_primary.observed_at == reported_state.last_reported
+    assert not runtime.source_states["primary"].recovering
+    assert runtime.debounce_cancel is None
+
+    target_generation = runtime.input_generation
+    hass.states.async_set("climate.target", "heat", target_attributes)
+    await hass.async_block_till_done()
+
+    assert runtime.input_generation == target_generation
+    assert runtime.debounce_cancel is None
+    await runtime.async_unload()
+
+
 async def test_runtime_uses_pipeline_and_broker_for_exact_target_only_service(
     hass: HomeAssistant,
 ) -> None:
