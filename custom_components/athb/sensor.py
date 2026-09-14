@@ -28,6 +28,7 @@ class Description:
     key: str
     temperature: bool = False
     humidity: bool = False
+    suggested_display_precision: int | None = None
     enabled_default: bool = True
     entity_category: EntityCategory | None = None
 
@@ -37,16 +38,19 @@ DESCRIPTIONS = (
     Description(
         "heating_control_target",
         temperature=True,
+        suggested_display_precision=2,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "thermal_neutral",
         temperature=True,
+        suggested_display_precision=2,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "cooling_control_target",
         temperature=True,
+        suggested_display_precision=2,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description("comfort_status"),
@@ -79,6 +83,8 @@ class AthbSensor(AthbEntity, RestoreSensor):
             self._attr_device_class = SensorDeviceClass.HUMIDITY
             self._attr_native_unit_of_measurement = "%"
             self._attr_suggested_display_precision = 2
+        if description.suggested_display_precision is not None:
+            self._attr_suggested_display_precision = description.suggested_display_precision
 
     @property
     def native_value(self) -> Any:

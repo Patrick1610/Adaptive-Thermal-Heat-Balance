@@ -45,7 +45,7 @@ The comfort band is defined by `lower_comfort_vote` and `upper_comfort_vote`, de
 | Efficient | 0.30 | -0.35 | +0.35 | More of the comfort band remains available. |
 | Balanced | 0.50 | -0.25 | +0.25 | Recommended energy/comfort compromise. |
 | Comfort | 0.70 | -0.15 | +0.15 | Targets remain closer to thermal neutral. |
-| Near neutral | 0.85 | -0.075 | +0.075 | Greatest normal comfort without making neutral the target. |
+| Near neutral | 0.90 | -0.050 | +0.050 | Greatest normal comfort without making neutral the target. |
 
 The temperatures are **not** interpolated. Each vote is independently inverse-solved while vapour
 pressure remains constant. Thermal neutral (vote 0) is a reference, not the normal actuator
@@ -213,12 +213,12 @@ entity present the choices from maximum saving to greatest comfort, with Custom 
 
 | Setback | Heating policy | Cooling policy | Intended use |
 |---|---|---|---|
-| Max | configured minimum command temperature | configured maximum command temperature | Maximum saving or long absence; no adaptive target is implied. |
+| Boundary limit | configured minimum command temperature | configured maximum command temperature | Maximum saving or long absence; no adaptive target is implied. |
 | Eco — 4 °C | solved root − 4 °C | solved root + 4 °C | Longer daytime absence. |
 | Comfort — 2 °C | solved root − 2 °C | solved root + 2 °C | Short absence or modest savings. |
 | Custom | root − `eco_heating_setback_c` | root + `eco_cooling_setback_c` | Expert offsets from 0–5 °C. |
 
-Max uses the configured minimum and maximum command temperatures directly. Any eligible critical
+Boundary limit uses the configured minimum and maximum command temperatures directly. Any eligible critical
 local-air location can still add
 its already bounded, directional correction of at most 2 °C. The result is then intersected with
 the configured control bounds and device bounds and rounded inward to the device grid. Existing
@@ -230,7 +230,7 @@ source is configured.
 
 `minimum_control_temperature` and `maximum_control_temperature` are hard user bounds in Celsius
 and must be ordered. They are intersected with each climate entity's own limits. They also directly
-form the heating and cooling requests for Max setback. `manual_override_minutes` is 15–1440 minutes.
+form the heating and cooling requests for Boundary limit setback. `manual_override_minutes` is 15–1440 minutes.
 
 `boost_delta_c` (0–3 °C) defines the calculated Boost target in the comfort-seeking direction,
 capped at thermal neutral. Boost lasts 5–180 minutes according to `boost_duration_minutes`, then

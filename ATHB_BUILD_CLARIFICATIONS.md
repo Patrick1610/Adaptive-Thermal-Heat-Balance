@@ -199,7 +199,7 @@ greatest comfort. Its fixed inward fractions and default-boundary votes are:
 | Efficient | `efficient` | 0.30 | -0.35 | +0.35 |
 | Balanced | `balanced` | 0.50 | -0.25 | +0.25 |
 | Comfort | `comfort` | 0.70 | -0.15 | +0.15 |
-| Near neutral | `near_neutral` | 0.85 | -0.075 | +0.075 |
+| Near neutral | `near_neutral` | 0.90 | -0.050 | +0.050 |
 
 Balanced remains the default. Every vote is calculated from the configured outer comfort
 boundary and independently inverse-solved in ATHB sensation space. No temperature interpolation
@@ -209,7 +209,7 @@ An optional Home Assistant binary occupancy or schedule entity controls setback 
 level. `on` means no setback; `off` applies the selected Setback; no configured source means no
 setback. For `unknown` or unavailable input, retain the last resolved state for 30 minutes and
 then assume occupied/no setback with `occupancy_unknown`. The Setback configuration and entity are
-shown only when an occupancy source is configured. The choices remain ordered Max, Eco - 4 °C,
+shown only when an occupancy source is configured. The choices remain ordered Boundary limit, Eco - 4 °C,
 Comfort - 2 °C, and Custom.
 
 Boost is a separate temporary select with `off`, `adaptive`, and `rapid`:

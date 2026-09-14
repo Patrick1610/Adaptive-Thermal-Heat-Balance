@@ -526,6 +526,61 @@ def test_runtime_source_state_requires_two_reports_after_invalid_primary() -> No
     assert recovered.targets[0].result is not None
 
 
+def test_runtime_accepts_first_valid_primary_after_startup_unavailable() -> None:
+    unavailable = StateValue(
+        "sensor.room",
+        "unavailable",
+        "°C",
+        NOW,
+        False,
+        {},
+        None,
+        None,
+    )
+    initial = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            NOW,
+            unavailable,
+            None,
+            50.0,
+            _state("sensor.outdoor", "5", "°C"),
+            None,
+            5.0,
+            "complete_history",
+            "balanced",
+            "comfort",
+            {},
+            (_target(),),
+            explicit_transition=True,
+        )
+    )
+    assert initial.targets[0].suppression_reason == "primary_temperature_invalid"
+
+    reported_at = NOW + timedelta(seconds=10)
+    recovered = calculate_runtime_snapshot(
+        CapturedZoneSnapshot(
+            reported_at,
+            StateValue("sensor.room", "20.1", "°C", reported_at, True, {}, None, None),
+            None,
+            50.0,
+            _state("sensor.outdoor", "5", "°C"),
+            None,
+            5.0,
+            "complete_history",
+            "balanced",
+            "comfort",
+            {},
+            (_target(),),
+            explicit_transition=False,
+            source_states=initial.source_states,
+        )
+    )
+
+    assert recovered.targets[0].result is not None
+    assert recovered.targets[0].suppression_reason is None
+    assert not dict(recovered.source_states)["primary"].recovering
+
+
 def test_measured_air_speed_is_required_when_selected_and_fixed_clothing_is_applied() -> None:
     base = dict(
         now=NOW,

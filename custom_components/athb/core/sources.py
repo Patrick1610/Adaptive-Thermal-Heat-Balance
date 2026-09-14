@@ -157,6 +157,12 @@ def _invalid(
     )
 
 
+def _invalid_transition_state(state: SourceState) -> SourceState:
+    """Require recovery reports only after a previously accepted observation."""
+
+    return SourceState(state.last_accepted, recovering=state.last_accepted is not None)
+
+
 def validate_measured_source(
     *,
     state: SourceState,
@@ -176,15 +182,15 @@ def validate_measured_source(
     now = received_at.astimezone(UTC)
     if not available:
         observation = _invalid(identity, now=now, reason="source_unavailable", unit=unit)
-        return SourceUpdate(observation, SourceState(state.last_accepted, recovering=True))
+        return SourceUpdate(observation, _invalid_transition_state(state))
     if observed_at is None or observed_at.tzinfo is None or observed_at.utcoffset() is None:
         observation = _invalid(identity, now=now, reason="missing_freshness", unit=unit)
-        return SourceUpdate(observation, SourceState(state.last_accepted, recovering=True))
+        return SourceUpdate(observation, _invalid_transition_state(state))
     observed = observed_at.astimezone(UTC)
     converted = convert_source_value(kind, raw_value, unit)
     if converted is None:
         observation = _invalid(identity, now=now, reason="invalid_numeric_or_unit", unit=unit)
-        return SourceUpdate(observation, SourceState(state.last_accepted, recovering=True))
+        return SourceUpdate(observation, _invalid_transition_state(state))
     value, canonical_unit = converted
     policy = SOURCE_POLICIES[kind]
     if not policy.minimum <= value <= policy.maximum:
@@ -195,7 +201,7 @@ def validate_measured_source(
             unit=canonical_unit,
             value=value,
         )
-        return SourceUpdate(observation, SourceState(state.last_accepted, recovering=True))
+        return SourceUpdate(observation, _invalid_transition_state(state))
     maximum_age = freshness if freshness is not None else policy.freshness
     if maximum_age <= timedelta(0):
         raise ValueError("freshness must be positive")
@@ -283,7 +289,10 @@ def validate_measured_source(
         Provenance.MEASURED,
         ObservationValidity.VALID,
     )
-    recovering = state.recovering
+    # A transient unavailable state during Home Assistant startup must not make
+    # the first valid baseline wait for a second physical sensor report. The
+    # strict recovery gate remains active after any previously accepted value.
+    recovering = state.recovering and last is not None
     recovery = (*state.recovery_reports, observed)[-2:] if recovering else ()
     ready = len(recovery) >= 2 and (recovery[-1] - recovery[-2]).total_seconds() >= 30.0
     return SourceUpdate(

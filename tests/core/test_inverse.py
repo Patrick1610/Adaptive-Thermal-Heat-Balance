@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
 
@@ -181,7 +182,7 @@ def test_strategy_votes_are_solved_in_sensation_space_not_temperature_midpoints(
         (ComfortStrategy.EFFICIENT, 0.3, -0.35, 0.35),
         (ComfortStrategy.BALANCED, 0.5, -0.25, 0.25),
         (ComfortStrategy.COMFORT, 0.7, -0.15, 0.15),
-        (ComfortStrategy.NEAR_NEUTRAL, 0.85, -0.075, 0.075),
+        (ComfortStrategy.NEAR_NEUTRAL, 0.9, -0.05, 0.05),
     ],
 )
 def test_strategy_vote_fractions(
@@ -193,6 +194,15 @@ def test_strategy_vote_fractions(
     assert result.heating_control == pytest.approx(heating)
     assert result.cooling_control == pytest.approx(cooling)
     assert [name for name, _ in result.ordered()] == list(RootName)
+
+
+def test_default_comfort_levels_have_uniform_sensation_steps() -> None:
+    results = [strategy_votes(strategy) for strategy in ComfortStrategy]
+    assert all(isinstance(result, StrategyVotes) for result in results)
+    heating = [result.heating_control for result in results if isinstance(result, StrategyVotes)]
+    cooling = [result.cooling_control for result in results if isinstance(result, StrategyVotes)]
+    assert [right - left for left, right in pairwise(heating)] == pytest.approx([0.1] * 4)
+    assert [right - left for left, right in pairwise(cooling)] == pytest.approx([-0.1] * 4)
 
 
 def test_asymmetric_boundaries_change_votes_before_solving() -> None:

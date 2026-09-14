@@ -73,6 +73,10 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
     assert english_entities["sensor"]["cooling_control_target"]["name"] == (
         "Comfort — cooling boundary"
     )
+    assert documents[1]["selector"]["eco_intensity"]["options"]["deep"] == (
+        "Boundary limit — minimum/maximum command temperature"
+    )
+    assert english_entities["select"]["eco_intensity"]["state"]["deep"] == "Boundary limit"
     assert all(
         not definition["name"].startswith("Control — ")
         for platform in ("switch", "select", "button")

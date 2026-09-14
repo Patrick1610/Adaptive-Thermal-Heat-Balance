@@ -158,6 +158,13 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
         is EntityCategory.DIAGNOSTIC
     )
     assert (
+        AthbSensor(runtime, descriptions["heating_control_target"]).suggested_display_precision == 2
+    )
+    assert AthbSensor(runtime, descriptions["thermal_neutral"]).suggested_display_precision == 2
+    assert (
+        AthbSensor(runtime, descriptions["cooling_control_target"]).suggested_display_precision == 2
+    )
+    assert (
         AthbSensor(runtime, descriptions["thermal_neutral"]).entity_category
         is EntityCategory.DIAGNOSTIC
     )

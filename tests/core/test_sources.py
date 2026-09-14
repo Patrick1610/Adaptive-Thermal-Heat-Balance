@@ -109,16 +109,21 @@ def test_source_limits_freshness_availability_and_timestamp_order_are_explicit()
 
 
 def test_reusing_same_observation_does_not_advance_recovery_reports() -> None:
-    invalid = _update(available=False)
+    accepted = _update()
+    invalid = _update(
+        accepted.state,
+        available=False,
+        received_at=NOW + timedelta(seconds=1),
+    )
     first_recovery = _update(
         invalid.state,
-        observed_at=NOW + timedelta(seconds=1),
-        received_at=NOW + timedelta(seconds=1),
+        observed_at=NOW + timedelta(seconds=2),
+        received_at=NOW + timedelta(seconds=2),
     )
 
     replay = _update(
         first_recovery.state,
-        observed_at=NOW + timedelta(seconds=1),
+        observed_at=NOW + timedelta(seconds=2),
         received_at=NOW + timedelta(seconds=10),
     )
 
@@ -157,14 +162,33 @@ def test_age_only_staleness_recovers_on_one_genuinely_new_report() -> None:
     assert not recovered.state.recovering
 
 
-def test_unavailable_source_keeps_strict_multi_report_recovery() -> None:
+def test_initial_unavailable_source_accepts_first_valid_baseline() -> None:
     unavailable = _update(available=False)
-    assert unavailable.state.recovering
+    assert not unavailable.state.recovering
 
     first = _update(
         unavailable.state,
         observed_at=NOW + timedelta(seconds=1),
         received_at=NOW + timedelta(seconds=1),
+    )
+
+    assert first.observation.validity is ObservationValidity.VALID
+    assert not first.state.recovering
+
+
+def test_unavailable_source_after_accepted_value_keeps_strict_recovery() -> None:
+    accepted = _update()
+    unavailable = _update(
+        accepted.state,
+        available=False,
+        received_at=NOW + timedelta(seconds=1),
+    )
+    assert unavailable.state.recovering
+
+    first = _update(
+        unavailable.state,
+        observed_at=NOW + timedelta(seconds=2),
+        received_at=NOW + timedelta(seconds=2),
     )
 
     assert first.observation.validity is ObservationValidity.VALID

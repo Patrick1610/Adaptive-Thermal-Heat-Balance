@@ -817,7 +817,7 @@ The public policy controls are one comfort-level select, an optional occupancy s
 | Efficient | `efficient` | 0.30 | −0.35 | +0.35 | Controls closer to the comfort boundary and prioritizes reduced conditioning. |
 | Balanced | `balanced` | 0.50 | −0.25 | +0.25 | Controls halfway between the comfort boundary and thermal neutral in sensation space. |
 | Comfort | `comfort` | 0.70 | −0.15 | +0.15 | Controls closer to thermal neutral and provides more comfort reserve. |
-| Near neutral | `near_neutral` | 0.85 | −0.075 | +0.075 | Greatest normal comfort reserve while retaining thermal neutral as a reference. |
+| Near neutral | `near_neutral` | 0.90 | −0.050 | +0.050 | Greatest normal comfort reserve while retaining thermal neutral as a reference. |
 
 **Balanced is the default.** Fractions are product-defined presets, not editable tuning parameters. For advanced outer boundaries `l < 0 < u`:
 
@@ -846,7 +846,7 @@ Occupancy resolves as follows:
 - No entity → no setback control or setback entity.
 - Unknown/unavailable → retain the last resolved occupancy state for 30 minutes, then assume occupied/no setback with `occupancy_unknown`.
 
-Schedules remain Home Assistant schedule helpers or automations. ATHB does not implement a scheduling engine. The setback presets are Max (command limits), Eco (4 K), Comfort (2 K), and Custom. Occupancy and setback never change the selected sensation votes.
+Schedules remain Home Assistant schedule helpers or automations. ATHB does not implement a scheduling engine. The setback presets are Boundary limit (command limits), Eco (4 K), Comfort (2 K), and Custom. Occupancy and setback never change the selected sensation votes.
 
 ### 7.2 Directional baseline and critical-location targets
 
@@ -1569,12 +1569,12 @@ Temporarily unavailable entities may be saved for monitoring, but activation enf
 | Clothing | Automatic | Fixed declared alternative 0.1–2.0 clo |
 | Ambient air speed | Fixed 0.1 m/s | Declared directly; 0–2 m/s; measured alternative supported |
 | Relative-speed mode | Off | Explicit advanced declaration |
-| Comfort level | Balanced | Exactly `eco`, `efficient`, `balanced`, `comfort`, `near_neutral`; fixed fractions 0.10/0.30/0.50/0.70/0.85 |
+| Comfort level | Balanced | Exactly `eco`, `efficient`, `balanced`, `comfort`, `near_neutral`; fixed fractions 0.10/0.30/0.50/0.70/0.90 |
 | Lower comfort boundary vote | −0.50 | Advanced; −1.0…−0.05 |
 | Upper comfort boundary vote | +0.50 | Advanced; +0.05…+1.0 |
 | Room model | Standard uniform approximation | Existing Home Assistant Mold Indicator for surface-risk diagnostics only |
 | Critical locations | None | At most eight; physical type required |
-| Occupancy setback | Comfort / 2 K | Shown only with occupancy; Max, Eco / 4 K, Comfort / 2 K, or Custom 0–5 K |
+| Occupancy setback | Comfort / 2 K | Shown only with occupancy; Boundary limit, Eco / 4 K, Comfort / 2 K, or Custom 0–5 K |
 | Boost mode | Off | Runtime select: Off, Adaptive, Rapid; Rapid safely falls back to Adaptive for range or mixed-direction zones |
 | Boost delta | 1 K | Ordinary setup; 0–3 K |
 | Boost duration | 60 minutes | Ordinary setup; 5–180 minutes |
@@ -1647,7 +1647,7 @@ Per zone:
 | Adaptive control switch | User control intent |
 | Comfort level select | **Eco**, **Efficient**, **Balanced**, **Comfort**, **Near neutral**; Balanced default |
 | Boost select | `off`, `adaptive`, `rapid`; Off default |
-| Setback select | Max, Eco / 4 K, Comfort / 2 K, Custom; created only when an occupancy source is configured |
+| Setback select | Boundary limit, Eco / 4 K, Comfort / 2 K, Custom; created only when an occupancy source is configured |
 | Resume control button | Resume eligible overridden/faulted targets |
 
 Per target:

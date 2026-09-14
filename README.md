@@ -14,7 +14,7 @@ environment is used only to generate and audit independent development goldens.
   **Near neutral**, ordered from greatest efficiency to greatest comfort. Each solves its own
   sensation-space roots; targets are not interpolated between temperatures.
 - An optional occupancy or schedule entity applies **Setback** whenever it is off, at every
-  comfort level. Setback is **Max**, **Eco — 4 °C**, **Comfort — 2 °C**, or **Custom**.
+  comfort level. Setback is **Boundary limit**, **Eco — 4 °C**, **Comfort — 2 °C**, or **Custom**.
 - **Boost** is separate: Adaptive moves to a bounded calculated Boost target; Rapid uses the
   command limit until that target is reached and then holds it. Expiry returns Boost to Off.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's

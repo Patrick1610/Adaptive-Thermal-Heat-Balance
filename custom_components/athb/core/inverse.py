@@ -52,7 +52,7 @@ _STRATEGY_FRACTIONS = {
     ComfortStrategy.EFFICIENT: 0.30,
     ComfortStrategy.BALANCED: 0.50,
     ComfortStrategy.COMFORT: 0.70,
-    ComfortStrategy.NEAR_NEUTRAL: 0.85,
+    ComfortStrategy.NEAR_NEUTRAL: 0.90,
 }
 _ROOT_ORDER = (
     RootName.LOWER_COMFORT,
