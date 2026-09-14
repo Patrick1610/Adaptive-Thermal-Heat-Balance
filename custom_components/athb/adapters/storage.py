@@ -17,9 +17,12 @@ from .broker import PendingCommand, service_payload
 CONTROL_STORAGE_VERSION = 1
 LAST_VALID_OUTPUT_KEYS = (
     "thermal_sensation",
+    "lower_comfort_boundary",
     "heating_control_target",
     "thermal_neutral",
     "cooling_control_target",
+    "upper_comfort_boundary",
+    "root_sensation_votes",
     "comfort_status",
     "surface_temperature",
     "surface_relative_humidity",

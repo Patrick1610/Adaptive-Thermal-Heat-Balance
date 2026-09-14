@@ -67,11 +67,20 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
         "mandatory_input_unavailable_1h",
     }
     english_entities = documents[1]["entity"]
+    assert english_entities["sensor"]["lower_comfort_boundary"]["name"] == (
+        "Comfort range — lower limit"
+    )
     assert english_entities["sensor"]["heating_control_target"]["name"] == (
-        "Comfort — heating boundary"
+        "Control point — heating"
+    )
+    assert english_entities["sensor"]["thermal_neutral"]["name"] == (
+        "Comfort range — neutral reference"
     )
     assert english_entities["sensor"]["cooling_control_target"]["name"] == (
-        "Comfort — cooling boundary"
+        "Control point — cooling"
+    )
+    assert english_entities["sensor"]["upper_comfort_boundary"]["name"] == (
+        "Comfort range — upper limit"
     )
     assert documents[1]["selector"]["eco_intensity"]["options"]["deep"] == (
         "Boundary limit — minimum/maximum command temperature"

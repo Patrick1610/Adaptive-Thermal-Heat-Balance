@@ -722,12 +722,12 @@ For each valid location, solve these **five** roots for the selected comfort str
 | Output | Contract key | Sensation vote |
 | --- | --- | ---: |
 | Lower comfort boundary | `lower_comfort` | `comfort_vote_lower`, default −0.50 |
-| Heating control target | `heating_control` | `lower_vote + f × (0 − lower_vote)` |
+| Heating control boundary | `heating_control` | `lower_vote + f × (0 − lower_vote)` |
 | Thermal neutral | `thermal_neutral` | 0.00 |
-| Cooling control target | `cooling_control` | `upper_vote + f × (0 − upper_vote)` |
+| Cooling control boundary | `cooling_control` | `upper_vote + f × (0 − upper_vote)` |
 | Upper comfort boundary | `upper_comfort` | `comfort_vote_upper`, default +0.50 |
 
-The **comfort band** spans the lower and upper comfort boundaries. The **control band** spans the heating and cooling control targets. These terms describe the raw solved bands; subsequent occupancy-setback, Boost, critical-location, bound, calibration and grid effects are identified separately.
+The **comfort band** spans the lower and upper comfort boundaries. The **control band** spans the heating and cooling control boundaries. These terms describe the raw solved bands; subsequent occupancy-setback, Boost, critical-location, bound, calibration and grid effects are identified separately.
 
 The outer sensation boundaries are product policy, not universal scientific ATHB comfort limits, satisfaction percentages or standards categories. Thermal neutral is a model reference and is not the default heating or cooling target.
 
@@ -1638,9 +1638,11 @@ Per zone:
 | Entity | State |
 | --- | --- |
 | Thermal sensation sensor | Current primary ATHB vote |
-| Heating control target sensor | Primary raw root at the selected heating control vote |
+| Comfort-range lower-limit sensor | Primary raw root at the configured lower comfort vote |
+| Heating control-point sensor | Primary raw root at the selected heating control vote |
 | Thermal neutral sensor | Primary raw root at vote zero |
-| Cooling control target sensor | Primary raw root at the selected cooling control vote |
+| Cooling control-point sensor | Primary raw root at the selected cooling control vote |
+| Comfort-range upper-limit sensor | Primary raw root at the configured upper comfort vote |
 | Comfort status sensor | `cold`, `comfortable`, `warm`, `mixed`, `unknown` |
 | Control status sensor | Derived operational state |
 | Outdoor running-mean sensor | Current usable or explicitly partial running mean |

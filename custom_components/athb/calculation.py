@@ -702,6 +702,11 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         root = getattr(roots, name, None)
         return root.mapped_room_temperature_c if isinstance(root, RootSuccess) else None
 
+    def root_vote(name: str) -> float | None:
+        root = getattr(roots, name, None)
+        vote = getattr(root, "requested_vote", None)
+        return float(vote) if isinstance(vote, int | float) and not isinstance(vote, bool) else None
+
     effective: dict[str, dict[str, float]] = {}
     effective_details: dict[str, dict[str, str | bool | float | None]] = {}
     target_scenarios: dict[str, dict[str, Any]] = {}
@@ -797,9 +802,21 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
     )
     return {
         "thermal_sensation": sensation,
+        "lower_comfort_boundary": root_value("lower_comfort"),
         "heating_control_target": root_value("heating_control"),
         "thermal_neutral": root_value("thermal_neutral"),
         "cooling_control_target": root_value("cooling_control"),
+        "upper_comfort_boundary": root_value("upper_comfort"),
+        "root_sensation_votes": {
+            name: root_vote(name)
+            for name in (
+                "lower_comfort",
+                "heating_control",
+                "thermal_neutral",
+                "cooling_control",
+                "upper_comfort",
+            )
+        },
         "comfort_status": comfort_status,
         "input_status": result.hold_condition or "ready",
         "control_status": "suppressed" if result.suppression_reason else "ready",

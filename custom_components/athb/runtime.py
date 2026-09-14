@@ -936,6 +936,13 @@ class ZoneRuntime:
                         key in {"effective_targets", "effective_target_details"}
                         and not projected_value
                     )
+                    or (
+                        key == "root_sensation_votes"
+                        and (
+                            not isinstance(projected_value, dict)
+                            or not any(value is not None for value in projected_value.values())
+                        )
+                    )
                 ):
                     projected[key] = deepcopy(value)
             details = projected.get("effective_target_details", {})

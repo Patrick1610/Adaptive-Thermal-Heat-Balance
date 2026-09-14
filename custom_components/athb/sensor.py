@@ -36,6 +36,12 @@ class Description:
 DESCRIPTIONS = (
     Description("thermal_sensation"),
     Description(
+        "lower_comfort_boundary",
+        temperature=True,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    Description(
         "heating_control_target",
         temperature=True,
         suggested_display_precision=2,
@@ -53,6 +59,12 @@ DESCRIPTIONS = (
         suggested_display_precision=2,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    Description(
+        "upper_comfort_boundary",
+        temperature=True,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     Description("comfort_status"),
     Description("input_status", entity_category=EntityCategory.DIAGNOSTIC),
     Description("control_status", entity_category=EntityCategory.DIAGNOSTIC),
@@ -66,6 +78,13 @@ DESCRIPTIONS = (
 
 TARGET_ENDPOINTS = ("temperature", "target_low", "target_high")
 TARGET_SCENARIOS = ("current", "occupied", "unoccupied")
+ROOT_SENSOR_CONTEXT = {
+    "lower_comfort_boundary": ("lower_comfort", "comfort_range"),
+    "heating_control_target": ("heating_control", "control_range"),
+    "thermal_neutral": ("thermal_neutral", "comfort_range_reference"),
+    "cooling_control_target": ("cooling_control", "control_range"),
+    "upper_comfort_boundary": ("upper_comfort", "comfort_range"),
+}
 
 
 class AthbSensor(AthbEntity, RestoreSensor):
@@ -107,7 +126,7 @@ class AthbSensor(AthbEntity, RestoreSensor):
         data_quality = self.runtime.values.get("data_quality")
         if self._restored_native_value is not None and data_quality in {None, "unavailable"}:
             data_quality = "restored_stale"
-        return {
+        attributes = {
             **super().extra_state_attributes,
             "comfort_level": self.runtime.strategy,
             "boost_mode": self.runtime.boost_mode,
@@ -123,6 +142,12 @@ class AthbSensor(AthbEntity, RestoreSensor):
             "data_age_minutes": self.runtime.values.get("data_age_minutes"),
             "stale_safety_active": self.runtime.values.get("stale_safety_active", False),
         }
+        if context := ROOT_SENSOR_CONTEXT.get(self.description.key):
+            root_name, range_role = context
+            votes = self.runtime.values.get("root_sensation_votes", {})
+            attributes["sensation_vote"] = votes.get(root_name) if isinstance(votes, dict) else None
+            attributes["range_role"] = range_role
+        return attributes
 
 
 class ZoneTargetSensor(AthbEntity, RestoreSensor):

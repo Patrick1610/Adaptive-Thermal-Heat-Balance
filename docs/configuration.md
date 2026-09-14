@@ -32,11 +32,12 @@ also bound the stale-input safety action. See the full [technical configuration
 reference](configuration-reference.md) for formulas, supported ranges and policy effects.
 
 The device page groups occupant-facing outputs under semantic names such as **Comfort**, **Target**,
-**Surface**, and **Weather**. Raw inverse roots, input readiness, control state, and eligibility are
-classified as Home Assistant diagnostic entities. Non-target unique IDs remain stable. The former
-per-climate scalar target entities are deliberately replaced by the three room-target entities
-below; dashboards or automations that referenced an old scalar target must select the new Current
-target once after updating.
+**Surface**, and **Weather**. The diagnostic section separates the outer **Comfort range**
+(lower limit, neutral reference and upper limit) from the selected inner heating and
+cooling **Control points**. Input readiness, control state, and eligibility are also diagnostic
+entities. Non-target unique IDs remain stable. The former per-climate scalar target entities are
+deliberately replaced by the three room-target entities below; dashboards or automations that
+referenced an old scalar target must select the new Current target once after updating.
 
 For a normal scalar heat-only or cool-only zone, **Target — current**, **Target — occupied** and
 **Target — unoccupied** show the common room target without repeating climate names. Open

@@ -117,6 +117,17 @@ def test_snapshot_adapter_preserves_declared_rh_and_adaptive_root_path() -> None
     assert dict(result.provenance)["air_speed"] == "declared"
     assert dict(result.provenance)["rh"] == "declared"
     values = result_values(result)
+    assert values["lower_comfort_boundary"] < values["heating_control_target"]
+    assert values["heating_control_target"] < values["thermal_neutral"]
+    assert values["thermal_neutral"] < values["cooling_control_target"]
+    assert values["cooling_control_target"] < values["upper_comfort_boundary"]
+    assert values["root_sensation_votes"] == {
+        "lower_comfort": -0.5,
+        "heating_control": -0.25,
+        "thermal_neutral": 0.0,
+        "cooling_control": 0.25,
+        "upper_comfort": 0.5,
+    }
     assert values["effective_targets"] == {"target-1": {"temperature": 19.5}}
     scenarios = values["target_scenarios"]["target-1"]
     assert scenarios["current"]["room"]["temperature"] == pytest.approx(19.362709, abs=0.005)

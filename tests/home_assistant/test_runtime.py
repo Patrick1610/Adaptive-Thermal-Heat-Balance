@@ -238,7 +238,10 @@ def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
 
     assert stale.hold_condition == "primary_temperature_stale"
     assert held["thermal_sensation"] == current["thermal_sensation"]
+    assert held["lower_comfort_boundary"] == current["lower_comfort_boundary"]
     assert held["heating_control_target"] == current["heating_control_target"]
+    assert held["upper_comfort_boundary"] == current["upper_comfort_boundary"]
+    assert held["root_sensation_votes"] == current["root_sensation_votes"]
     assert held["effective_targets"] == current["effective_targets"]
     assert held["input_status"] == "primary_temperature_stale"
     assert held["data_quality"] == "stale"

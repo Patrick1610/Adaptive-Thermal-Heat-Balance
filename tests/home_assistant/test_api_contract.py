@@ -154,6 +154,13 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
     assert AthbSensor(runtime, descriptions["outdoor_running_mean"]).entity_category is None
     assert AthbSensor(runtime, descriptions["surface_temperature"]).entity_category is None
     assert (
+        AthbSensor(runtime, descriptions["lower_comfort_boundary"]).entity_category
+        is EntityCategory.DIAGNOSTIC
+    )
+    assert (
+        AthbSensor(runtime, descriptions["lower_comfort_boundary"]).suggested_display_precision == 2
+    )
+    assert (
         AthbSensor(runtime, descriptions["heating_control_target"]).entity_category
         is EntityCategory.DIAGNOSTIC
     )
@@ -171,6 +178,13 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
     assert (
         AthbSensor(runtime, descriptions["cooling_control_target"]).entity_category
         is EntityCategory.DIAGNOSTIC
+    )
+    assert (
+        AthbSensor(runtime, descriptions["upper_comfort_boundary"]).entity_category
+        is EntityCategory.DIAGNOSTIC
+    )
+    assert (
+        AthbSensor(runtime, descriptions["upper_comfort_boundary"]).suggested_display_precision == 2
     )
     assert (
         AthbSensor(runtime, descriptions["input_status"]).entity_category
@@ -608,9 +622,18 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
         {
             "thermal_sensation": -0.16,
             "comfort_status": "comfortable",
+            "lower_comfort_boundary": 19.4,
             "heating_control_target": 21.3,
             "thermal_neutral": 23.3,
             "cooling_control_target": 25.2,
+            "upper_comfort_boundary": 27.1,
+            "root_sensation_votes": {
+                "lower_comfort": -0.5,
+                "heating_control": -0.25,
+                "thermal_neutral": 0.0,
+                "cooling_control": 0.25,
+                "upper_comfort": 0.5,
+            },
             "occupancy_status": "eco",
             "setback_active": True,
             "data_quality": "current",
@@ -623,8 +646,41 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
     assert sensation["sources"]["primary_temperature"]["entity_id"] == "sensor.room"
     assert sensation["sources"]["relative_humidity"]["provenance"] == "declared"
     assert sensation["control_context"]["occupancy_entity"] == "binary_sensor.occupied"
-    assert sensation["related_values"]["neutral_reference"] == 23.3
+    assert sensation["related_values"] == {
+        "thermal_sensation": -0.16,
+        "comfort_status": "comfortable",
+        "comfort_range_lower_limit": 19.4,
+        "heating_control_point": 21.3,
+        "comfort_range_neutral_reference": 23.3,
+        "cooling_control_point": 25.2,
+        "comfort_range_upper_limit": 27.1,
+        "adaptive_outdoor_temperature": None,
+    }
     assert sensation["settings"]["radiant_model"] == "uniform"
+
+    root_sensors = {
+        key: AthbSensor(runtime, next(item for item in DESCRIPTIONS if item.key == key))
+        for key in (
+            "lower_comfort_boundary",
+            "heating_control_target",
+            "thermal_neutral",
+            "cooling_control_target",
+            "upper_comfort_boundary",
+        )
+    }
+    assert root_sensors["lower_comfort_boundary"].extra_state_attributes["sensation_vote"] == -0.5
+    assert (
+        root_sensors["lower_comfort_boundary"].extra_state_attributes["range_role"]
+        == "comfort_range"
+    )
+    assert (
+        root_sensors["heating_control_target"].extra_state_attributes["range_role"]
+        == "control_range"
+    )
+    assert root_sensors["thermal_neutral"].extra_state_attributes["range_role"] == (
+        "comfort_range_reference"
+    )
+    assert root_sensors["upper_comfort_boundary"].extra_state_attributes["sensation_vote"] == 0.5
 
     boost = BoostModeSelect(runtime).extra_state_attributes
     assert boost["settings"] == {"boost_delta_c": 1.5, "boost_duration_minutes": 45.0}
