@@ -1882,6 +1882,60 @@ def test_runtime_marks_startup_and_data_recovery_for_live_target_reassertion() -
     assert recovered == frozenset({identity})
 
 
+def test_explicit_transition_survives_invalid_input_and_is_consumed_by_valid_result(
+    hass: HomeAssistant,
+) -> None:
+    scenario = load_scenarios()[0]
+    snapshot = replace(_captured(scenario), explicit_transition=False)
+    valid = calculate_runtime_snapshot(snapshot)
+    stale = calculate_runtime_snapshot(
+        replace(
+            snapshot,
+            now=snapshot.now + timedelta(hours=1),
+            source_states=valid.source_states,
+        )
+    )
+    identity = "registry-climate-living-room"
+    runtime = _runtime(target_identity=identity)
+    runtime.hass = hass
+    runtime.pending_transition_reasons.clear()
+    runtime.explicit_transition = False
+    runtime.ownership[identity] = OwnershipState(
+        identity,
+        Ownership.OWNED,
+        DataReadiness.READY,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+
+    runtime._publish_calculation(1, stale)
+
+    assert runtime.explicit_transition
+    assert runtime.pending_transition_reasons == {"input_recovery"}
+
+    recovered = calculate_runtime_snapshot(replace(snapshot, explicit_transition=True))
+    runtime._publish_calculation(2, recovered)
+
+    assert not runtime.explicit_transition
+    assert runtime.pending_transition_reasons == set()
+
+
+def test_occupancy_change_is_an_explicit_transition(hass: HomeAssistant) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.options["occupancy_entity"] = "binary_sensor.room_occupied"
+    now = datetime(2026, 9, 15, 12, 0, tzinfo=UTC)
+    hass.states.async_set("binary_sensor.room_occupied", "on")
+    assert runtime._resolve_profile(now).resolved.value == "comfort"
+    runtime.pending_transition_reasons.clear()
+    runtime.explicit_transition = False
+
+    hass.states.async_set("binary_sensor.room_occupied", "off")
+    assert runtime._resolve_profile(now + timedelta(seconds=1)).resolved.value == "eco"
+
+    assert runtime.explicit_transition
+    assert runtime.pending_transition_reasons == {"occupancy"}
+
+
 async def test_broker_timer_callbacks_cover_timeout_and_queue_paths(
     hass: HomeAssistant,
 ) -> None:

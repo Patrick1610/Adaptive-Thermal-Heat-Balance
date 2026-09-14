@@ -146,6 +146,7 @@ class ZoneRuntime:
     persistence: ZoneCommandPersistence | None = None
     broker: CommandBroker | None = None
     explicit_transition: bool = True
+    pending_transition_reasons: set[str] = field(default_factory=lambda: {"startup"})
     trace_ring: DecisionTraceRing = field(default_factory=DecisionTraceRing)
     repair_manager: RepairManager | None = None
     transition_logger: TransitionLogger = field(default_factory=lambda: TransitionLogger(_LOGGER))
@@ -221,6 +222,11 @@ class ZoneRuntime:
             if self.persistence.requires_resume:
                 for identity in identities:
                     self._transition(identity, OwnershipEvent.UNCLEAN_RESTART)
+        self.values["recovery_reason"] = (
+            str(getattr(self.persistence, "startup_reason", "not_started"))
+            if self.persistence is not None
+            else "not_started"
+        )
         await self._async_start_history()
         self.controller = ZoneController(
             executor=self.hass.async_add_executor_job,
@@ -754,7 +760,6 @@ class ZoneRuntime:
         self.values["setback_active"] = profile_resolution.resolved.value == "eco"
         self.values["configuration_generation"] = self.configuration_generation
         self._schedule_freshness_expiries(now, radiant_id)
-        self.explicit_transition = False
         self.controller.request(snapshot)
 
     def _capture_critical_locations(
@@ -839,6 +844,7 @@ class ZoneRuntime:
 
     @callback
     def _publish_calculation(self, generation: int, result: RuntimeCalculation) -> None:
+        transition_reasons = tuple(sorted(self.pending_transition_reasons))
         self.source_states = dict(result.source_states)
         self._update_failure_hold(result.hold_condition)
         self._update_observability_conditions(result)
@@ -874,6 +880,8 @@ class ZoneRuntime:
             identity: state.target_readiness.value for identity, state in self.ownership.items()
         }
         values["control_status"] = self._control_status()
+        values["transition_reasons"] = transition_reasons
+        values["resume_required"] = any(state.resume_required for state in self.ownership.values())
         values["control_eligible"] = (
             self.control_enabled
             and bool(result.targets)
@@ -903,6 +911,14 @@ class ZoneRuntime:
                 numerical.policy.cooling_c,
             )
             self.previous_requested_at = dt_util.utcnow()
+            if result.hold_condition is None:
+                self.explicit_transition = False
+                self.pending_transition_reasons.clear()
+        elif result.hold_condition is not None:
+            # A failed or recovering mandatory input must not consume the one-shot
+            # transition. The first later trustworthy calculation must be applied
+            # directly instead of being slewed from an obsolete target.
+            self._mark_explicit_transition("input_recovery")
 
     def _observable_values(self, result: RuntimeCalculation) -> dict[str, Any]:
         """Keep the last valid output visible while clearly labelling held data."""
@@ -1837,8 +1853,17 @@ class ZoneRuntime:
             now=now,
             previous=self.profile_resolution,
         )
+        previous = self.profile_resolution
         self.profile_resolution = resolution
+        if previous is not None and previous.resolved is not resolution.resolved:
+            self._mark_explicit_transition("occupancy")
         return resolution
+
+    def _mark_explicit_transition(self, reason: str) -> None:
+        """Retain an explicit transition until a valid calculation consumes it."""
+
+        self.explicit_transition = True
+        self.pending_transition_reasons.add(reason)
 
     def _schedule_override_expiry(self, identity: str, expiry: datetime | None) -> None:
         key = f"override:{identity}"
@@ -1851,7 +1876,7 @@ class ZoneRuntime:
         def expire(_now: Any) -> None:
             self.timers.pop(key, None)
             self._transition(identity, OwnershipEvent.OVERRIDE_EXPIRED, now=_now)
-            self.explicit_transition = True
+            self._mark_explicit_transition("manual_override_expired")
             self.async_request_snapshot()
 
         self.timers[key] = async_track_point_in_utc_time(self.hass, expire, expiry)
@@ -1948,7 +1973,7 @@ class ZoneRuntime:
         )
         self.strategy = strategy
         self.configuration_generation += 1
-        self.explicit_transition = True
+        self._mark_explicit_transition("comfort_level")
         if self.controller is not None:
             self.controller.invalidate()
             if self.debounce_cancel is not None:
@@ -1975,7 +2000,7 @@ class ZoneRuntime:
             self._schedule_boost_expiry()
         self.boost_mode = boost_mode
         self.rapid_boost_reached = False
-        self.explicit_transition = True
+        self._mark_explicit_transition("boost")
         self.hass.config_entries.async_update_entry(
             self.entry, options={**self.entry.options, CONF_BOOST_MODE: boost_mode}
         )
@@ -1990,7 +2015,7 @@ class ZoneRuntime:
         )
         self.eco_intensity = intensity
         self.configuration_generation += 1
-        self.explicit_transition = True
+        self._mark_explicit_transition("setback")
         if self.controller is not None:
             self.controller.invalidate()
             if self.debounce_cancel is not None:
@@ -2046,7 +2071,7 @@ class ZoneRuntime:
                 get_lease_registry(self.hass).release(identity, self.entry.entry_id)
                 self._transition(identity, OwnershipEvent.DISABLE)
         self.control_enabled = enabled
-        self.explicit_transition = True
+        self._mark_explicit_transition("adaptive_control")
         self.hass.config_entries.async_update_entry(
             self.entry, options={**self.entry.options, CONF_CONTROL_ENABLED: enabled}
         )
@@ -2065,7 +2090,7 @@ class ZoneRuntime:
             if (timer := self.timers.pop(f"queue:{identity}", None)) is not None:
                 timer()
             self._transition(identity, OwnershipEvent.RESUME)
-        self.explicit_transition = True
+        self._mark_explicit_transition("resume")
         self.publish({**self.values, "resume_requested": True})
         self._schedule_runtime_persistence()
         self.async_request_snapshot()

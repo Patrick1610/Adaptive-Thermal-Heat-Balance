@@ -19,8 +19,8 @@ jobs:
           - home_assistant: "2026.9.0"
             ha_test_helper: "0.13.363"
             support: minimum
-          - home_assistant: "2026.9.1"
-            ha_test_helper: "0.13.364"
+          - home_assistant: "2026.9.2"
+            ha_test_helper: "0.13.365"
             support: current
     steps:
       - uses: actions/checkout@v4

@@ -34,3 +34,9 @@ are never replayed. Ambiguous or corrupt control state requires Resume. Disablin
 closes the dispatch gate and releases listeners, timers, tasks, leases and shared-source references;
 it does not turn climate equipment off. Removing a zone removes only its zone state and never
 unrelated Recorder/helper data.
+
+The environmental slew limiter applies only to ordinary measured changes. A start or reload, the
+first trustworthy calculation after an invalid mandatory input, an occupancy/setback change, a
+comfort-level or Boost change, Enable and Resume are explicit transitions. Their first valid
+calculation bypasses environmental slew once so the current target immediately represents the
+active policy. An invalid or recovering calculation cannot consume that one-shot transition.
