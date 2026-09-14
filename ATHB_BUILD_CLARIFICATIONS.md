@@ -270,3 +270,17 @@ The action is one-shot for the stale episode. A fully valid recovered calculatio
 safety state and resumes the ordinary event-driven path. The configured fallback temperatures are
 therefore always retained and validated, even when insufficient outdoor history is configured as
 `no_write`; that choice controls history fallback only.
+
+### Recovery target reassertion
+
+An unclean process exit without an unresolved persisted command does not by itself require manual
+resume. After restart, reload, target return or recovery of mandatory inputs, ATHB performs a fresh
+calculation and reconciles against the target climate's live reported setpoint. If the normalized
+live setpoint already matches, no service call is made. If it differs, ATHB issues one recovery
+reassertion through `CommandBroker`; this bypasses ordinary meaningful-change and release-
+hysteresis suppression but retains the hard command interval and every ownership, validity,
+availability, lease, generation, persistence, grid and acknowledgement gate.
+
+An unresolved persisted command, unknown command outcome, external target intervention, corrupt
+storage or configuration/target-identity drift remains fail-closed and requires the applicable
+explicit resume or repair. Display-only last-valid values never qualify a recovery reassertion.

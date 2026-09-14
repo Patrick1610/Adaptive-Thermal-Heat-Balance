@@ -10,6 +10,7 @@ from custom_components.athb.adapters.broker import (
     AcknowledgedTarget,
     BrokerPreflight,
     CommandBroker,
+    CommandOutcome,
     ContextToken,
     NormalizedIntent,
     PendingCommand,
@@ -417,6 +418,93 @@ def test_explicit_transition_bypasses_hysteresis_and_ordinary_but_not_hard_inter
         )
         is None
     )
+
+
+def test_recovery_reassertion_accepts_matching_live_target_without_write() -> None:
+    service = FakeService()
+    persistence = FakePersistence()
+    current = [
+        replace(
+            _preflight(),
+            observed_target=TargetFingerprint(TargetShape.SCALAR, temperature_ha=20.0),
+        )
+    ]
+    broker = _broker(service, persistence, current)
+
+    outcome = asyncio.run(
+        broker.async_submit(
+            replace(
+                _intent(value=20.0, explicit=True),
+                recovery_reassertion=True,
+            ),
+            now=NOW,
+        )
+    )
+
+    assert outcome.reason == "target_current"
+    assert outcome.dispatch_status is DispatchStatus.NOT_DISPATCHED
+    assert service.calls == []
+    duplicate = asyncio.run(broker.async_submit(_intent(value=20.0), now=NOW))
+    assert duplicate.reason == "target_unchanged"
+
+
+def test_range_recovery_accepts_both_matching_live_endpoints_without_write() -> None:
+    service = FakeService()
+    persistence = FakePersistence()
+    current = [
+        replace(
+            _preflight(),
+            observed_target=TargetFingerprint(TargetShape.RANGE, low_ha=19.0, high_ha=23.0),
+        )
+    ]
+    broker = _broker(service, persistence, current)
+
+    outcome = asyncio.run(
+        broker.async_submit(
+            replace(
+                _intent(
+                    shape=TargetShape.RANGE,
+                    direction=ActuationDirection.RANGED,
+                    explicit=True,
+                ),
+                recovery_reassertion=True,
+            ),
+            now=NOW,
+        )
+    )
+
+    assert outcome.reason == "target_current"
+    assert service.calls == []
+
+
+def test_recovery_reassertion_uses_live_target_and_bypasses_prior_acknowledgement() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> tuple[CommandOutcome, CommandOutcome]:
+        initial = await broker.async_submit(_intent(value=20.0), now=NOW)
+        assert initial.command_id is not None
+        await broker.async_feedback(_feedback(20.0), now=NOW + timedelta(seconds=1))
+        current[0] = replace(
+            current[0],
+            observed_target=TargetFingerprint(TargetShape.SCALAR, temperature_ha=19.5),
+        )
+        reasserted = await broker.async_submit(
+            replace(
+                _intent(value=20.0, explicit=True),
+                meaningful_delta_ha=5.0,
+                recovery_reassertion=True,
+            ),
+            now=NOW + timedelta(seconds=10),
+        )
+        return initial, reasserted
+
+    initial, reasserted = asyncio.run(scenario())
+
+    assert initial.dispatch_status is DispatchStatus.DISPATCHED
+    assert reasserted.dispatch_status is DispatchStatus.DISPATCHED
+    assert len(service.calls) == 2
+    assert service.calls[-1][0] == {"entity_id": "climate.test", "temperature": 20.0}
 
 
 def test_target_leases_prevent_duplicate_enabled_control() -> None:

@@ -247,20 +247,33 @@ def test_clean_restart_restores_intent_only_and_starts_new_run_unclean() -> None
     assert recovery.state.last_valid_at == "2026-09-11T12:00:00+00:00"
 
 
-def test_unclean_or_unresolved_restart_requires_resume_and_never_replays_command() -> None:
-    for prior, reason in (
-        (_state(clean=False), "unclean_shutdown"),
-        (_state(clean=True, command=_command(dispatched=True)), "unresolved_command"),
-    ):
-        recovery = prepare_startup_recovery(
-            load_control_state(serialize_control_state(prior)),
-            run_id="run-new",
-            configuration_fingerprint="config-a",
-            strategy="balanced",
-        )
-        assert recovery.requires_resume
-        assert recovery.reason == reason
-        assert recovery.state.actuators[0].pending_command is None
+def test_unclean_restart_without_unresolved_command_reconciles_automatically() -> None:
+    recovery = prepare_startup_recovery(
+        load_control_state(serialize_control_state(_state(clean=False))),
+        run_id="run-new",
+        configuration_fingerprint="config-a",
+        strategy="balanced",
+    )
+
+    assert not recovery.requires_resume
+    assert recovery.reason == "unclean_shutdown"
+    assert recovery.state.actuators[0].ownership == "reconciling"
+    assert not recovery.state.actuators[0].resume_required
+
+
+def test_unresolved_restart_requires_resume_and_never_replays_command() -> None:
+    recovery = prepare_startup_recovery(
+        load_control_state(
+            serialize_control_state(_state(clean=True, command=_command(dispatched=True)))
+        ),
+        run_id="run-new",
+        configuration_fingerprint="config-a",
+        strategy="balanced",
+    )
+
+    assert recovery.requires_resume
+    assert recovery.reason == "unresolved_command"
+    assert recovery.state.actuators[0].pending_command is None
 
 
 def test_corrupt_store_is_preserved_and_requires_resume() -> None:

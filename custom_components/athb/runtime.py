@@ -859,7 +859,7 @@ class ZoneRuntime:
                 },
             },
         )
-        self._reconcile_targets(result)
+        recovery_reassertions = self._reconcile_targets(result)
         self._schedule_stale_safety(result)
         values = {**self.values, **self._observable_values(result)}
         values["calculation_generation"] = generation
@@ -887,7 +887,7 @@ class ZoneRuntime:
             )
         )
         self.publish(values)
-        self._create_task(self._async_apply_calculation(result))
+        self._create_task(self._async_apply_calculation(result, recovery_reassertions))
 
         numerical = next((item.result for item in result.targets if item.result is not None), None)
         if numerical is not None and numerical.policy is not None:
@@ -1442,10 +1442,14 @@ class ZoneRuntime:
             "mold_indicator": SourceKind.SURFACE,
         }.get(str(self.entry.options.get("radiant_model", "uniform")), SourceKind.DIRECT_MRT)
 
-    def _reconcile_targets(self, result: RuntimeCalculation) -> None:
+    def _reconcile_targets(self, result: RuntimeCalculation) -> frozenset[str]:
         incompatible = False
+        recovery_reassertions: set[str] = set()
         for target in result.targets:
             state = self.ownership[target.registry_identity]
+            previous_ownership = state.ownership
+            previous_data = state.data_readiness
+            previous_readiness = state.target_readiness
             readiness = self._target_readiness(target.capability, target.mapping)
             incompatible = incompatible or readiness is TargetReadiness.INCOMPATIBLE
             calculation = target.result
@@ -1484,10 +1488,36 @@ class ZoneRuntime:
                     target_readiness=readiness,
                     data_readiness=data,
                 )
+            state = self.ownership[target.registry_identity]
+            data_recovered = previous_data not in {
+                DataReadiness.READY,
+                DataReadiness.DEGRADED_READY,
+                DataReadiness.FALLBACK_READY,
+            } and data in {
+                DataReadiness.READY,
+                DataReadiness.DEGRADED_READY,
+                DataReadiness.FALLBACK_READY,
+            }
+            target_recovered = (
+                previous_readiness is not TargetReadiness.AVAILABLE_SUPPORTED
+                and readiness is TargetReadiness.AVAILABLE_SUPPORTED
+            )
+            ownership_recovered = (
+                previous_ownership is Ownership.RECONCILING and state.ownership is Ownership.OWNED
+            )
+            if state.ownership is Ownership.OWNED and (
+                data_recovered or target_recovered or ownership_recovered
+            ):
+                recovery_reassertions.add(target.registry_identity)
         if self.repair_manager is not None:
             self.repair_manager.update("incompatible_auto_mapping", incompatible)
+        return frozenset(recovery_reassertions)
 
-    async def _async_apply_calculation(self, result: RuntimeCalculation) -> None:
+    async def _async_apply_calculation(
+        self,
+        result: RuntimeCalculation,
+        recovery_reassertions: frozenset[str] = frozenset(),
+    ) -> None:
         if not self.control_enabled or self.broker is None:
             return
         outcomes: dict[str, str] = {}
@@ -1513,7 +1543,10 @@ class ZoneRuntime:
                 calculation.normalized,
                 mapping,
                 now,
-                explicit_transition=result.explicit_transition,
+                explicit_transition=(
+                    result.explicit_transition or target.registry_identity in recovery_reassertions
+                ),
+                recovery_reassertion=(target.registry_identity in recovery_reassertions),
             )
             outcome = await self.broker.async_submit(intent, now=now)
             outcomes[target.target_uuid] = outcome.reason
@@ -1598,6 +1631,7 @@ class ZoneRuntime:
         *,
         explicit_transition: bool,
         safety_deescalation: bool = False,
+        recovery_reassertion: bool = False,
     ) -> NormalizedIntent:
         state = self.ownership[target.registry_identity]
         common = (
@@ -1616,6 +1650,7 @@ class ZoneRuntime:
             now + timedelta(minutes=5),
             explicit_transition,
             safety_deescalation,
+            recovery_reassertion,
         )
         if isinstance(normalized, NormalizedRangeTarget):
             return NormalizedIntent(
@@ -1655,6 +1690,21 @@ class ZoneRuntime:
 
     def _broker_preflight(self, identity: str) -> BrokerPreflight:
         state = self.ownership[identity]
+        configured = next(
+            (
+                target
+                for target in self.entry.data.get("targets", ())
+                if str(target["registry_identity"]) == identity
+            ),
+            None,
+        )
+        observed_target = (
+            None
+            if configured is None
+            else self._fingerprint(
+                capability_from_state(self.hass.states.get(str(configured["entity_id"])))
+            )
+        )
         return BrokerPreflight(
             identity,
             self.configuration_generation,
@@ -1667,6 +1717,7 @@ class ZoneRuntime:
             in {DataReadiness.READY, DataReadiness.DEGRADED_READY, DataReadiness.FALLBACK_READY},
             get_lease_registry(self.hass).owner(identity),
             True,
+            observed_target,
         )
 
     def _context_token(self) -> ContextToken:

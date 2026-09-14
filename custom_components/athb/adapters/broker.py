@@ -59,6 +59,7 @@ class NormalizedIntent:
     expires_at: datetime
     explicit_transition: bool = False
     safety_deescalation: bool = False
+    recovery_reassertion: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +74,7 @@ class BrokerPreflight:
     data_ready: bool
     lease_owner: str | None
     dispatch_gate_open: bool = True
+    observed_target: TargetFingerprint | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +223,25 @@ def _same_target(a: TargetFingerprint, b: TargetFingerprint) -> bool:
     return a == b
 
 
+def _target_matches(a: TargetFingerprint, b: TargetFingerprint, *, tolerance: float) -> bool:
+    if a.shape is not b.shape:
+        return False
+    if a.shape is TargetShape.SCALAR:
+        return (
+            a.temperature_ha is not None
+            and b.temperature_ha is not None
+            and math.isclose(a.temperature_ha, b.temperature_ha, rel_tol=0.0, abs_tol=tolerance)
+        )
+    return (
+        a.low_ha is not None
+        and b.low_ha is not None
+        and a.high_ha is not None
+        and b.high_ha is not None
+        and math.isclose(a.low_ha, b.low_ha, rel_tol=0.0, abs_tol=tolerance)
+        and math.isclose(a.high_ha, b.high_ha, rel_tol=0.0, abs_tol=tolerance)
+    )
+
+
 def _maximum_change_ha(a: TargetFingerprint, b: TargetFingerprint) -> float:
     if a.shape is not b.shape:
         return math.inf
@@ -298,15 +319,24 @@ def anti_chatter_reason(
     """Apply unchanged, meaningful, hysteresis, then interval suppression order."""
 
     requested = intent_fingerprint(intent)
-    if acknowledged is not None and _same_target(requested, acknowledged.fingerprint):
+    if (
+        not intent.recovery_reassertion
+        and acknowledged is not None
+        and _same_target(requested, acknowledged.fingerprint)
+    ):
         return "target_unchanged"
     if (
-        acknowledged is not None
+        not intent.recovery_reassertion
+        and acknowledged is not None
         and _maximum_change_ha(requested, acknowledged.fingerprint) + 1e-12
         < intent.meaningful_delta_ha
     ):
         return "below_minimum_change"
-    if acknowledged is not None and _release_hysteresis_blocks(intent, acknowledged):
+    if (
+        not intent.recovery_reassertion
+        and acknowledged is not None
+        and _release_hysteresis_blocks(intent, acknowledged)
+    ):
         return "quantization_hysteresis"
     if last_dispatch_at is not None:
         interval = (
@@ -403,6 +433,29 @@ class CommandBroker:
                 AcknowledgementStatus.PENDING,
                 "command_pending",
             )
+        if intent.recovery_reassertion:
+            requested = intent_fingerprint(intent)
+            if current.observed_target is not None and _target_matches(
+                requested,
+                current.observed_target,
+                tolerance=intent.feedback_resolution_ha,
+            ):
+                state.acknowledged = AcknowledgedTarget(
+                    current.observed_target,
+                    intent.normalized_room_c,
+                    intent.normalized_low_room_c,
+                    intent.normalized_high_room_c,
+                    now,
+                )
+                state.queued = None
+                return CommandOutcome(
+                    None,
+                    DispatchStatus.NOT_DISPATCHED,
+                    AcknowledgementStatus.NOT_APPLICABLE,
+                    "target_current",
+                )
+            # A prior acknowledgement is not proof of the live target after recovery.
+            state.acknowledged = None
         chatter = anti_chatter_reason(
             intent,
             acknowledged=state.acknowledged,

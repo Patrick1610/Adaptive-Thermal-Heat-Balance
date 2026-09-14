@@ -22,6 +22,12 @@ from custom_components.athb.adapters.climate import (
     HomeAssistantClimateService,
     capability_from_state,
 )
+from custom_components.athb.adapters.storage import (
+    ControlStoreState,
+    HomeAssistantControlStorageBackend,
+    StoredActuator,
+    serialize_control_state,
+)
 from custom_components.athb.calculation import CapturedTarget, calculate_runtime_snapshot
 from custom_components.athb.core.climate import (
     ClimateCapabilitySnapshot,
@@ -969,6 +975,105 @@ async def test_runtime_uses_pipeline_and_broker_for_exact_target_only_service(
     await runtime.async_unload()
 
 
+async def test_unclean_restart_without_pending_command_reasserts_without_resume(
+    hass: HomeAssistant,
+) -> None:
+    target_attributes = {
+        "hvac_modes": ["off", "heat"],
+        "supported_features": 1,
+        "min_temp": 16.0,
+        "max_temp": 30.0,
+        "target_temp_step": 0.5,
+        "temperature": 17.0,
+        "unit_of_measurement": "°C",
+    }
+    acknowledged_attributes = {**target_attributes, "temperature": 18.0}
+    calls: list[ServiceCall] = []
+
+    async def acknowledge(call: ServiceCall) -> None:
+        calls.append(call)
+        hass.states.async_set(
+            "climate.target", "heat", acknowledged_attributes, context=call.context
+        )
+
+    hass.services.async_register("climate", "set_temperature", acknowledge)
+    hass.states.async_set("sensor.room", "20", {"unit_of_measurement": "°C"})
+    hass.states.async_set("sensor.outdoor", "5", {"unit_of_measurement": "°C"})
+    hass.states.async_set("climate.target", "heat", target_attributes)
+    entry = MockConfigEntry(
+        domain="athb",
+        title="Zone",
+        data={
+            "zone_uuid": "zone-unclean-reassert",
+            "primary_temperature": "sensor.room",
+            "outdoor_source": "sensor.outdoor",
+            "rh_mode": "declared",
+            "rh_declared": 50.0,
+            "targets": [
+                {
+                    "target_uuid": "target-1",
+                    "entity_id": "climate.target",
+                    "registry_identity": "registry-1",
+                }
+            ],
+        },
+        options={
+            "comfort_strategy": "balanced",
+            "control_enabled": True,
+            "minimum_control_temperature": 18.0,
+            "maximum_control_temperature": 26.0,
+        },
+    )
+    runtime = ZoneRuntime(
+        hass,
+        cast(Any, entry),
+        "zone-unclean-reassert",
+        "balanced",
+        "off",
+        True,
+    )
+    stored = ControlStoreState(
+        storage_generation=4,
+        run_id="prior-run",
+        clean_shutdown=False,
+        configuration_fingerprint=runtime._configuration_fingerprint(),
+        strategy="balanced",
+        actuators=(
+            StoredActuator(
+                target_identity="registry-1",
+                ownership="owned",
+                ownership_revision=3,
+                external_revision=0,
+                override_reason=None,
+                override_expiry=None,
+                resume_required=False,
+                last_observed_target_fingerprint=None,
+                last_command_id=None,
+                last_command_payload_fingerprint=None,
+                last_command_context_id=None,
+                pending_command=None,
+            ),
+        ),
+        control_enabled_intent=True,
+    )
+    await HomeAssistantControlStorageBackend(hass, "zone-unclean-reassert").async_save(
+        serialize_control_state(stored)
+    )
+
+    await runtime.async_start()
+    assert runtime.controller is not None
+    await runtime.controller.async_wait_idle()
+    await hass.async_block_till_done()
+
+    assert [dict(call.data) for call in calls] == [
+        {"entity_id": "climate.target", "temperature": 18.0}
+    ]
+    assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+    assert not runtime.ownership["registry-1"].resume_required
+    assert runtime.values["command_outcomes"]["target-1"] == "own_context_match"
+    await runtime.async_unload()
+
+
 async def test_same_value_climate_report_acknowledges_command_end_to_end(
     hass: HomeAssistant,
 ) -> None:
@@ -990,7 +1095,7 @@ async def test_same_value_climate_report_acknowledges_command_end_to_end(
     hass.services.async_register("climate", "set_temperature", report_unchanged)
     hass.states.async_set("sensor.room", "20", {"unit_of_measurement": "°C"})
     hass.states.async_set("sensor.outdoor", "5", {"unit_of_measurement": "°C"})
-    hass.states.async_set("climate.target", "heat", target_attributes)
+    hass.states.async_set("climate.target", "heat", {**target_attributes, "temperature": 17.0})
     entry = MockConfigEntry(
         domain="athb",
         title="Zone",
@@ -1748,6 +1853,33 @@ async def test_runtime_apply_schedules_deadlines_and_marks_unknown(
     assert "ack:registry-climate-living-room" in runtime.timers
     for cancel in runtime.timers.values():
         cancel()
+
+
+def test_runtime_marks_startup_and_data_recovery_for_live_target_reassertion() -> None:
+    scenario = load_scenarios()[0]
+    calculation = calculate_runtime_snapshot(_captured(scenario))
+    identity = "registry-climate-living-room"
+    runtime = _runtime(target_identity=identity)
+    runtime.control_enabled = True
+    runtime.ownership[identity] = OwnershipState(
+        identity,
+        Ownership.RECONCILING,
+        DataReadiness.INVALID,
+        TargetReadiness.UNAVAILABLE,
+    )
+
+    startup = runtime._reconcile_targets(calculation)
+
+    assert startup == frozenset({identity})
+    assert runtime.ownership[identity].ownership is Ownership.OWNED
+    assert runtime._reconcile_targets(calculation) == frozenset()
+
+    runtime.ownership[identity] = replace(
+        runtime.ownership[identity], data_readiness=DataReadiness.HOLD_LAST_GOOD
+    )
+    recovered = runtime._reconcile_targets(calculation)
+
+    assert recovered == frozenset({identity})
 
 
 async def test_broker_timer_callbacks_cover_timeout_and_queue_paths(

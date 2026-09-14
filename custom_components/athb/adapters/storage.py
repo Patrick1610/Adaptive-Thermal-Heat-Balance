@@ -541,9 +541,10 @@ def prepare_startup_recovery(
     unresolved = any(actuator.pending_command is not None for actuator in prior.actuators)
     configuration_changed = prior.configuration_fingerprint != configuration_fingerprint
     strategy_changed = prior.strategy != strategy
-    requires_resume = (
-        not prior.clean_shutdown or unresolved or configuration_changed or strategy_changed
-    )
+    # Persistence-before-dispatch makes an unresolved command the authoritative
+    # signal for an uncertain climate write. An unclean process exit without one
+    # can safely perform a fresh, live-target reconciliation.
+    requires_resume = unresolved or configuration_changed or strategy_changed
     reason = (
         "unresolved_command"
         if unresolved
