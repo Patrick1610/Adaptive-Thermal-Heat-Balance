@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3
+
+- Coalesce repeated reports and sub-deadband sensor noise before scheduling a new thermal
+  calculation: 0.05 °C for indoor/radiant inputs, 0.1 °C outdoors, 0.5 percentage point RH and
+  0.02 m/s air speed.
+- Compare small changes with the last materially processed value, so cumulative movement always
+  crosses the threshold and triggers a calculation.
+- Never suppress first observations, availability/validity-shape transitions, target capability
+  changes, freshness-expiry checks or command acknowledgements.
+- Expose the bounded count of coalesced source reports in runtime diagnostics for field analysis.
+
 ## 0.2.2
 
 - Clear only the obsolete v0.2.0 `unclean_restart` Resume gate during startup migration; unresolved

@@ -49,7 +49,7 @@ from custom_components.athb.core.ownership import (
     OwnershipState,
     TargetReadiness,
 )
-from custom_components.athb.core.sources import SourceState
+from custom_components.athb.core.sources import SourceKind, SourceState
 from custom_components.athb.runtime import ZoneRuntime
 from tests.virtual_installations.runner import _captured
 from tests.virtual_installations.schema import load_scenarios
@@ -243,6 +243,84 @@ def test_ownership_transition_is_published_without_waiting_for_calculation() -> 
     assert runtime.values["control_eligible"] is False
     assert runtime.values["resume_required"] is False
     assert runtime.values["ownership"] == {"registry-1": "disabled"}
+
+
+def test_source_noise_is_coalesced_but_cumulative_and_availability_changes_are_material() -> None:
+    runtime = _runtime()
+    runtime.entry.data["primary_temperature"] = "sensor.room"
+    attributes = {"unit_of_measurement": "°C"}
+
+    assert runtime._source_report_is_material("sensor.room", State("sensor.room", "20", attributes))
+    assert not runtime._source_report_is_material(
+        "sensor.room", State("sensor.room", "20.02", attributes)
+    )
+    assert not runtime._source_report_is_material(
+        "sensor.room", State("sensor.room", "20.04", attributes)
+    )
+    assert runtime._source_report_is_material(
+        "sensor.room", State("sensor.room", "20.06", attributes)
+    )
+    assert runtime._source_report_is_material(
+        "sensor.room", State("sensor.room", "unavailable", attributes)
+    )
+    assert not runtime._source_report_is_material(
+        "sensor.room", State("sensor.room", "unavailable", attributes)
+    )
+    assert runtime._source_report_is_material(
+        "sensor.room", State("sensor.room", "20.07", attributes)
+    )
+    assert runtime.suppressed_source_reports == 3
+
+
+def test_relative_humidity_uses_a_bounded_half_percent_deadband() -> None:
+    runtime = _runtime()
+    runtime.entry.data["rh_entity"] = "sensor.rh"
+    attributes = {"unit_of_measurement": "%"}
+
+    assert runtime._source_report_is_material("sensor.rh", State("sensor.rh", "50", attributes))
+    assert not runtime._source_report_is_material(
+        "sensor.rh", State("sensor.rh", "50.4", attributes)
+    )
+    assert runtime._source_report_is_material("sensor.rh", State("sensor.rh", "50.6", attributes))
+
+
+def test_source_noise_classifies_all_configured_source_shapes(hass: HomeAssistant) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.data.update(
+        {
+            "primary_temperature": "climate.room",
+            "rh_entity": "sensor.rh",
+            "outdoor_source": "sensor.outdoor",
+        }
+    )
+    runtime.entry.options.update(
+        {
+            "air_speed_entity": "sensor.air_speed",
+            "globe_temperature_entity": "sensor.globe",
+            "surface_temperature_entity": "sensor.surface",
+            "mold_indicator_entity": "sensor.mold",
+        }
+    )
+
+    assert runtime._source_kind("climate.room") is SourceKind.PRIMARY_AIR
+    assert runtime._source_kind("sensor.rh") is SourceKind.RELATIVE_HUMIDITY
+    assert runtime._source_kind("sensor.outdoor") is SourceKind.OUTDOOR
+    assert runtime._source_kind("sensor.air_speed") is SourceKind.AIR_SPEED
+    assert runtime._source_kind("sensor.globe") is SourceKind.GLOBE
+    assert runtime._source_kind("sensor.surface") is SourceKind.SURFACE
+    assert runtime._source_kind("sensor.mold") is SourceKind.DIRECT_MRT
+    assert runtime._source_numeric_value("sensor.none", None, SourceKind.PRIMARY_AIR) is None
+    assert runtime._source_numeric_value(
+        "climate.room",
+        State("climate.room", "heat", {"current_temperature": 21.25}),
+        SourceKind.PRIMARY_AIR,
+    ) == pytest.approx(21.25)
+    assert runtime._source_numeric_value(
+        "sensor.mold",
+        State("sensor.mold", "75", {"estimated_critical_temp": 16.75}),
+        SourceKind.DIRECT_MRT,
+    ) == pytest.approx(16.75)
 
 
 def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:

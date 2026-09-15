@@ -170,6 +170,9 @@ class ZoneRuntime:
     last_valid_at: datetime | None = None
     last_valid_persistence_payload: str | None = None
     stale_safety_applied: set[str] = field(default_factory=set)
+    last_meaningful_source_values: dict[str, float | None] = field(default_factory=dict)
+    last_source_availability: dict[str, bool] = field(default_factory=dict)
+    suppressed_source_reports: int = 0
 
     async def async_start(self) -> None:
         """Acquire recovery state, shared history, listeners and initial calculation."""
@@ -365,10 +368,15 @@ class ZoneRuntime:
         )
         if target is not None:
             self._create_task(self._async_handle_target_state(target, old_state, new_state))
-        if target is None or entity_id in self._reported_source_entity_ids():
+        source_event = entity_id in self._reported_source_entity_ids()
+        material_source_event = source_event and self._source_report_is_material(
+            entity_id, new_state
+        )
+        if material_source_event:
             self.input_generation += 1
             self._update_critical_delta(entity_id, new_state)
-        self.schedule_environmental_snapshot()
+        if target is not None or material_source_event:
+            self.schedule_environmental_snapshot()
 
     @callback
     def _handle_source_report_event(self, event: Event[Any]) -> None:
@@ -376,9 +384,88 @@ class ZoneRuntime:
 
         entity_id = str(event.data.get("entity_id", ""))
         new_state = cast(State | None, event.data.get("new_state"))
-        self.input_generation += 1
-        self._update_critical_delta(entity_id, new_state)
-        self.schedule_environmental_snapshot()
+        if self._source_report_is_material(entity_id, new_state):
+            self.input_generation += 1
+            self._update_critical_delta(entity_id, new_state)
+            self.schedule_environmental_snapshot()
+
+    def _source_report_is_material(self, entity_id: str, state: State | None) -> bool:
+        """Coalesce bounded input noise while retaining availability and cumulative changes."""
+
+        kind = self._source_kind(entity_id)
+        available = state is not None and state.state not in {"unknown", "unavailable"}
+        value = self._source_numeric_value(entity_id, state, kind) if available else None
+        prior_available = self.last_source_availability.get(entity_id)
+        prior_value = self.last_meaningful_source_values.get(entity_id)
+        threshold = {
+            SourceKind.RELATIVE_HUMIDITY: 0.5,
+            SourceKind.AIR_SPEED: 0.02,
+            SourceKind.OUTDOOR: 0.1,
+        }.get(kind, 0.05)
+        known = entity_id in self.last_meaningful_source_values
+        value_shape_changed = (prior_value is None) != (value is None)
+        material = (
+            not known
+            or prior_available != available
+            or (
+                available
+                and (
+                    value_shape_changed
+                    or (
+                        prior_value is not None
+                        and value is not None
+                        and abs(value - prior_value) >= threshold
+                    )
+                )
+            )
+        )
+        self.last_source_availability[entity_id] = available
+        if material:
+            self.last_meaningful_source_values[entity_id] = value
+            return True
+        self.suppressed_source_reports += 1
+        self.values["suppressed_source_reports"] = self.suppressed_source_reports
+        return False
+
+    def _source_kind(self, entity_id: str) -> SourceKind:
+        if entity_id == str(self.entry.data.get("primary_temperature", "")):
+            return SourceKind.PRIMARY_AIR
+        if entity_id == str(self.entry.data.get("rh_entity", "")):
+            return SourceKind.RELATIVE_HUMIDITY
+        if entity_id == str(self.entry.data.get("outdoor_source", "")):
+            return SourceKind.OUTDOOR
+        if entity_id == str(self.entry.options.get("air_speed_entity", "")):
+            return SourceKind.AIR_SPEED
+        if entity_id == str(self.entry.options.get("globe_temperature_entity", "")):
+            return SourceKind.GLOBE
+        if entity_id == str(self.entry.options.get("surface_temperature_entity", "")):
+            return SourceKind.SURFACE
+        return SourceKind.DIRECT_MRT
+
+    def _source_numeric_value(
+        self, entity_id: str, state: State | None, kind: SourceKind
+    ) -> float | None:
+        if state is None:
+            return None
+        if entity_id == str(self.entry.options.get(CONF_MOLD_INDICATOR_ENTITY, "")):
+            raw_value = state.attributes.get(MOLD_INDICATOR_CRITICAL_TEMP_ATTRIBUTE)
+            unit = str(self.hass.config.units.temperature_unit)
+        else:
+            raw_value = (
+                state.attributes.get(ATTR_CURRENT_TEMPERATURE)
+                if kind is SourceKind.PRIMARY_AIR and entity_id.startswith("climate.")
+                else state.state
+            )
+            unit = str(
+                state.attributes.get("unit_of_measurement")
+                or (
+                    self.hass.config.units.temperature_unit
+                    if kind is SourceKind.PRIMARY_AIR and entity_id.startswith("climate.")
+                    else ""
+                )
+            )
+        converted = convert_source_value(kind, raw_value, unit)
+        return converted[0] if converted is not None else None
 
     @callback
     def _handle_target_report_event(self, event: Event[Any]) -> None:
