@@ -240,6 +240,7 @@ def test_clean_restart_restores_intent_only_and_starts_new_run_unclean() -> None
     )
     assert not recovery.requires_resume
     assert recovery.reason == "clean_restart"
+    assert recovery.reasons == ("clean_restart",)
     assert not recovery.state.clean_shutdown
     assert recovery.state.run_id == "run-new"
     assert recovery.state.actuators[0].ownership == "reconciling"
@@ -257,6 +258,7 @@ def test_unclean_restart_without_unresolved_command_reconciles_automatically() -
 
     assert not recovery.requires_resume
     assert recovery.reason == "unclean_shutdown"
+    assert recovery.reasons == ("unclean_shutdown",)
     assert recovery.state.actuators[0].ownership == "reconciling"
     assert not recovery.state.actuators[0].resume_required
 
@@ -273,6 +275,7 @@ def test_unresolved_restart_requires_resume_and_never_replays_command() -> None:
 
     assert recovery.requires_resume
     assert recovery.reason == "unresolved_command"
+    assert recovery.reasons == ("unresolved_command", "clean_restart")
     assert recovery.state.actuators[0].pending_command is None
 
 
@@ -296,17 +299,52 @@ def test_strategy_or_configuration_drift_cannot_restore_stale_state() -> None:
             )
         )
     )
-    for fingerprint, strategy in (("config-b", "balanced"), ("config-a", "comfort")):
+    for fingerprint, strategy, reason in (
+        ("config-b", "balanced", "configuration_changed"),
+        ("config-a", "comfort", "strategy_changed"),
+    ):
         recovery = prepare_startup_recovery(
             prior,
             run_id="run-new",
             configuration_fingerprint=fingerprint,
             strategy=strategy,
         )
-        assert recovery.requires_resume
-        assert recovery.reason == "configuration_changed"
+        assert not recovery.requires_resume
+        assert recovery.reason == reason
+        assert recovery.reasons == (reason, "clean_restart")
         assert recovery.state.last_valid_values_json is None
         assert recovery.state.last_valid_at is None
+
+
+def test_persisted_resume_flag_remains_an_explicit_startup_gate() -> None:
+    prior = replace(
+        _state(clean=True),
+        actuators=(replace(_actuator(), ownership="command_fault", resume_required=True),),
+    )
+    recovery = prepare_startup_recovery(
+        load_control_state(serialize_control_state(prior)),
+        run_id="run-new",
+        configuration_fingerprint="config-a",
+        strategy="balanced",
+    )
+
+    assert recovery.requires_resume
+    assert recovery.reason == "command_fault"
+    assert recovery.reasons == ("command_fault", "clean_restart")
+    assert recovery.state.actuators[0].resume_required
+
+
+def test_configuration_drift_is_reported_ahead_of_unclean_shutdown_without_blocking() -> None:
+    recovery = prepare_startup_recovery(
+        load_control_state(serialize_control_state(_state(clean=False))),
+        run_id="run-new",
+        configuration_fingerprint="config-b",
+        strategy="balanced",
+    )
+
+    assert not recovery.requires_resume
+    assert recovery.reason == "configuration_changed"
+    assert recovery.reasons == ("configuration_changed", "unclean_shutdown")
 
 
 def test_clean_shutdown_rejects_pending_commands_and_naive_clock() -> None:
@@ -344,6 +382,8 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
         boost_mode="rapid",
         rapid_boost_reached=True,
         boost_expiry_utc="2026-09-11T13:00:00+00:00",
+        configuration_fingerprint="config-updated",
+        strategy="comfort",
     )
     assert await persistence.async_update_last_valid_output(
         values_json='{"thermal_sensation":-0.2}',
@@ -364,6 +404,8 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
     assert loaded.state.boost_mode == "rapid"
     assert loaded.state.rapid_boost_reached is True
     assert loaded.state.boost_expiry_utc == "2026-09-11T13:00:00+00:00"
+    assert loaded.state.configuration_fingerprint == "config-updated"
+    assert loaded.state.strategy == "comfort"
     assert loaded.state.last_valid_values_json == '{"thermal_sensation":-0.2}'
     assert loaded.state.last_valid_at == "2026-09-11T12:30:00+00:00"
     assert loaded.state.actuators[0].ownership == "manual_override"
@@ -395,6 +437,8 @@ async def test_unstarted_or_unknown_persistence_operations_fail_closed() -> None
         boost_mode="off",
         rapid_boost_reached=False,
         boost_expiry_utc=None,
+        configuration_fingerprint="config-current",
+        strategy="balanced",
     )
     assert not await persistence.async_update_last_valid_output(
         values_json='{"thermal_sensation":-0.2}',

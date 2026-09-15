@@ -975,8 +975,22 @@ async def test_runtime_uses_pipeline_and_broker_for_exact_target_only_service(
     await runtime.async_unload()
 
 
-async def test_unclean_restart_without_pending_command_reasserts_without_resume(
+@pytest.mark.parametrize(
+    ("stored_fingerprint", "expected_reason", "expected_reasons"),
+    [
+        (None, "unclean_shutdown", ("unclean_shutdown",)),
+        (
+            "stale-configuration",
+            "configuration_changed",
+            ("configuration_changed", "unclean_shutdown"),
+        ),
+    ],
+)
+async def test_restart_without_pending_command_reasserts_without_resume(
     hass: HomeAssistant,
+    stored_fingerprint: str | None,
+    expected_reason: str,
+    expected_reasons: tuple[str, ...],
 ) -> None:
     target_attributes = {
         "hvac_modes": ["off", "heat"],
@@ -1036,7 +1050,7 @@ async def test_unclean_restart_without_pending_command_reasserts_without_resume(
         storage_generation=4,
         run_id="prior-run",
         clean_shutdown=False,
-        configuration_fingerprint=runtime._configuration_fingerprint(),
+        configuration_fingerprint=stored_fingerprint or runtime._configuration_fingerprint(),
         strategy="balanced",
         actuators=(
             StoredActuator(
@@ -1070,6 +1084,8 @@ async def test_unclean_restart_without_pending_command_reasserts_without_resume(
     ]
     assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
     assert not runtime.ownership["registry-1"].resume_required
+    assert runtime.values["recovery_reason"] == expected_reason
+    assert runtime.values["recovery_reasons"] == expected_reasons
     assert runtime.values["command_outcomes"]["target-1"] == "own_context_match"
     await runtime.async_unload()
 
@@ -2182,6 +2198,14 @@ async def test_strategy_and_boost_changes_invalidate_active_runtime_without_relo
 
     runtime = ZoneRuntime(hass, cast(Any, entry), "runtime-changes", "balanced", "off", False)
     runtime.controller = cast(Any, Controller())
+    persisted: list[dict[str, Any]] = []
+
+    class Persistence:
+        async def async_update_runtime(self, **values: Any) -> bool:
+            persisted.append(values)
+            return True
+
+    runtime.persistence = cast(Any, Persistence())
     cancelled: list[bool] = []
     runtime.debounce_cancel = lambda: cancelled.append(True)
     runtime.debounce_started = hass.loop.time()
@@ -2212,3 +2236,8 @@ async def test_strategy_and_boost_changes_invalidate_active_runtime_without_relo
     unchanged_generation = runtime.configuration_generation
     await runtime.async_set_eco_intensity("workday")
     assert runtime.configuration_generation == unchanged_generation
+    await hass.async_block_till_done()
+    assert len(persisted) == 4
+    assert persisted[0]["strategy"] == "comfort"
+    assert persisted[-1]["strategy"] == "comfort"
+    assert persisted[-1]["configuration_fingerprint"] == runtime._configuration_fingerprint()

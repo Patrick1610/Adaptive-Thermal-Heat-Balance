@@ -173,6 +173,14 @@ def test_command_fault_and_restart_require_explicit_reconciliation() -> None:
     unclean = reduce_ownership(fault, OwnershipEvent.UNCLEAN_RESTART, now=NOW).state
     assert unclean.ownership is Ownership.RECONCILING
     assert unclean.resume_required
+    assert unclean.override_reason == "unclean_restart"
+    unresolved = reduce_ownership(
+        fault,
+        OwnershipEvent.UNCLEAN_RESTART,
+        now=NOW,
+        recovery_reason="unresolved_command",
+    ).state
+    assert unresolved.override_reason == "unresolved_command"
     clean = reduce_ownership(_owned(), OwnershipEvent.CLEAN_RESTART, now=NOW).state
     assert clean.ownership is Ownership.RECONCILING
     assert not clean.resume_required

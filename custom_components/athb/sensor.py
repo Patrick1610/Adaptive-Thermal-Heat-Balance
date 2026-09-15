@@ -459,6 +459,7 @@ def _target_decision_context(runtime: ZoneRuntime) -> dict[str, Any]:
         "quality_reasons": runtime.values.get("quality_reasons", ()),
         "suppression_reason": runtime.values.get("suppression_reason"),
         "recovery_reason": runtime.values.get("recovery_reason"),
+        "recovery_reasons": runtime.values.get("recovery_reasons", ()),
         "resume_required": runtime.values.get("resume_required", False),
     }
 

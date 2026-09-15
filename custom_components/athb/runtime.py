@@ -227,11 +227,21 @@ class ZoneRuntime:
             await self._async_acquire_target_leases()
             if self.persistence.requires_resume:
                 for identity in identities:
-                    self._transition(identity, OwnershipEvent.UNCLEAN_RESTART)
-        self.values["recovery_reason"] = (
+                    self._transition(
+                        identity,
+                        OwnershipEvent.UNCLEAN_RESTART,
+                        recovery_reason=self.persistence.startup_reason,
+                    )
+        startup_reason = (
             str(getattr(self.persistence, "startup_reason", "not_started"))
             if self.persistence is not None
             else "not_started"
+        )
+        self.values["recovery_reason"] = startup_reason
+        self.values["recovery_reasons"] = tuple(
+            getattr(self.persistence, "startup_reasons", (startup_reason,))
+            if self.persistence is not None
+            else (startup_reason,)
         )
         await self._async_start_history()
         self.controller = ZoneController(
@@ -1824,6 +1834,7 @@ class ZoneRuntime:
         target_readiness: TargetReadiness | None = None,
         data_readiness: DataReadiness | None = None,
         now: datetime | None = None,
+        recovery_reason: str | None = None,
     ) -> None:
         current = self.ownership.setdefault(identity, initial_ownership(identity))
         transition = reduce_ownership(
@@ -1835,6 +1846,7 @@ class ZoneRuntime:
             override_duration=timedelta(
                 minutes=float(self.entry.options.get("manual_override_minutes", 120.0))
             ),
+            recovery_reason=recovery_reason,
         )
         self.ownership[identity] = transition.state
         if transition.invalidate_intents and self.broker is not None:
@@ -1873,6 +1885,8 @@ class ZoneRuntime:
                 boost_mode=self.boost_mode,
                 rapid_boost_reached=self.rapid_boost_reached,
                 boost_expiry_utc=(boost_expiry.isoformat() if boost_expiry is not None else None),
+                configuration_fingerprint=self._configuration_fingerprint(),
+                strategy=self.strategy,
             )
         )
 
@@ -2079,6 +2093,7 @@ class ZoneRuntime:
                     self.broker.invalidate(identity)
             self.async_request_snapshot()
         self.publish({**self.values, "eco_intensity": intensity, "reason": "eco_intensity_changed"})
+        self._schedule_runtime_persistence()
 
     def _schedule_boost_expiry(self, expiry: datetime | None = None) -> None:
         expiry = expiry or (

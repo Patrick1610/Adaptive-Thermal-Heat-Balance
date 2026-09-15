@@ -140,6 +140,7 @@ def reduce_ownership(
     preset_affects_temperature_target: bool = False,
     override_duration: timedelta | None = DEFAULT_OVERRIDE_DURATION,
     acknowledged_external_revision: int | None = None,
+    recovery_reason: str | None = None,
 ) -> OwnershipTransition:
     """Apply one authoritative event without conflating readiness and ownership."""
 
@@ -356,7 +357,9 @@ def reduce_ownership(
                 revision=revision,
                 resume_required=event is OwnershipEvent.UNCLEAN_RESTART,
                 override_reason=(
-                    "unclean_restart" if event is OwnershipEvent.UNCLEAN_RESTART else None
+                    recovery_reason or "unclean_restart"
+                    if event is OwnershipEvent.UNCLEAN_RESTART
+                    else None
                 ),
             ),
             True,

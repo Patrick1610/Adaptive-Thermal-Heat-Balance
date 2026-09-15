@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1
+
+- Reconcile automatically after clean or unclean restart, reload, upgrade and ordinary
+  configuration or comfort-policy changes when no unresolved command or persisted recovery gate
+  exists.
+- Keep explicit Resume fail-closed for unresolved commands, corrupt storage and persisted command
+  recovery states.
+- Persist the current configuration fingerprint and comfort strategy with runtime control changes,
+  including occupancy setback changes.
+- Report all startup recovery causes separately instead of masking configuration drift as an
+  unclean restart.
+
 ## 0.2.0
 
 - Accept a temperature/numeric sensor state or a climate `current_temperature` attribute as the

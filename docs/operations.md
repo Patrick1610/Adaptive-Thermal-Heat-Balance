@@ -31,8 +31,11 @@ removed.
 
 ## Recovery and removal
 
-Clean and unclean restarts reconcile live target state before any new command; persisted commands
-are never replayed. Ambiguous or corrupt control state requires Resume. Disabling or unloading ATHB
+Clean and unclean restarts, reloads, upgrades and ordinary configuration or comfort-policy changes
+reconcile live target state automatically before any new command; persisted commands are never
+replayed. Resume remains fail-closed only for an unresolved command, corrupt control storage or an
+explicit persisted recovery gate such as a command fault. `recovery_reason` identifies the primary
+cause and `recovery_reasons` lists every detected startup condition. Disabling or unloading ATHB
 closes the dispatch gate and releases listeners, timers, tasks, leases and shared-source references;
 it does not turn climate equipment off. Removing a zone removes only its zone state and never
 unrelated Recorder/helper data.

@@ -129,6 +129,7 @@ class AthbEntity(Entity):
                 "data_readiness": values.get("data_readiness", {}),
                 "command_outcomes": values.get("command_outcomes", {}),
                 "recovery_reason": values.get("recovery_reason"),
+                "recovery_reasons": values.get("recovery_reasons", ()),
                 "resume_required": values.get("resume_required", False),
                 "transition_reasons": values.get("transition_reasons", ()),
             },

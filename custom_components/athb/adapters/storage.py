@@ -101,6 +101,7 @@ class StartupRecovery:
     state: ControlStoreState
     requires_resume: bool
     reason: str
+    reasons: tuple[str, ...] = ()
 
 
 class ControlStorageBackend(Protocol):
@@ -320,6 +321,7 @@ class ZoneCommandPersistence:
         self.state: ControlStoreState | None = None
         self.requires_resume = False
         self.startup_reason = "not_started"
+        self.startup_reasons: tuple[str, ...] = ("not_started",)
 
     async def async_start(self) -> bool:
         async with self._lock:
@@ -361,6 +363,7 @@ class ZoneCommandPersistence:
             )
             self.requires_resume = recovery.requires_resume
             self.startup_reason = recovery.reason
+            self.startup_reasons = recovery.reasons
             return (await self._verified.async_write_critical(self.state)).verified
 
     def _replace_actuator(self, identity: str, actuator: StoredActuator) -> None:
@@ -436,6 +439,8 @@ class ZoneCommandPersistence:
         boost_mode: str,
         rapid_boost_reached: bool,
         boost_expiry_utc: str | None,
+        configuration_fingerprint: str,
+        strategy: str,
     ) -> bool:
         """Persist authoritative non-command runtime intent."""
 
@@ -451,6 +456,8 @@ class ZoneCommandPersistence:
                 boost_expiry_utc=boost_expiry_utc,
                 boost_mode=boost_mode,
                 rapid_boost_reached=rapid_boost_reached,
+                configuration_fingerprint=configuration_fingerprint,
+                strategy=strategy,
             )
             return (await self._verified.async_write_critical(self.state)).verified
 
@@ -534,26 +541,40 @@ def prepare_startup_recovery(
         raise ValueError("run_id is required")
     if loaded.state is None:
         state = ControlStoreState(1, run_id, False, configuration_fingerprint, strategy, ())
+        reason = loaded.reason or "new_store"
         return StartupRecovery(
-            state, loaded.reason == "corrupt_control_storage", loaded.reason or "new_store"
+            state,
+            loaded.reason == "corrupt_control_storage",
+            reason,
+            (reason,),
         )
     prior = loaded.state
     unresolved = any(actuator.pending_command is not None for actuator in prior.actuators)
+    stored_resume_required = any(actuator.resume_required for actuator in prior.actuators)
+    stored_command_fault = any(
+        actuator.resume_required and actuator.ownership == "command_fault"
+        for actuator in prior.actuators
+    )
     configuration_changed = prior.configuration_fingerprint != configuration_fingerprint
     strategy_changed = prior.strategy != strategy
-    # Persistence-before-dispatch makes an unresolved command the authoritative
-    # signal for an uncertain climate write. An unclean process exit without one
-    # can safely perform a fresh, live-target reconciliation.
-    requires_resume = unresolved or configuration_changed or strategy_changed
-    reason = (
-        "unresolved_command"
-        if unresolved
-        else "unclean_shutdown"
-        if not prior.clean_shutdown
-        else "configuration_changed"
-        if configuration_changed or strategy_changed
-        else "clean_restart"
+    # Persistence-before-dispatch makes an unresolved command or an explicit
+    # persisted recovery flag authoritative. Configuration drift and an unclean
+    # exit without either can safely use a fresh, live-target reconciliation.
+    requires_resume = unresolved or stored_resume_required
+    reasons = tuple(
+        reason
+        for active, reason in (
+            (unresolved, "unresolved_command"),
+            (stored_command_fault, "command_fault"),
+            (stored_resume_required and not stored_command_fault, "stored_resume_required"),
+            (configuration_changed, "configuration_changed"),
+            (strategy_changed, "strategy_changed"),
+            (not prior.clean_shutdown, "unclean_shutdown"),
+            (prior.clean_shutdown, "clean_restart"),
+        )
+        if active
     )
+    reason = reasons[0]
     actuators = tuple(
         replace(
             actuator,
@@ -581,7 +602,7 @@ def prepare_startup_recovery(
         ),
         last_valid_at=(None if configuration_changed or strategy_changed else prior.last_valid_at),
     )
-    return StartupRecovery(state, requires_resume, reason)
+    return StartupRecovery(state, requires_resume, reason, reasons)
 
 
 def mark_clean_shutdown(state: ControlStoreState, *, now: datetime) -> ControlStoreState:

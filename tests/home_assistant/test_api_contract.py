@@ -526,6 +526,7 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
         "quality_reasons": (),
         "suppression_reason": None,
         "recovery_reason": None,
+        "recovery_reasons": (),
         "resume_required": False,
     }
 
