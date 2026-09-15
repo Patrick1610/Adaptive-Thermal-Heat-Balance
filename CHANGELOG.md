@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4
+
+- Exercise all seven anonymized diagnostic configurations through one parametrized Home Assistant
+  lifecycle test covering startup, invalid or stale mandatory inputs, and automatic recovery.
+- Verify fixed-fallback and no-write behavior, recovery without reload or Resume, and the exact
+  target-only climate service payload for every applicable scenario.
+
 ## 0.2.3
 
 - Coalesce repeated reports and sub-deadband sensor noise before scheduling a new thermal
