@@ -72,8 +72,8 @@ and do not reload the config entry.
 Seven diagnostic sensors expose the inverse-solved structure and current position before
 occupancy or Boost policy. **Comfort range — lower limit**, **Comfort range — neutral reference**,
 and **Comfort range — upper limit** form the outer comfort range. **Comfort range — current** is
-the validated primary indoor temperature and **Comfort range — neutral delta** is current minus
-neutral, retaining its positive or negative sign. **Control point — heating** and
+the validated primary indoor temperature and **Comfort range — deviation from neutral** is current
+minus neutral, retaining its positive or negative sign. **Control point — heating** and
 **Control point — cooling** form the selected comfort level's inner control range. Their
 temperature states are the solved room temperatures; the corresponding sensation vote and range
 role are available as attributes. Setback and Boost do not change these raw ranges.
@@ -97,10 +97,20 @@ grid rounding. **Target — current** exposes a structured `decision` attribute 
 comfort, occupancy/setback, Boost phase, governing control point, pre-slew/requested values,
 transition, quality, suppression and recovery state. Its `per_climate` attribute includes current
 temperature, reported setpoint, calibration, bounds, grid, HVAC mode/action, availability,
-normalized ATHB requests, ownership/readiness and command outcome. This keeps the device page
-compact while preserving actuator-level evidence. Zones that genuinely mix heating and cooling directions or use
-an atomic temperature range retain separate climate-specific endpoint sensors: one scalar room
-target would be physically ambiguous there.
+normalized ATHB requests, ownership/readiness and command outcome.
+
+Direction-specific target-deviation sensors are created automatically from the target climate
+capabilities. Heat-only exposes **Target — heating deviation from current**, cool-only exposes
+**Target — cooling deviation from current**, and `heat_cool` exposes both. Heating deviation is
+the active heating target (or `target_low`) minus current room temperature. Cooling deviation is
+the active cooling target (or `target_high`) minus current room temperature. A positive value
+therefore means the directional target lies above current; a negative value means it lies below.
+For `heat_cool`, the two values retain both distances instead of collapsing the result to zero
+inside the range.
+
+This keeps the device page compact while preserving actuator-level evidence. Zones that genuinely
+mix heating and cooling directions or use an atomic temperature range retain separate
+climate-specific endpoint sensors: one scalar room target would be physically ambiguous there.
 
 Targets remain previews while control is disabled. The actual climate target changes only when
 adaptive control is enabled and ownership, capability, override, and broker gates allow a write.

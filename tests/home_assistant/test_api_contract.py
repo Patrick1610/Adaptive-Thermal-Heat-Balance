@@ -32,10 +32,12 @@ from custom_components.athb.select import BoostModeSelect, EcoIntensitySelect, S
 from custom_components.athb.sensor import (
     DESCRIPTIONS,
     AthbSensor,
+    TargetDeviationSensor,
     TargetSensor,
     ZoneTargetSensor,
     _per_climate_context,
     _supports_zone_target_sensors,
+    _target_control_directions,
     _target_display_name,
     _target_endpoints,
 )
@@ -216,6 +218,113 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
         "target_occupied",
         "target_unoccupied",
     ]
+    assert TargetDeviationSensor(runtime, "heating").unique_id == (
+        "zone-1_target_heating_deviation"
+    )
+    assert TargetDeviationSensor(runtime, "heating").translation_key == ("target_heating_deviation")
+
+
+@pytest.mark.parametrize(
+    ("current", "target_direction", "sensor_direction", "room", "expected", "position"),
+    [
+        (20.0, "heating_only", "heating", {"temperature": 21.5}, 1.5, "below_reference"),
+        (25.0, "cooling_only", "cooling", {"temperature": 24.0}, -1.0, "above_reference"),
+        (
+            22.0,
+            "ranged",
+            "heating",
+            {"target_low": 19.0, "target_high": 24.0},
+            -3.0,
+            "above_reference",
+        ),
+        (
+            22.0,
+            "ranged",
+            "cooling",
+            {"target_low": 19.0, "target_high": 24.0},
+            2.0,
+            "below_reference",
+        ),
+    ],
+)
+def test_target_deviation_is_consistent_for_scalar_and_heat_cool(
+    current: float,
+    target_direction: str,
+    sensor_direction: str,
+    room: dict[str, float],
+    expected: float,
+    position: str,
+) -> None:
+    runtime = _runtime()
+    runtime.values.update(
+        {
+            "comfort_range_current": current,
+            "target_scenarios": {
+                "target-1": {
+                    "direction": target_direction,
+                    "current": {"room": room},
+                }
+            },
+        }
+    )
+
+    sensor = TargetDeviationSensor(runtime, sensor_direction)
+
+    assert sensor.native_value == expected
+    assert sensor.extra_state_attributes["position"] == position
+    assert sensor.extra_state_attributes["current_temperature"] == current
+
+
+@pytest.mark.parametrize(
+    ("entity_id", "state", "features", "hvac_modes", "expected"),
+    [
+        (
+            "climate.heating",
+            "off",
+            ClimateEntityFeature.TARGET_TEMPERATURE,
+            ["heat", "off"],
+            ("heating",),
+        ),
+        (
+            "climate.cooling",
+            "off",
+            ClimateEntityFeature.TARGET_TEMPERATURE,
+            ["cool", "off"],
+            ("cooling",),
+        ),
+        (
+            "climate.ranged",
+            "heat_cool",
+            ClimateEntityFeature.TARGET_TEMPERATURE_RANGE,
+            ["heat_cool", "off"],
+            ("heating", "cooling"),
+        ),
+    ],
+)
+def test_target_deviation_directions_follow_climate_capabilities(
+    hass: Any,
+    entity_id: str,
+    state: str,
+    features: ClimateEntityFeature,
+    hvac_modes: list[str],
+    expected: tuple[str, ...],
+) -> None:
+    hass.states.async_set(
+        entity_id,
+        state,
+        {
+            "supported_features": int(features),
+            "hvac_modes": hvac_modes,
+        },
+    )
+
+    assert (
+        _target_control_directions(
+            hass,
+            [{"entity_id": entity_id, "target_uuid": "target-1"}],
+        )
+        == expected
+    )
 
 
 def test_target_display_names_prefer_state_then_registry_and_never_show_raw_ids(hass: Any) -> None:
@@ -419,6 +528,13 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
         config_entry=entry,
         suggested_object_id="obsolete_scalar",
     )
+    obsolete_cooling_deviation = registry.async_get_or_create(
+        "sensor",
+        "athb",
+        "zone-1_target_cooling_deviation",
+        config_entry=entry,
+        suggested_object_id="obsolete_cooling_deviation",
+    )
     added: list[Any] = []
     await async_setup_sensor_entry(hass, cast(Any, entry), added.extend)
 
@@ -427,6 +543,7 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
         "zone-1_target_current",
         "zone-1_target_occupied",
         "zone-1_target_unoccupied",
+        "zone-1_target_heating_deviation",
     } <= unique_ids
     assert "zone-1_target-1_temperature" not in unique_ids
     assert "zone-1_target-1_target_low" not in unique_ids
@@ -435,6 +552,7 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
     assert registry.async_get(obsolete_range.entity_id) is None
     assert registry.async_get(obsolete_surface.entity_id) is None
     assert registry.async_get(obsolete_scalar.entity_id) is None
+    assert registry.async_get(obsolete_cooling_deviation.entity_id) is None
     assert "zone-1_input_status" in unique_ids
 
 

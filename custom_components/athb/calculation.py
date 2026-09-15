@@ -776,6 +776,11 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             }
         target_scenarios[target.target_uuid] = {
             "entity_id": target.entity_id,
+            "direction": (
+                "ranged"
+                if isinstance(normalized, NormalizedRangeTarget)
+                else normalized.direction.value
+            ),
             "current": {
                 "room": room_values(calculation, "current"),
                 "actuator": normalized_values(calculation.normalized),

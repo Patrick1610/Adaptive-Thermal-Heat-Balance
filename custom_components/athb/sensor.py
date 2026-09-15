@@ -230,6 +230,87 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
         return attributes
 
 
+def _target_deviation_context(runtime: ZoneRuntime, direction: str) -> dict[str, Any] | None:
+    current = runtime.values.get("comfort_range_current")
+    if not isinstance(current, int | float) or isinstance(current, bool):
+        return None
+    references: list[float] = []
+    for target in runtime.values.get("target_scenarios", {}).values():
+        room = target.get("current", {}).get("room", {})
+        target_direction = target.get("direction")
+        if target_direction == "ranged":
+            endpoint = "target_low" if direction == "heating" else "target_high"
+            value = room.get(endpoint)
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                references.append(float(value))
+        elif (
+            isinstance(value := room.get("temperature"), int | float)
+            and not isinstance(value, bool)
+            and target_direction == f"{direction}_only"
+        ):
+            references.append(float(value))
+    if not references:
+        return None
+    reference = max(references) if direction == "heating" else min(references)
+    return {
+        "deviation": reference - float(current),
+        "current_temperature": float(current),
+        "direction": direction,
+        "reference_temperature": reference,
+        "position": (
+            "below_reference"
+            if float(current) < reference
+            else "above_reference"
+            if float(current) > reference
+            else "at_reference"
+        ),
+    }
+
+
+class TargetDeviationSensor(AthbEntity, RestoreSensor):
+    """Signed directional target position in room-temperature coordinates."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, runtime: ZoneRuntime, direction: str) -> None:
+        super().__init__(runtime, f"target_{direction}_deviation")
+        self.direction = direction
+        self._attr_translation_key = f"target_{direction}_deviation"
+        self._restored_native_value: Any = None
+
+    @property
+    def native_value(self) -> Any:
+        context = _target_deviation_context(self.runtime, self.direction)
+        return context["deviation"] if context is not None else self._restored_native_value
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if _target_deviation_context(self.runtime, self.direction) is None:
+            restored = await self.async_get_last_sensor_data()
+            if restored is not None:
+                self._restored_native_value = restored.native_value
+
+    @property
+    def available(self) -> bool:
+        return self.native_value is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        context = _target_deviation_context(self.runtime, self.direction)
+        data_quality = self.runtime.values.get("data_quality")
+        if context is None and self._restored_native_value is not None:
+            data_quality = "restored_stale"
+        return {
+            **super().extra_state_attributes,
+            "calculation": "directional_target_minus_current",
+            **(context or {}),
+            "data_quality": data_quality,
+            "last_valid_at": self.runtime.values.get("last_valid_at"),
+        }
+
+
 class TargetSensor(AthbEntity, RestoreSensor):
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -314,6 +395,10 @@ async def async_setup_entry(
     entities: list[SensorEntity] = [AthbSensor(runtime, item) for item in descriptions]
     desired_unique_ids = {entity.unique_id for entity in entities}
     targets = list(entry.data.get("targets", ()))
+    for direction in _target_control_directions(hass, targets):
+        deviation = TargetDeviationSensor(runtime, direction)
+        entities.append(deviation)
+        desired_unique_ids.add(deviation.unique_id)
     if _supports_zone_target_sensors(hass, targets):
         for scenario in TARGET_SCENARIOS:
             zone_entity = ZoneTargetSensor(runtime, scenario)
@@ -398,6 +483,34 @@ def _supports_zone_target_sensors(hass: HomeAssistant, targets: list[dict[str, s
         else:
             return False
     return len(directions) == 1
+
+
+def _target_control_directions(
+    hass: HomeAssistant, targets: list[dict[str, str]]
+) -> tuple[str, ...]:
+    """Return observable heating/cooling target directions from public capabilities."""
+
+    directions: set[str] = set()
+    for target in targets:
+        capability = capability_from_state(hass.states.get(target["entity_id"]))
+        if capability.supported_features & TARGET_TEMPERATURE_RANGE:
+            directions.update(("heating", "cooling"))
+            continue
+        if not capability.supported_features & TARGET_TEMPERATURE:
+            continue
+        if capability.hvac_mode in {"heat", "cool"}:
+            directions.add("heating" if capability.hvac_mode == "heat" else "cooling")
+            continue
+        inferred = infer_auto_mapping(capability)
+        if inferred in {AutoMapping.HEATING, AutoMapping.COOLING}:
+            directions.add(inferred.value)
+            continue
+        advertised = set(capability.advertised_hvac_modes)
+        if "heat" in advertised and "cool" not in advertised:
+            directions.add("heating")
+        elif "cool" in advertised and "heat" not in advertised:
+            directions.add("cooling")
+    return tuple(direction for direction in ("heating", "cooling") if direction in directions)
 
 
 def _per_climate_context(runtime: ZoneRuntime) -> dict[str, dict[str, Any]]:
@@ -495,6 +608,8 @@ def _remove_stale_sensor_entities(
     core_ids = {
         *(f"{entry.runtime_data.zone_uuid}_{item.key}" for item in DESCRIPTIONS),
         *(f"{entry.runtime_data.zone_uuid}_target_{scenario}" for scenario in TARGET_SCENARIOS),
+        f"{entry.runtime_data.zone_uuid}_target_heating_deviation",
+        f"{entry.runtime_data.zone_uuid}_target_cooling_deviation",
     }
     for registry_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         unique_id = registry_entry.unique_id

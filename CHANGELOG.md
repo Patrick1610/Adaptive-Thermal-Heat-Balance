@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6
+
+- Rename the signed neutral comparison to **Comfort range — deviation from neutral**.
+- Add direction-specific **Target — heating/cooling deviation from current** sensors selected from
+  climate capabilities: heat-only exposes heating, cool-only exposes cooling and `heat_cool`
+  exposes both distances to its active lower and upper targets.
+
 ## 0.2.5
 
 - Keep the descriptive outer comfort range available beyond the constant-moisture saturation
