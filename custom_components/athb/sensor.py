@@ -274,10 +274,18 @@ class TargetDeviationSensor(AthbEntity, RestoreSensor):
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_suggested_display_precision = 2
 
-    def __init__(self, runtime: ZoneRuntime, direction: str) -> None:
+    def __init__(
+        self,
+        runtime: ZoneRuntime,
+        direction: str,
+        *,
+        show_direction: bool = True,
+    ) -> None:
         super().__init__(runtime, f"target_{direction}_deviation")
         self.direction = direction
-        self._attr_translation_key = f"target_{direction}_deviation"
+        self._attr_translation_key = (
+            f"target_{direction}_deviation" if show_direction else "target_deviation"
+        )
         self._restored_native_value: Any = None
 
     @property
@@ -395,8 +403,13 @@ async def async_setup_entry(
     entities: list[SensorEntity] = [AthbSensor(runtime, item) for item in descriptions]
     desired_unique_ids = {entity.unique_id for entity in entities}
     targets = list(entry.data.get("targets", ()))
-    for direction in _target_control_directions(hass, targets):
-        deviation = TargetDeviationSensor(runtime, direction)
+    target_directions = _target_control_directions(hass, targets)
+    for direction in target_directions:
+        deviation = TargetDeviationSensor(
+            runtime,
+            direction,
+            show_direction=len(target_directions) > 1,
+        )
         entities.append(deviation)
         desired_unique_ids.add(deviation.unique_id)
     if _supports_zone_target_sensors(hass, targets):

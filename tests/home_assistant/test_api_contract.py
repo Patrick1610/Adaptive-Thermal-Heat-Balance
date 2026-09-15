@@ -222,6 +222,10 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
         "zone-1_target_heating_deviation"
     )
     assert TargetDeviationSensor(runtime, "heating").translation_key == ("target_heating_deviation")
+    assert (
+        TargetDeviationSensor(runtime, "heating", show_direction=False).translation_key
+        == "target_deviation"
+    )
 
 
 @pytest.mark.parametrize(
@@ -549,11 +553,52 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
     assert "zone-1_target-1_target_low" not in unique_ids
     assert "zone-1_target-1_target_high" not in unique_ids
     assert "zone-1_surface_temperature" not in unique_ids
+    heating_deviation = next(
+        entity for entity in added if entity.unique_id == "zone-1_target_heating_deviation"
+    )
+    assert heating_deviation.translation_key == "target_deviation"
     assert registry.async_get(obsolete_range.entity_id) is None
     assert registry.async_get(obsolete_surface.entity_id) is None
     assert registry.async_get(obsolete_scalar.entity_id) is None
     assert registry.async_get(obsolete_cooling_deviation.entity_id) is None
     assert "zone-1_input_status" in unique_ids
+
+
+async def test_sensor_setup_keeps_directional_names_for_heat_cool(hass: Any) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    target = {
+        "target_uuid": "target-1",
+        "entity_id": "climate.ranged",
+        "registry_identity": "registry-1",
+    }
+    entry = MockConfigEntry(
+        domain="athb",
+        entry_id="entry-ranged-deviations",
+        data={"targets": [target]},
+        options={"radiant_model": "uniform"},
+    )
+    entry.add_to_hass(hass)
+    entry.runtime_data = runtime
+    hass.states.async_set(
+        "climate.ranged",
+        "heat_cool",
+        {
+            "supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE_RANGE),
+            "hvac_modes": ["heat_cool", "off"],
+        },
+    )
+    added: list[Any] = []
+
+    await async_setup_sensor_entry(hass, cast(Any, entry), added.extend)
+
+    deviation_keys = {
+        entity.translation_key
+        for entity in added
+        if entity.unique_id
+        in {"zone-1_target_heating_deviation", "zone-1_target_cooling_deviation"}
+    }
+    assert deviation_keys == {"target_heating_deviation", "target_cooling_deviation"}
 
 
 def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: Any) -> None:

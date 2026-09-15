@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.7
+
+- Use the concise **Target — deviation from current** name when a zone has only one control
+  direction; retain explicit heating and cooling names when both directions are present.
+- Keep the direction-specific entity unique ID and signed calculation unchanged.
+
 ## 0.2.6
 
 - Rename the signed neutral comparison to **Comfort range — deviation from neutral**.

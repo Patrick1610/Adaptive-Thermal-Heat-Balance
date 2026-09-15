@@ -99,14 +99,14 @@ transition, quality, suppression and recovery state. Its `per_climate` attribute
 temperature, reported setpoint, calibration, bounds, grid, HVAC mode/action, availability,
 normalized ATHB requests, ownership/readiness and command outcome.
 
-Direction-specific target-deviation sensors are created automatically from the target climate
-capabilities. Heat-only exposes **Target — heating deviation from current**, cool-only exposes
-**Target — cooling deviation from current**, and `heat_cool` exposes both. Heating deviation is
-the active heating target (or `target_low`) minus current room temperature. Cooling deviation is
-the active cooling target (or `target_high`) minus current room temperature. A positive value
-therefore means the directional target lies above current; a negative value means it lies below.
-For `heat_cool`, the two values retain both distances instead of collapsing the result to zero
-inside the range.
+Target-deviation sensors are created automatically from the target climate capabilities. A zone
+with only one control direction exposes the concise **Target — deviation from current** name.
+A zone with both directions, including `heat_cool`, exposes **Target — heating deviation from
+current** and **Target — cooling deviation from current**. Heating deviation is the active heating
+target (or `target_low`) minus current room temperature. Cooling deviation is the active cooling
+target (or `target_high`) minus current room temperature. A positive value therefore means the
+directional target lies above current; a negative value means it lies below. For `heat_cool`, the
+two values retain both distances instead of collapsing the result to zero inside the range.
 
 This keeps the device page compact while preserving actuator-level evidence. Zones that genuinely
 mix heating and cooling directions or use an atomic temperature range retain separate

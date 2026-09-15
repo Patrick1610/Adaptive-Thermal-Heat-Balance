@@ -77,6 +77,9 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
     assert english_entities["sensor"]["comfort_range_neutral_delta"]["name"] == (
         "Comfort range — deviation from neutral"
     )
+    assert english_entities["sensor"]["target_deviation"]["name"] == (
+        "Target — deviation from current"
+    )
     assert english_entities["sensor"]["target_heating_deviation"]["name"] == (
         "Target — heating deviation from current"
     )
