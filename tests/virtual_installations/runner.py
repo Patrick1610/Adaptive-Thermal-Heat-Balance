@@ -460,6 +460,9 @@ def _assert_goldens(scenario: dict[str, Any], calculation: RuntimeCalculation) -
     for name, expected_root in zip(ROOT_NAMES, golden["roots"], strict=True):
         root = getattr(result.roots, name)
         if expected_root is None:
+            if expected_statuses[name] == "descriptive_success":
+                assert isinstance(root, RootSuccess)
+                continue
             assert isinstance(root, RootFailure)
             assert root.failure.value == expected_statuses[name]
         else:

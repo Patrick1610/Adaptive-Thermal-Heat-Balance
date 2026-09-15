@@ -71,6 +71,12 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
     assert english_entities["sensor"]["lower_comfort_boundary"]["name"] == (
         "Comfort range — lower limit"
     )
+    assert english_entities["sensor"]["comfort_range_current"]["name"] == (
+        "Comfort range — current"
+    )
+    assert english_entities["sensor"]["comfort_range_neutral_delta"]["name"] == (
+        "Comfort range — neutral delta"
+    )
     assert english_entities["sensor"]["heating_control_target"]["name"] == (
         "Control point — heating"
     )

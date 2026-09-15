@@ -25,6 +25,7 @@ from custom_components.athb.core import (
     calculate_zone,
 )
 from custom_components.athb.core import pipeline as pipeline_module
+from custom_components.athb.core.contracts import RootFailure, RootFailureCode
 from custom_components.athb.core.policy import PolicyTargets
 
 
@@ -336,10 +337,36 @@ def test_required_directional_root_failure_holds_then_falls_back() -> None:
     hold = calculate_zone(ranged)
     assert hold.suppression_reason == "missing_required_root:heating_control"
     assert hold.normalized is None
+    assert hold.roots is not None
+    assert isinstance(hold.roots.lower_comfort, RootSuccess)
+    assert isinstance(hold.roots.heating_control, RootFailure)
+    assert hold.roots.heating_control.failure is RootFailureCode.MOISTURE_LIMITED_NO_SOLUTION
     fallback = calculate_zone(replace(ranged, failure_hold_elapsed=True))
     assert fallback.policy is not None
     assert fallback.policy.fallback
     assert isinstance(fallback.normalized, NormalizedRangeTarget)
+
+
+def test_descriptive_lower_limit_continues_beyond_moisture_control_boundary() -> None:
+    """Reproduce the supplied 24.89 °C / 71% RH field diagnostic."""
+
+    result = calculate_zone(
+        replace(
+            _input(),
+            air_temperature_c=24.89,
+            relative_humidity_pct=71.0,
+            running_mean_c=17.66331634356816,
+        )
+    )
+
+    assert result.roots is not None
+    assert isinstance(result.roots.lower_comfort, RootSuccess)
+    assert result.roots.lower_comfort.requested_vote == -0.5
+    assert result.roots.lower_comfort.mapped_room_temperature_c == pytest.approx(19.114, abs=0.005)
+    assert isinstance(result.roots.heating_control, RootSuccess)
+    assert result.roots.heating_control.mapped_room_temperature_c == pytest.approx(
+        21.061, abs=0.005
+    )
 
 
 def test_fallback_cooling_is_blocked_below_dewpoint() -> None:

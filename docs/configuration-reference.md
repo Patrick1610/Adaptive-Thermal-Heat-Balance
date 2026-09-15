@@ -69,12 +69,18 @@ Rapid falls back explicitly to Adaptive for an atomic range or a zone with separ
 cooling targets. Boost expires to Off. Comfort-level, Setback and Boost changes are lightweight
 and do not reload the config entry.
 
-Five diagnostic sensors expose the complete inverse-solved structure before occupancy or Boost
-policy. **Comfort range — lower limit**, **Comfort range — neutral reference**, and **Comfort
-range — upper limit** form the outer comfort range. **Control point — heating** and
+Seven diagnostic sensors expose the inverse-solved structure and current position before
+occupancy or Boost policy. **Comfort range — lower limit**, **Comfort range — neutral reference**,
+and **Comfort range — upper limit** form the outer comfort range. **Comfort range — current** is
+the validated primary indoor temperature and **Comfort range — neutral delta** is current minus
+neutral, retaining its positive or negative sign. **Control point — heating** and
 **Control point — cooling** form the selected comfort level's inner control range. Their
 temperature states are the solved room temperatures; the corresponding sensation vote and range
 role are available as attributes. Setback and Boost do not change these raw ranges.
+
+The outer comfort limits remain descriptive even when a constant-moisture inverse would cross
+saturation: only that display envelope continues at 100% RH. Heating/cooling control points,
+eligibility and climate commands retain the stricter moisture constraint.
 
 For ordinary scalar heating-only or cooling-only zones, three room-coordinate sensors make the
 policy result explicit:

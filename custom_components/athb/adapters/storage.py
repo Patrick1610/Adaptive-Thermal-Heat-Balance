@@ -18,6 +18,8 @@ CONTROL_STORAGE_VERSION = 1
 LAST_VALID_OUTPUT_KEYS = (
     "thermal_sensation",
     "lower_comfort_boundary",
+    "comfort_range_current",
+    "comfort_range_neutral_delta",
     "heating_control_target",
     "thermal_neutral",
     "cooling_control_target",

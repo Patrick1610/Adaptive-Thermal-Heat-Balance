@@ -679,6 +679,8 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
             "thermal_sensation": -0.16,
             "comfort_status": "comfortable",
             "lower_comfort_boundary": 19.4,
+            "comfort_range_current": 22.1,
+            "comfort_range_neutral_delta": -1.2,
             "heating_control_target": 21.3,
             "thermal_neutral": 23.3,
             "cooling_control_target": 25.2,
@@ -737,6 +739,18 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
         "comfort_range_reference"
     )
     assert root_sensors["upper_comfort_boundary"].extra_state_attributes["sensation_vote"] == 0.5
+    current_description = next(item for item in DESCRIPTIONS if item.key == "comfort_range_current")
+    delta_description = next(
+        item for item in DESCRIPTIONS if item.key == "comfort_range_neutral_delta"
+    )
+    current_sensor = AthbSensor(runtime, current_description)
+    delta_sensor = AthbSensor(runtime, delta_description)
+    assert current_sensor.native_value == 22.1
+    assert delta_sensor.native_value == -1.2
+    assert current_description.entity_category is EntityCategory.DIAGNOSTIC
+    assert delta_description.entity_category is EntityCategory.DIAGNOSTIC
+    assert current_sensor.extra_state_attributes["source_entity"] == "sensor.room"
+    assert delta_sensor.extra_state_attributes["calculation"] == "current_minus_neutral"
 
     boost = BoostModeSelect(runtime).extra_state_attributes
     assert boost["settings"] == {"boost_delta_c": 1.5, "boost_duration_minutes": 45.0}

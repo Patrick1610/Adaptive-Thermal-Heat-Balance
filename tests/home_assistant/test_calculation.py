@@ -184,6 +184,8 @@ def test_snapshot_adapter_preserves_declared_rh_and_adaptive_root_path() -> None
     assert dict(result.provenance)["air_speed"] == "declared"
     assert dict(result.provenance)["rh"] == "declared"
     values = result_values(result)
+    assert values["comfort_range_current"] == 20.0
+    assert values["comfort_range_neutral_delta"] == pytest.approx(20.0 - values["thermal_neutral"])
     assert values["lower_comfort_boundary"] < values["heating_control_target"]
     assert values["heating_control_target"] < values["thermal_neutral"]
     assert values["thermal_neutral"] < values["cooling_control_target"]

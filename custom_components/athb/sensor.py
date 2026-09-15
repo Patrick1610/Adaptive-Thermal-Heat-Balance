@@ -42,6 +42,18 @@ DESCRIPTIONS = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
+        "comfort_range_current",
+        temperature=True,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    Description(
+        "comfort_range_neutral_delta",
+        temperature=True,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    Description(
         "heating_control_target",
         temperature=True,
         suggested_display_precision=2,
@@ -147,6 +159,14 @@ class AthbSensor(AthbEntity, RestoreSensor):
             votes = self.runtime.values.get("root_sensation_votes", {})
             attributes["sensation_vote"] = votes.get(root_name) if isinstance(votes, dict) else None
             attributes["range_role"] = range_role
+        elif self.description.key == "comfort_range_current":
+            attributes["range_role"] = "current_observation"
+            attributes["source_entity"] = self.runtime.entry.data.get("primary_temperature")
+        elif self.description.key == "comfort_range_neutral_delta":
+            attributes["range_role"] = "neutral_delta"
+            attributes["calculation"] = "current_minus_neutral"
+            attributes["current_temperature"] = self.runtime.values.get("comfort_range_current")
+            attributes["neutral_reference"] = self.runtime.values.get("thermal_neutral")
         return attributes
 
 

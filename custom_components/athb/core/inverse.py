@@ -232,7 +232,9 @@ def _map_radiant_failure(failure: RadiantFailure) -> CandidateFailure:
     return CandidateFailure(RootFailureCode.OUTSIDE_ENGINEERING_DOMAIN, failure.detail)
 
 
-def _candidate_evaluator(context: InverseLocationContext) -> CandidateEvaluator:
+def _candidate_evaluator(
+    context: InverseLocationContext, *, continue_at_saturation: bool = False
+) -> CandidateEvaluator:
     def evaluate(room_temperature_c: float, budget: EvaluationBudget) -> CandidateResult:
         if not budget.consume():
             return CandidateFailure(
@@ -242,7 +244,14 @@ def _candidate_evaluator(context: InverseLocationContext) -> CandidateEvaluator:
         local_temperature = room_temperature_c - context.local_delta_c
         humidity = candidate_relative_humidity(context.moisture, local_temperature)
         if isinstance(humidity, MoistureFailure):
-            return _map_moisture_failure(humidity)
+            if not (
+                continue_at_saturation
+                and humidity.code is MoistureFailureCode.MOISTURE_LIMITED_NO_SOLUTION
+            ):
+                return _map_moisture_failure(humidity)
+            relative_humidity_pct = 100.0
+        else:
+            relative_humidity_pct = humidity.relative_humidity_pct
         radiant_coordinate = (
             room_temperature_c if context.radiant_uses_room_coordinate else local_temperature
         )
@@ -254,7 +263,7 @@ def _candidate_evaluator(context: InverseLocationContext) -> CandidateEvaluator:
                 tdb_c=local_temperature,
                 tr_c=radiant.mrt_c,
                 relative_air_speed_m_s=context.relative_air_speed_m_s,
-                rh_pct=humidity.relative_humidity_pct,
+                rh_pct=relative_humidity_pct,
                 met=context.met,
                 running_mean_c=context.running_mean_c,
                 clothing=context.clothing,
@@ -270,6 +279,53 @@ def _candidate_evaluator(context: InverseLocationContext) -> CandidateEvaluator:
         )
 
     return evaluate
+
+
+def complete_descriptive_comfort_range(
+    context: InverseLocationContext,
+    votes: StrategyVotes,
+    roots: RootSet,
+    *,
+    budget: EvaluationBudget,
+) -> RootSet:
+    """Complete only descriptive outer limits beyond the saturation boundary.
+
+    Control roots retain the constant-moisture failure semantics. The display-only
+    comfort range may continue at 100% RH so its envelope remains observable; policy
+    and command eligibility never consume these two outer roots.
+    """
+
+    missing_lower = (
+        isinstance(roots.lower_comfort, RootFailure)
+        and roots.lower_comfort.failure is RootFailureCode.MOISTURE_LIMITED_NO_SOLUTION
+    )
+    missing_upper = (
+        isinstance(roots.upper_comfort, RootFailure)
+        and roots.upper_comfort.failure is RootFailureCode.MOISTURE_LIMITED_NO_SOLUTION
+    )
+    if not missing_lower and not missing_upper:
+        return roots
+    low = max(SEARCH_MIN_C, SEARCH_MIN_C + context.local_delta_c)
+    high = min(SEARCH_MAX_C, SEARCH_MAX_C + context.local_delta_c)
+    descriptive = solve_requested_roots(
+        votes=votes,
+        evaluate=_candidate_evaluator(context, continue_at_saturation=True),
+        search_low_c=low,
+        search_high_c=high,
+        budget=budget,
+        moisture_restricted=False,
+    )
+    return RootSet(
+        descriptive.lower_comfort
+        if missing_lower and isinstance(descriptive.lower_comfort, RootSuccess)
+        else roots.lower_comfort,
+        roots.heating_control,
+        roots.thermal_neutral,
+        roots.cooling_control,
+        descriptive.upper_comfort
+        if missing_upper and isinstance(descriptive.upper_comfort, RootSuccess)
+        else roots.upper_comfort,
+    )
 
 
 def evaluate_current_location(

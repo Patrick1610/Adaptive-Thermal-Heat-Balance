@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.5
+
+- Keep the descriptive outer comfort range available beyond the constant-moisture saturation
+  boundary without weakening moisture constraints on control points or climate commands.
+- Add diagnostic **Comfort range — current** and **Comfort range — neutral delta** sensors; the
+  signed delta is the validated primary indoor temperature minus the neutral reference.
+
 ## 0.2.4
 
 - Exercise all seven anonymized diagnostic configurations through one parametrized Home Assistant

@@ -791,6 +791,11 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         }
     current = numerical.current if numerical is not None else None
     sensation = current.public_sensation_vote if isinstance(current, AthbSuccess) else None
+    neutral = root_value("thermal_neutral")
+    range_current = result.primary_value_c
+    neutral_delta = (
+        range_current - neutral if range_current is not None and neutral is not None else None
+    )
     comfort_status = (
         "unknown"
         if sensation is None
@@ -803,8 +808,10 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
     return {
         "thermal_sensation": sensation,
         "lower_comfort_boundary": root_value("lower_comfort"),
+        "comfort_range_current": range_current,
+        "comfort_range_neutral_delta": neutral_delta,
         "heating_control_target": root_value("heating_control"),
-        "thermal_neutral": root_value("thermal_neutral"),
+        "thermal_neutral": neutral,
         "cooling_control_target": root_value("cooling_control"),
         "upper_comfort_boundary": root_value("upper_comfort"),
         "root_sensation_votes": {

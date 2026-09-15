@@ -40,6 +40,7 @@ from .inverse import (
     RadiantModel,
     StrategyVoteFailure,
     StrategyVotes,
+    complete_descriptive_comfort_range,
     directional_root_eligibility,
     evaluate_current_location,
     solve_five_roots,
@@ -201,6 +202,7 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
     budget = EvaluationBudget()
     current = evaluate_current_location(context, budget=budget)
     roots = solve_five_roots(context, votes, budget=budget)
+    roots = complete_descriptive_comfort_range(context, votes, roots, budget=budget)
     eligibility = directional_root_eligibility(
         current=current,
         roots=roots,

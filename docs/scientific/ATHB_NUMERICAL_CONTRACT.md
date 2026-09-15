@@ -132,6 +132,10 @@ Inverse calculations preserve the starting vapor pressure. A measured RH source 
 the ASHRAE/PsychroLib saturation-pressure equations and is never held constant. A candidate that
 exceeds saturation by more than `1e-6` percentage point returns
 `moisture_limited_no_solution`; only smaller floating-point overshoot is normalized to 100%.
+The two descriptive outer comfort-range sensors are the sole exception: if their requested vote
+lies beyond that saturation boundary, their display-only inverse continues at 100% RH. These
+completed outer limits are never consumed by control eligibility, policy or climate commands;
+heating and cooling control roots retain `moisture_limited_no_solution`.
 Dew/frost point is the bisection inverse of the same water/ice equations. Zero RH returns the
 explicit `dry_limit`, not an invented finite temperature. Optional humidity-ratio diagnostics
 require an explicit total pressure; ATHB does not manufacture an atmospheric-pressure reading.
