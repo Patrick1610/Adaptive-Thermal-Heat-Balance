@@ -237,11 +237,17 @@ class ZoneRuntime:
             if self.persistence is not None
             else "not_started"
         )
-        self.values["recovery_reason"] = startup_reason
+        public_startup_reason = (
+            "first_start" if startup_reason in {"storage_missing", "new_store"} else startup_reason
+        )
+        self.values["recovery_reason"] = public_startup_reason
         self.values["recovery_reasons"] = tuple(
-            getattr(self.persistence, "startup_reasons", (startup_reason,))
+            (
+                "first_start" if reason in {"storage_missing", "new_store"} else reason
+                for reason in getattr(self.persistence, "startup_reasons", (startup_reason,))
+            )
             if self.persistence is not None
-            else (startup_reason,)
+            else (public_startup_reason,)
         )
         await self._async_start_history()
         self.controller = ZoneController(
@@ -1856,6 +1862,37 @@ class ZoneRuntime:
         elif (timer := self.timers.pop(f"override:{identity}", None)) is not None:
             timer()
         self._schedule_ownership_persistence(identity)
+        self._publish_control_state()
+
+    def _publish_control_state(self) -> None:
+        """Publish ownership transitions immediately, without waiting for a calculation."""
+
+        values = dict(self.values)
+        values["control_enabled"] = self.control_enabled
+        values["ownership"] = {
+            identity: state.ownership.value for identity, state in self.ownership.items()
+        }
+        values["data_readiness"] = {
+            identity: state.data_readiness.value for identity, state in self.ownership.items()
+        }
+        values["target_readiness"] = {
+            identity: state.target_readiness.value for identity, state in self.ownership.items()
+        }
+        values["control_status"] = self._control_status()
+        values["resume_required"] = any(state.resume_required for state in self.ownership.values())
+        values["control_eligible"] = bool(values.get("control_eligible")) and all(
+            state.ownership is Ownership.OWNED
+            and state.data_readiness
+            in {
+                DataReadiness.READY,
+                DataReadiness.DEGRADED_READY,
+                DataReadiness.FALLBACK_READY,
+            }
+            and state.target_readiness is TargetReadiness.AVAILABLE_SUPPORTED
+            for state in self.ownership.values()
+        )
+        if values != self.values:
+            self.publish(values)
 
     def _schedule_ownership_persistence(self, identity: str) -> None:
         if self.persistence is None or not hasattr(self.hass, "async_create_task"):

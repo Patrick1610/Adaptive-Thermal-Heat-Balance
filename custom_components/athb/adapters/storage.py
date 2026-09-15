@@ -550,7 +550,18 @@ def prepare_startup_recovery(
         )
     prior = loaded.state
     unresolved = any(actuator.pending_command is not None for actuator in prior.actuators)
-    stored_resume_required = any(actuator.resume_required for actuator in prior.actuators)
+    legacy_restart_gates = {
+        actuator.target_identity
+        for actuator in prior.actuators
+        if actuator.resume_required
+        and actuator.override_reason == "unclean_restart"
+        and actuator.pending_command is None
+        and actuator.ownership != "command_fault"
+    }
+    stored_resume_required = any(
+        actuator.resume_required and actuator.target_identity not in legacy_restart_gates
+        for actuator in prior.actuators
+    )
     stored_command_fault = any(
         actuator.resume_required and actuator.ownership == "command_fault"
         for actuator in prior.actuators
@@ -567,6 +578,7 @@ def prepare_startup_recovery(
             (unresolved, "unresolved_command"),
             (stored_command_fault, "command_fault"),
             (stored_resume_required and not stored_command_fault, "stored_resume_required"),
+            (bool(legacy_restart_gates), "legacy_unclean_restart_gate_cleared"),
             (configuration_changed, "configuration_changed"),
             (strategy_changed, "strategy_changed"),
             (not prior.clean_shutdown, "unclean_shutdown"),
@@ -580,6 +592,11 @@ def prepare_startup_recovery(
             actuator,
             ownership="reconciling",
             resume_required=requires_resume,
+            override_reason=(
+                None
+                if actuator.target_identity in legacy_restart_gates and not requires_resume
+                else actuator.override_reason
+            ),
             pending_command=None,
         )
         for actuator in prior.actuators

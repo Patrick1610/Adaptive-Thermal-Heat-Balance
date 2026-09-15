@@ -334,6 +334,62 @@ def test_persisted_resume_flag_remains_an_explicit_startup_gate() -> None:
     assert recovery.state.actuators[0].resume_required
 
 
+def test_legacy_unclean_restart_resume_gate_is_migrated_to_reconciliation() -> None:
+    prior = replace(
+        _state(clean=False),
+        actuators=(
+            replace(
+                _actuator(),
+                ownership="suspended",
+                resume_required=True,
+                override_reason="unclean_restart",
+                pending_command=None,
+            ),
+        ),
+    )
+
+    recovery = prepare_startup_recovery(
+        load_control_state(serialize_control_state(prior)),
+        run_id="run-new",
+        configuration_fingerprint="config-a",
+        strategy="balanced",
+    )
+
+    assert not recovery.requires_resume
+    assert recovery.reason == "legacy_unclean_restart_gate_cleared"
+    assert recovery.reasons == (
+        "legacy_unclean_restart_gate_cleared",
+        "unclean_shutdown",
+    )
+    assert recovery.state.actuators[0].ownership == "reconciling"
+    assert not recovery.state.actuators[0].resume_required
+    assert recovery.state.actuators[0].override_reason is None
+
+
+def test_legacy_restart_gate_never_clears_a_real_command_fault() -> None:
+    prior = replace(
+        _state(clean=False),
+        actuators=(
+            replace(
+                _actuator(),
+                ownership="command_fault",
+                resume_required=True,
+                override_reason="unclean_restart",
+            ),
+        ),
+    )
+
+    recovery = prepare_startup_recovery(
+        load_control_state(serialize_control_state(prior)),
+        run_id="run-new",
+        configuration_fingerprint="config-a",
+        strategy="balanced",
+    )
+
+    assert recovery.requires_resume
+    assert recovery.state.actuators[0].resume_required
+
+
 def test_configuration_drift_is_reported_ahead_of_unclean_shutdown_without_blocking() -> None:
     recovery = prepare_startup_recovery(
         load_control_state(serialize_control_state(_state(clean=False))),

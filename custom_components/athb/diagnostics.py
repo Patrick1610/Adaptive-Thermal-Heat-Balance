@@ -9,7 +9,14 @@ from typing import Any
 
 from homeassistant.components.diagnostics.util import async_redact_data
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
+from .const import (
+    CONF_MOLD_INDICATOR_ENTITY,
+    CONF_OUTDOOR_SOURCE,
+    CONF_PRIMARY_TEMPERATURE,
+    CONF_RH_ENTITY,
+)
 from .runtime import AthbConfigEntry
 
 _DROP_KEYS = {
@@ -45,11 +52,18 @@ def _pseudonym(value: str, salt: str) -> str:
     return f"athb-{sha256(f'{salt}|{value}'.encode()).hexdigest()[:12]}"
 
 
+def _pseudonym_entity(value: str, salt: str) -> str:
+    """Keep the non-private HA domain useful while hiding the object id."""
+
+    domain, separator, _object_id = value.partition(".")
+    return f"{domain}.{_pseudonym(value, salt)}" if separator else _pseudonym(value, salt)
+
+
 def _privacy_filter(value: Any, *, salt: str, key: str | None = None) -> Any:
     if key in _DROP_KEYS:
         return None
     if key in _IDENTITY_KEYS and isinstance(value, str):
-        return _pseudonym(value, salt)
+        return _pseudonym_entity(value, salt)
     if isinstance(value, dict):
         return {
             (
@@ -71,12 +85,55 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return bounded current evidence without exposing household identifiers."""
 
-    del hass
     runtime = entry.runtime_data
     trace_payloads = [
         {"decision_id": item.decision_id, "generation": item.generation, **item.payload}
         for item in runtime.trace_ring.items
     ]
+    now = dt_util.utcnow()
+    source_specs = (
+        (
+            "primary",
+            entry.data.get(CONF_PRIMARY_TEMPERATURE),
+            "primary_temperature_freshness_minutes",
+        ),
+        ("humidity", entry.data.get(CONF_RH_ENTITY), "relative_humidity_freshness_minutes"),
+        ("outdoor", entry.data.get(CONF_OUTDOOR_SOURCE), None),
+        (
+            "mold_indicator",
+            entry.options.get(CONF_MOLD_INDICATOR_ENTITY),
+            "radiant_freshness_minutes",
+        ),
+    )
+    sources: list[dict[str, Any]] = []
+    for kind, raw_entity_id, freshness_key in source_specs:
+        entity_id = str(raw_entity_id or "")
+        if not entity_id:
+            continue
+        state = hass.states.get(entity_id)
+        reported = (
+            (getattr(state, "last_reported", None) or state.last_updated)
+            if state is not None
+            else None
+        )
+        age_minutes = (
+            max(0.0, (now - reported).total_seconds() / 60.0) if reported is not None else None
+        )
+        source_key = "rh" if kind == "humidity" else kind
+        accepted = runtime.source_states.get(source_key)
+        sources.append(
+            {
+                "kind": kind,
+                "entity_id": entity_id,
+                "available": state is not None and state.state not in {"unknown", "unavailable"},
+                "reported_age_minutes": age_minutes,
+                "configured_freshness_minutes": (
+                    entry.options.get(freshness_key) if freshness_key is not None else 120.0
+                ),
+                "validated": accepted is not None and accepted.last_accepted is not None,
+                "recovering": bool(accepted.recovering) if accepted is not None else False,
+            }
+        )
     raw = {
         "entry": {"data": dict(entry.data), "options": dict(entry.options)},
         "current": {
@@ -86,6 +143,10 @@ async def async_get_config_entry_diagnostics(
         },
         "decision_traces": trace_payloads,
         "ownership": {key: asdict(value) for key, value in runtime.ownership.items()},
+        "sources": sources,
+        "active_repairs": sorted(
+            runtime.repair_manager.active if runtime.repair_manager is not None else ()
+        ),
     }
     serializable = json.loads(json.dumps(raw, default=str, allow_nan=False))
     # HA's standard helper removes known sensitive keys before ATHB applies

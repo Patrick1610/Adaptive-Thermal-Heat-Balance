@@ -64,6 +64,9 @@ async def test_diagnostics_pseudonymize_identifiers_and_drop_private_data(
     assert "private.example" not in serialized
     assert "requested_room_target" in serialized
     assert "athb-" in serialized
+    assert diagnostics["sources"][0]["kind"] == "primary"
+    assert diagnostics["sources"][0]["entity_id"].startswith("sensor.athb-")
+    assert diagnostics["active_repairs"] == []
 
 
 def test_repair_manager_creates_once_and_clears_issue(hass: HomeAssistant) -> None:

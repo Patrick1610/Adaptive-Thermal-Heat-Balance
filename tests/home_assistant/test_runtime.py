@@ -222,6 +222,29 @@ def test_control_status_is_unknown_without_a_registered_target() -> None:
     assert runtime._control_status() == "stale_safety"
 
 
+def test_ownership_transition_is_published_without_waiting_for_calculation() -> None:
+    runtime = _runtime()
+    runtime.control_enabled = True
+    runtime.ownership["registry-1"] = OwnershipState(
+        target_identity="registry-1",
+        ownership=Ownership.OWNED,
+        data_readiness=DataReadiness.READY,
+        target_readiness=TargetReadiness.AVAILABLE_SUPPORTED,
+        revision=1,
+    )
+    runtime.values = {
+        "control_status": "owned",
+        "control_eligible": True,
+        "resume_required": False,
+    }
+    runtime._transition("registry-1", OwnershipEvent.DISABLE)
+
+    assert runtime.values["control_status"] == "ready"
+    assert runtime.values["control_eligible"] is False
+    assert runtime.values["resume_required"] is False
+    assert runtime.values["ownership"] == {"registry-1": "disabled"}
+
+
 def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
     scenario = load_scenarios()[0]
     snapshot = _captured(scenario)

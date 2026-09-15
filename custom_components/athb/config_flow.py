@@ -16,7 +16,13 @@ from homeassistant.helpers import selector
 from homeassistant.util import dt as dt_util
 
 from .adapters.climate import capability_from_state
-from .adapters.sources import snapshot_primary_temperature, valid_value, validate_state_value
+from .adapters.sources import (
+    configured_freshness,
+    snapshot_primary_temperature,
+    snapshot_state,
+    valid_value,
+    validate_state_value,
+)
 from .config_schema import validate_environment, validate_options, validate_targets
 from .const import (
     CONF_BOOST_MODE,
@@ -31,8 +37,13 @@ from .const import (
     CONF_RH_MODE,
     CONF_TARGETS,
     CONF_ZONE_UUID,
+    DEFAULT_BOOST_DELTA_C,
     DEFAULT_BOOST_MODE,
     DEFAULT_ECO_INTENSITY,
+    DEFAULT_FALLBACK_COOLING_C,
+    DEFAULT_FALLBACK_HEATING_C,
+    DEFAULT_MAXIMUM_CONTROL_TEMPERATURE,
+    DEFAULT_MINIMUM_CONTROL_TEMPERATURE,
     DEFAULT_STRATEGY,
     DOMAIN,
 )
@@ -92,11 +103,11 @@ OPTION_DEFAULTS: dict[str, object] = {
     "running_mean_alpha": 0.8,
     "eco_heating_setback_c": 2.0,
     "eco_cooling_setback_c": 2.0,
-    "boost_delta_c": 1.0,
+    "boost_delta_c": DEFAULT_BOOST_DELTA_C,
     "boost_duration_minutes": 60.0,
     "manual_override_minutes": 120.0,
-    "minimum_control_temperature": 18.0,
-    "maximum_control_temperature": 26.0,
+    "minimum_control_temperature": DEFAULT_MINIMUM_CONTROL_TEMPERATURE,
+    "maximum_control_temperature": DEFAULT_MAXIMUM_CONTROL_TEMPERATURE,
     "minimum_range_gap": 1.0,
     "minimum_meaningful_change": 0.1,
     "feedback_resolution": 0.01,
@@ -107,8 +118,8 @@ OPTION_DEFAULTS: dict[str, object] = {
     "air_speed_freshness_minutes": 30.0,
     "reject_extrapolation": False,
     "fallback_mode": "fixed",
-    "fallback_heating_c": 18.0,
-    "fallback_cooling_c": 26.0,
+    "fallback_heating_c": DEFAULT_FALLBACK_HEATING_C,
+    "fallback_cooling_c": DEFAULT_FALLBACK_COOLING_C,
     "critical_locations": (),
 }
 
@@ -486,19 +497,23 @@ class _OptionsWizardMixin:
             {
                 vol.Required(
                     "minimum_control_temperature",
-                    default=defaults.get("minimum_control_temperature", 18.0),
+                    default=defaults.get(
+                        "minimum_control_temperature", DEFAULT_MINIMUM_CONTROL_TEMPERATURE
+                    ),
                 ): _number(5.0, 35.0, 0.5, "°C"),
                 vol.Required(
                     "maximum_control_temperature",
-                    default=defaults.get("maximum_control_temperature", 26.0),
+                    default=defaults.get(
+                        "maximum_control_temperature", DEFAULT_MAXIMUM_CONTROL_TEMPERATURE
+                    ),
                 ): _number(5.0, 35.0, 0.5, "°C"),
                 vol.Required(
                     "manual_override_minutes",
                     default=defaults.get("manual_override_minutes", 120.0),
                 ): _number(15.0, 1440.0, 15.0, "min"),
-                vol.Required("boost_delta_c", default=defaults.get("boost_delta_c", 1.0)): _number(
-                    0.0, 3.0, 0.1, "°C"
-                ),
+                vol.Required(
+                    "boost_delta_c", default=defaults.get("boost_delta_c", DEFAULT_BOOST_DELTA_C)
+                ): _number(0.0, 3.0, 0.1, "°C"),
                 vol.Required(
                     "boost_duration_minutes",
                     default=defaults.get("boost_duration_minutes", 60.0),
@@ -562,10 +577,12 @@ class _OptionsWizardMixin:
         return vol.Schema(
             {
                 vol.Required(
-                    "fallback_heating_c", default=defaults.get("fallback_heating_c", 18.0)
+                    "fallback_heating_c",
+                    default=defaults.get("fallback_heating_c", DEFAULT_FALLBACK_HEATING_C),
                 ): _number(5.0, 35.0, 0.5, "°C"),
                 vol.Required(
-                    "fallback_cooling_c", default=defaults.get("fallback_cooling_c", 26.0)
+                    "fallback_cooling_c",
+                    default=defaults.get("fallback_cooling_c", DEFAULT_FALLBACK_COOLING_C),
                 ): _number(5.0, 35.0, 0.5, "°C"),
             }
         )
@@ -906,6 +923,22 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
     async def async_step_review(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is None:
             primary_value, primary_unit, primary_age, primary_status = self._primary_preview()
+            rh_preview = self._relative_humidity_preview()
+            outdoor_preview = self._source_preview(
+                str(self._data.get(CONF_OUTDOOR_SOURCE, "")), SourceKind.OUTDOOR
+            )
+            blocking_sources = (
+                ", ".join(
+                    name
+                    for name, status in (
+                        ("primary", primary_status),
+                        ("humidity", rh_preview[3]),
+                        ("outdoor", outdoor_preview[3]),
+                    )
+                    if status != "valid"
+                )
+                or "none"
+            )
             return self.async_show_form(
                 step_id="review",
                 data_schema=vol.Schema({}),
@@ -919,6 +952,9 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     "primary_unit": primary_unit,
                     "primary_age": primary_age,
                     "primary_status": primary_status,
+                    "humidity_preview": self._format_preview(rh_preview),
+                    "outdoor_preview": self._format_preview(outdoor_preview),
+                    "blocking_sources": blocking_sources,
                     "occupancy": self._occupancy_preview(),
                     "target_capabilities": self._target_capability_preview(),
                 },
@@ -939,7 +975,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             captured,
             kind=SourceKind.PRIMARY_AIR,
             now=now,
-            freshness=None,
+            freshness=configured_freshness(self._pending_options, SourceKind.PRIMARY_AIR),
         )
         value = valid_value(observation)
         age = (
@@ -953,6 +989,45 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             "—" if age is None else f"{age:.1f} min",
             observation.validity.value,
         )
+
+    def _source_preview(self, entity_id: str, kind: SourceKind) -> tuple[str, str, str, str]:
+        state = self.hass.states.get(entity_id)
+        registry_entry = er.async_get(self.hass).async_get(entity_id)
+        captured = snapshot_state(
+            state,
+            registry_identity=(registry_entry.id if registry_entry is not None else None),
+        )
+        now = dt_util.utcnow()
+        observation, _source_state = validate_state_value(
+            captured,
+            kind=kind,
+            now=now,
+            freshness=configured_freshness(self._pending_options, kind),
+        )
+        value = valid_value(observation)
+        age = (
+            max(0.0, (now - observation.observed_at).total_seconds() / 60.0)
+            if observation.observed_at is not None
+            else None
+        )
+        return (
+            "—" if value is None else f"{value:.2f}",
+            observation.unit or "—",
+            "—" if age is None else f"{age:.1f} min",
+            observation.validity.value,
+        )
+
+    def _relative_humidity_preview(self) -> tuple[str, str, str, str]:
+        if self._data.get(CONF_RH_MODE) == "declared":
+            return (f"{float(self._data[CONF_RH_DECLARED]):.2f}", "%", "declared", "valid")
+        return self._source_preview(
+            str(self._data.get(CONF_RH_ENTITY, "")), SourceKind.RELATIVE_HUMIDITY
+        )
+
+    @staticmethod
+    def _format_preview(preview: tuple[str, str, str, str]) -> str:
+        value, unit, age, status = preview
+        return f"{value} {unit}, age {age}, status {status}"
 
     def _occupancy_preview(self) -> str:
         entity_id = str(self._pending_options.get("occupancy_entity", ""))

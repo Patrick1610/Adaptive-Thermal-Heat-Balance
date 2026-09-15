@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.2
+
+- Clear only the obsolete v0.2.0 `unclean_restart` Resume gate during startup migration; unresolved
+  commands, command faults and other explicit recovery gates remain fail-closed.
+- Publish ownership, readiness, eligibility and Resume changes immediately instead of waiting for
+  a later environmental calculation.
+- Expand the final setup and reconfigure review with freshness-aware primary, humidity and outdoor
+  source checks plus a concise list of sources needing attention.
+- Add privacy-preserving per-source freshness/availability evidence and active Repair conditions to
+  downloaded diagnostics while retaining the Home Assistant entity domain.
+- Use 15/30 °C command limits, a 2 °C Boost shift and 18/27 °C fallback temperatures as defaults for
+  newly configured values; existing explicitly stored settings remain unchanged.
+- Add a seven-zone, anonymized and deliberately varied lifecycle regression matrix based on field
+  diagnostics, while preserving the supplied living-room setup as the baseline scenario.
+
 ## 0.2.1
 
 - Reconcile automatically after clean or unclean restart, reload, upgrade and ordinary

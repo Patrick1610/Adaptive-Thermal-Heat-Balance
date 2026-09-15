@@ -552,7 +552,7 @@ async def test_no_write_history_mode_still_collects_stale_safety_temperatures(
     assert _schema_keys(result) == {"fallback_heating_c", "fallback_cooling_c"}
 
     invalid = await flow.async_step_fallback_temperatures(
-        {"fallback_heating_c": 27.0, "fallback_cooling_c": 17.0}
+        {"fallback_heating_c": 31.0, "fallback_cooling_c": 14.0}
     )
     assert invalid["step_id"] == "fallback_temperatures"
     assert invalid["errors"] == {
