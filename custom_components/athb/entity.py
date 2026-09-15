@@ -174,12 +174,14 @@ def _settings_for_entity(key: str, options: Any) -> dict[str, Any]:
     if key in {
         "surface_temperature",
         "surface_relative_humidity",
+        "surface_high_humidity",
         "surface_saturation",
     }:
         return {
             "radiant_model": options.get("radiant_model", "uniform"),
             "mold_indicator_entity": options.get("mold_indicator_entity"),
-            "surface_rh_threshold_pct": options.get("surface_rh_threshold_pct", 80.0),
+            "high_humidity_threshold_pct": 80.0,
+            "condensation_threshold_pct": 100.0,
         }
     if key == "outdoor_running_mean":
         return {"running_mean_alpha": options.get("running_mean_alpha", 0.8)}

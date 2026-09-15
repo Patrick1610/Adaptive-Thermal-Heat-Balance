@@ -72,19 +72,19 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
         "Comfort range — lower limit"
     )
     assert english_entities["sensor"]["comfort_range_current"]["name"] == (
-        "Comfort range — current"
+        "Room — current temperature"
     )
     assert english_entities["sensor"]["comfort_range_neutral_delta"]["name"] == (
-        "Comfort range — deviation from neutral"
+        "Room — deviation from neutral"
     )
     assert english_entities["sensor"]["target_deviation"]["name"] == (
-        "Target — deviation from current"
+        "Room — deviation from target"
     )
     assert english_entities["sensor"]["target_heating_deviation"]["name"] == (
-        "Target — heating deviation from current"
+        "Room — deviation from heating target"
     )
     assert english_entities["sensor"]["target_cooling_deviation"]["name"] == (
-        "Target — cooling deviation from current"
+        "Room — deviation from cooling target"
     )
     assert english_entities["sensor"]["heating_control_target"]["name"] == (
         "Control point — heating"
@@ -97,6 +97,17 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
     )
     assert english_entities["sensor"]["upper_comfort_boundary"]["name"] == (
         "Comfort range — upper limit"
+    )
+    assert english_entities["sensor"]["thermal_sensation"]["name"] == (
+        "Room — thermal sensation"
+    )
+    assert english_entities["sensor"]["comfort_status"]["name"] == "Room — comfort status"
+    assert english_entities["binary_sensor"]["occupancy"]["name"] == "Room — occupancy"
+    assert english_entities["binary_sensor"]["surface_high_humidity"]["name"] == (
+        "Surface — high humidity"
+    )
+    assert english_entities["binary_sensor"]["surface_saturation"]["name"] == (
+        "Surface — condensation risk"
     )
     assert documents[1]["selector"]["eco_intensity"]["options"]["deep"] == (
         "Boundary limit — minimum/maximum command temperature"

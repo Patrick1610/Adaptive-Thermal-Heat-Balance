@@ -352,7 +352,7 @@ def test_modelled_surface_needs_no_helper_and_publishes_surface_risk_diagnostics
                 "surface_modelled": True,
                 "surface_f_rsi": 0.6,
                 "surface_view_factor": 0.25,
-                "surface_rh_threshold_pct": 80.0,
+                "surface_rh_threshold_pct": 99.0,
             },
             (_target(),),
             explicit_transition=True,
@@ -361,10 +361,12 @@ def test_modelled_surface_needs_no_helper_and_publishes_surface_risk_diagnostics
     assert result.surface_temperature_c == pytest.approx(12.0)
     assert result.surface_relative_humidity_pct is not None
     assert result.surface_relative_humidity_pct > 90.0
+    assert result.surface_high_humidity is True
     assert result.surface_saturation is True
     assert "modelled_surface" in result.quality_reasons
     values = result_values(result)
     assert values["surface_temperature"] == pytest.approx(12.0)
+    assert values["surface_high_humidity"] is True
 
 
 def test_modelled_surface_without_calibration_never_invents_a_factor() -> None:

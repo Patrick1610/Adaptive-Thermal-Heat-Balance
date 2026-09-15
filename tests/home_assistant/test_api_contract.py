@@ -10,10 +10,13 @@ from unittest.mock import MagicMock
 import pytest
 from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.const import EntityCategory
-from homeassistant.core import Context
+from homeassistant.core import Context, State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    mock_restore_cache_with_extra_data,
+)
 
 from custom_components.athb import async_migrate_entry, async_remove_entry
 from custom_components.athb.adapters.broker import ContextToken
@@ -22,6 +25,7 @@ from custom_components.athb.adapters.storage import HomeAssistantControlStorageB
 from custom_components.athb.binary_sensor import (
     ControlEligibleBinarySensor,
     OccupancyBinarySensor,
+    SurfaceHighHumidityBinarySensor,
     SurfaceSaturationBinarySensor,
 )
 from custom_components.athb.binary_sensor import async_setup_entry as async_setup_binary_entry
@@ -35,6 +39,7 @@ from custom_components.athb.sensor import (
     TargetDeviationSensor,
     TargetSensor,
     ZoneTargetSensor,
+    _migrate_restored_deviation,
     _per_climate_context,
     _supports_zone_target_sensors,
     _target_control_directions,
@@ -156,17 +161,11 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
     assert AthbSensor(runtime, descriptions["comfort_status"]).entity_category is None
     assert AthbSensor(runtime, descriptions["outdoor_running_mean"]).entity_category is None
     assert AthbSensor(runtime, descriptions["surface_temperature"]).entity_category is None
-    assert (
-        AthbSensor(runtime, descriptions["lower_comfort_boundary"]).entity_category
-        is EntityCategory.DIAGNOSTIC
-    )
+    assert AthbSensor(runtime, descriptions["lower_comfort_boundary"]).entity_category is None
     assert (
         AthbSensor(runtime, descriptions["lower_comfort_boundary"]).suggested_display_precision == 2
     )
-    assert (
-        AthbSensor(runtime, descriptions["heating_control_target"]).entity_category
-        is EntityCategory.DIAGNOSTIC
-    )
+    assert AthbSensor(runtime, descriptions["heating_control_target"]).entity_category is None
     assert (
         AthbSensor(runtime, descriptions["heating_control_target"]).suggested_display_precision == 2
     )
@@ -174,18 +173,9 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
     assert (
         AthbSensor(runtime, descriptions["cooling_control_target"]).suggested_display_precision == 2
     )
-    assert (
-        AthbSensor(runtime, descriptions["thermal_neutral"]).entity_category
-        is EntityCategory.DIAGNOSTIC
-    )
-    assert (
-        AthbSensor(runtime, descriptions["cooling_control_target"]).entity_category
-        is EntityCategory.DIAGNOSTIC
-    )
-    assert (
-        AthbSensor(runtime, descriptions["upper_comfort_boundary"]).entity_category
-        is EntityCategory.DIAGNOSTIC
-    )
+    assert AthbSensor(runtime, descriptions["thermal_neutral"]).entity_category is None
+    assert AthbSensor(runtime, descriptions["cooling_control_target"]).entity_category is None
+    assert AthbSensor(runtime, descriptions["upper_comfort_boundary"]).entity_category is None
     assert (
         AthbSensor(runtime, descriptions["upper_comfort_boundary"]).suggested_display_precision == 2
     )
@@ -231,14 +221,14 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
 @pytest.mark.parametrize(
     ("current", "target_direction", "sensor_direction", "room", "expected", "position"),
     [
-        (20.0, "heating_only", "heating", {"temperature": 21.5}, 1.5, "below_reference"),
-        (25.0, "cooling_only", "cooling", {"temperature": 24.0}, -1.0, "above_reference"),
+        (20.0, "heating_only", "heating", {"temperature": 21.5}, -1.5, "below_reference"),
+        (25.0, "cooling_only", "cooling", {"temperature": 24.0}, 1.0, "above_reference"),
         (
             22.0,
             "ranged",
             "heating",
             {"target_low": 19.0, "target_high": 24.0},
-            -3.0,
+            3.0,
             "above_reference",
         ),
         (
@@ -246,7 +236,7 @@ def test_entity_presentation_groups_user_outputs_and_diagnostics_without_id_chur
             "ranged",
             "cooling",
             {"target_low": 19.0, "target_high": 24.0},
-            2.0,
+            -2.0,
             "below_reference",
         ),
     ],
@@ -277,6 +267,41 @@ def test_target_deviation_is_consistent_for_scalar_and_heat_cool(
     assert sensor.native_value == expected
     assert sensor.extra_state_attributes["position"] == position
     assert sensor.extra_state_attributes["current_temperature"] == current
+    assert sensor.extra_state_attributes["reference_kind"] == f"{sensor_direction}_target"
+    assert sensor.extra_state_attributes["calculation"] == "room_temperature_minus_reference"
+
+
+def test_pre_028_restored_target_deviation_is_migrated_without_unique_id_churn() -> None:
+    sensor = TargetDeviationSensor(_runtime(), "heating", show_direction=False)
+
+    assert sensor.unique_id == "zone-1_target_heating_deviation"
+    assert _migrate_restored_deviation(1.5, "directional_target_minus_current") == -1.5
+    assert _migrate_restored_deviation(-1.5, "room_temperature_minus_reference") == -1.5
+
+
+async def test_pre_028_target_deviation_restore_cache_is_migrated(hass: Any) -> None:
+    entity_id = "sensor.room_deviation_from_target"
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(
+                    entity_id,
+                    "1.5",
+                    {"calculation": "directional_target_minus_current"},
+                ),
+                {"native_value": 1.5, "native_unit_of_measurement": "°C"},
+            )
+        ],
+    )
+    sensor = TargetDeviationSensor(_runtime(), "heating", show_direction=False)
+    sensor.hass = hass
+    sensor.entity_id = entity_id
+
+    await sensor.async_added_to_hass()
+
+    assert sensor.native_value == -1.5
+    assert sensor.extra_state_attributes["calculation"] == "room_temperature_minus_reference"
 
 
 @pytest.mark.parametrize(
@@ -406,6 +431,7 @@ def test_surface_values_and_inapplicable_target_endpoints_remain_truthful() -> N
     humidity_sensor = AthbSensor(runtime, surface_humidity)
     assert not humidity_sensor.available
     assert humidity_sensor.suggested_display_precision == 2
+    assert SurfaceHighHumidityBinarySensor(runtime).is_on is None
     assert SurfaceSaturationBinarySensor(runtime).is_on is None
 
     target = {
@@ -484,6 +510,11 @@ def test_restored_values_are_visible_but_explicitly_stale() -> None:
     saturation._restored_is_on = True
     assert saturation.is_on is True
     assert saturation.extra_state_attributes["data_quality"] == "restored_stale"
+
+    high_humidity = SurfaceHighHumidityBinarySensor(runtime)
+    high_humidity._restored_is_on = False
+    assert high_humidity.is_on is False
+    assert high_humidity.extra_state_attributes["data_quality"] == "restored_stale"
 
 
 async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolete_entities(
@@ -910,10 +941,15 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
     delta_sensor = AthbSensor(runtime, delta_description)
     assert current_sensor.native_value == 22.1
     assert delta_sensor.native_value == -1.2
-    assert current_description.entity_category is EntityCategory.DIAGNOSTIC
-    assert delta_description.entity_category is EntityCategory.DIAGNOSTIC
+    assert current_description.entity_category is None
+    assert delta_description.entity_category is None
     assert current_sensor.extra_state_attributes["source_entity"] == "sensor.room"
-    assert delta_sensor.extra_state_attributes["calculation"] == "current_minus_neutral"
+    assert delta_sensor.extra_state_attributes["calculation"] == (
+        "room_temperature_minus_reference"
+    )
+    assert delta_sensor.extra_state_attributes["current_temperature"] == 22.1
+    assert delta_sensor.extra_state_attributes["reference_temperature"] == 23.3
+    assert delta_sensor.extra_state_attributes["reference_kind"] == "neutral"
 
     boost = BoostModeSelect(runtime).extra_state_attributes
     assert boost["settings"] == {"boost_delta_c": 1.5, "boost_duration_minutes": 45.0}
@@ -939,7 +975,12 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
     surface = AthbSensor(
         runtime, next(item for item in DESCRIPTIONS if item.key == "surface_temperature")
     )
-    assert surface.extra_state_attributes["settings"]["surface_rh_threshold_pct"] == 80.0
+    assert surface.extra_state_attributes["settings"] == {
+        "radiant_model": "uniform",
+        "mold_indicator_entity": None,
+        "high_humidity_threshold_pct": 80.0,
+        "condensation_threshold_pct": 100.0,
+    }
 
 
 async def test_mold_indicator_mode_exposes_surface_diagnostic_entities(hass: Any) -> None:
@@ -961,6 +1002,9 @@ async def test_mold_indicator_mode_exposes_surface_diagnostic_entities(hass: Any
 
     assert "zone-1_surface_temperature" in {entity.unique_id for entity in sensors}
     assert "zone-1_surface_relative_humidity" in {entity.unique_id for entity in sensors}
+    assert "zone-1_surface_high_humidity" in {
+        entity.unique_id for entity in binary_sensors
+    }
     assert "zone-1_surface_saturation" in {entity.unique_id for entity in binary_sensors}
 
 

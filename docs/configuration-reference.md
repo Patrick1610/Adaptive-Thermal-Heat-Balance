@@ -99,14 +99,13 @@ transition, quality, suppression and recovery state. Its `per_climate` attribute
 temperature, reported setpoint, calibration, bounds, grid, HVAC mode/action, availability,
 normalized ATHB requests, ownership/readiness and command outcome.
 
-Target-deviation sensors are created automatically from the target climate capabilities. A zone
-with only one control direction exposes the concise **Target — deviation from current** name.
-A zone with both directions, including `heat_cool`, exposes **Target — heating deviation from
-current** and **Target — cooling deviation from current**. Heating deviation is the active heating
-target (or `target_low`) minus current room temperature. Cooling deviation is the active cooling
-target (or `target_high`) minus current room temperature. A positive value therefore means the
-directional target lies above current; a negative value means it lies below. For `heat_cool`, the
-two values retain both distances instead of collapsing the result to zero inside the range.
+Room-deviation sensors are created automatically from the target climate capabilities. A zone
+with only one control direction exposes **Room — deviation from target**. A zone with both
+directions, including `heat_cool`, exposes **Room — deviation from heating target** and
+**Room — deviation from cooling target**. Every deviation is current room temperature minus the
+named reference. A positive value therefore means that the room is warmer than the reference; a
+negative value means that it is colder. For `heat_cool`, the two values retain both distances
+instead of collapsing the result to zero inside the range.
 
 This keeps the device page compact while preserving actuator-level evidence. Zones that genuinely
 mix heating and cooling directions or use an atomic temperature range retain separate
@@ -143,10 +142,12 @@ The underlying diagnostic relationship is equivalent to a calibrated inner-surfa
 
 `T_surface = T_outdoor + f_Rsi × (T_indoor - T_outdoor)`
 
-`f_Rsi` is the Mold Indicator's dimensionless calibration. `surface_rh_threshold_pct` is
-diagnostic only: surface RH is calculated at constant indoor vapour pressure and saturation or
-non-physical states fail explicitly. Surface temperature, local-air temperature, and MRT remain
-separate physical quantities.
+`f_Rsi` is the Mold Indicator's dimensionless calibration. Surface RH is calculated at constant
+indoor vapour pressure. **Surface — high humidity** switches on at the fixed 80% warning level;
+**Surface — condensation risk** switches on at calculated saturation (100%). Legacy stored
+`surface_rh_threshold_pct` values are accepted for compatibility but no longer change the fixed
+warning level. Saturation or non-physical states fail explicitly. Surface temperature, local-air
+temperature, and MRT remain separate physical quantities.
 
 ## Human and air-movement model
 

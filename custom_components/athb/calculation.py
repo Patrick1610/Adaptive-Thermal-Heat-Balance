@@ -138,6 +138,7 @@ class RuntimeCalculation:
     source_states: tuple[tuple[str, SourceState], ...] = ()
     hold_condition: str | None = None
     provenance: tuple[tuple[str, str], ...] = ()
+    surface_high_humidity: bool | None = None
 
 
 def _finite_option(options: dict[str, Any], name: str, default: float) -> float:
@@ -458,7 +459,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         surface_humidity_diagnostic(
             moisture=primary_moisture,
             surface_temperature_c=surface_temperature_c,
-            high_threshold_pct=_finite_option(snapshot.options, "surface_rh_threshold_pct", 80.0),
+            high_threshold_pct=80.0,
         )
         if not isinstance(primary_moisture, MoistureFailure) and surface_temperature_c is not None
         else None
@@ -689,6 +690,11 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         tuple(sorted(updated_states.items())),
         hold_condition,
         (*base_provenance, ("radiant", radiant_provenance)),
+        surface_high_humidity=(
+            surface_rh.high_surface_humidity
+            if surface_rh is not None and not isinstance(surface_rh, SurfaceFailure)
+            else None
+        ),
     )
 
 
@@ -841,6 +847,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         "rh_provenance": result.relative_humidity_provenance,
         "surface_temperature": result.surface_temperature_c,
         "surface_relative_humidity": result.surface_relative_humidity_pct,
+        "surface_high_humidity": result.surface_high_humidity,
         "surface_saturation": result.surface_saturation,
         "provenance": dict(result.provenance),
         "calculation": result,

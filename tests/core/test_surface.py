@@ -7,7 +7,11 @@ import math
 import pytest
 
 from custom_components.athb.core.contracts import MeasuredRelativeHumidity, Provenance
-from custom_components.athb.core.psychrometrics import MoistureState, moisture_state
+from custom_components.athb.core.psychrometrics import (
+    MoistureState,
+    moisture_state,
+    saturation_vapor_pressure_pa,
+)
 from custom_components.athb.core.surface import (
     SurfaceCalibration,
     SurfaceEstimate,
@@ -107,6 +111,31 @@ def test_surface_threshold_temperature_round_trips() -> None:
     )
     assert isinstance(diagnostic, SurfaceHumidityDiagnostic)
     assert diagnostic.uncapped_relative_humidity_pct == pytest.approx(80.0, abs=0.01)
+
+
+@pytest.mark.parametrize(
+    ("surface_rh", "high_humidity", "condensation"),
+    [
+        (79.99, False, False),
+        (80.0, True, False),
+        (99.99, True, False),
+        (100.0, True, True),
+    ],
+)
+def test_fixed_surface_warning_and_condensation_boundaries(
+    surface_rh: float,
+    high_humidity: bool,
+    condensation: bool,
+) -> None:
+    saturation = saturation_vapor_pressure_pa(20.0)
+    assert isinstance(saturation, float)
+    moisture = MoistureState(20.0, surface_rh, saturation * surface_rh / 100.0, Provenance.MEASURED)
+
+    diagnostic = surface_humidity_diagnostic(moisture=moisture, surface_temperature_c=20.0)
+
+    assert isinstance(diagnostic, SurfaceHumidityDiagnostic)
+    assert diagnostic.high_surface_humidity is high_humidity
+    assert diagnostic.predicted_saturation is condensation
 
 
 @pytest.mark.parametrize("threshold", [0.0, -1.0, 101.0, math.nan, False])

@@ -39,43 +39,36 @@ DESCRIPTIONS = (
         "lower_comfort_boundary",
         temperature=True,
         suggested_display_precision=2,
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "comfort_range_current",
         temperature=True,
         suggested_display_precision=2,
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "comfort_range_neutral_delta",
         temperature=True,
         suggested_display_precision=2,
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "heating_control_target",
         temperature=True,
         suggested_display_precision=2,
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "thermal_neutral",
         temperature=True,
         suggested_display_precision=2,
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "cooling_control_target",
         temperature=True,
         suggested_display_precision=2,
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description(
         "upper_comfort_boundary",
         temperature=True,
         suggested_display_precision=2,
-        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     Description("comfort_status"),
     Description("input_status", entity_category=EntityCategory.DIAGNOSTIC),
@@ -164,9 +157,11 @@ class AthbSensor(AthbEntity, RestoreSensor):
             attributes["source_entity"] = self.runtime.entry.data.get("primary_temperature")
         elif self.description.key == "comfort_range_neutral_delta":
             attributes["range_role"] = "neutral_delta"
-            attributes["calculation"] = "current_minus_neutral"
+            attributes["calculation"] = "room_temperature_minus_reference"
             attributes["current_temperature"] = self.runtime.values.get("comfort_range_current")
             attributes["neutral_reference"] = self.runtime.values.get("thermal_neutral")
+            attributes["reference_temperature"] = self.runtime.values.get("thermal_neutral")
+            attributes["reference_kind"] = "neutral"
         return attributes
 
 
@@ -253,10 +248,11 @@ def _target_deviation_context(runtime: ZoneRuntime, direction: str) -> dict[str,
         return None
     reference = max(references) if direction == "heating" else min(references)
     return {
-        "deviation": reference - float(current),
+        "deviation": float(current) - reference,
         "current_temperature": float(current),
         "direction": direction,
         "reference_temperature": reference,
+        "reference_kind": f"{direction}_target",
         "position": (
             "below_reference"
             if float(current) < reference
@@ -265,6 +261,18 @@ def _target_deviation_context(runtime: ZoneRuntime, direction: str) -> dict[str,
             else "at_reference"
         ),
     }
+
+
+def _migrate_restored_deviation(value: Any, calculation: object) -> Any:
+    """Convert the pre-0.2.8 target-minus-current restore contract once."""
+
+    if (
+        calculation == "directional_target_minus_current"
+        and isinstance(value, int | float)
+        and not isinstance(value, bool)
+    ):
+        return -float(value)
+    return value
 
 
 class TargetDeviationSensor(AthbEntity, RestoreSensor):
@@ -296,9 +304,18 @@ class TargetDeviationSensor(AthbEntity, RestoreSensor):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         if _target_deviation_context(self.runtime, self.direction) is None:
+            restored_state = await self.async_get_last_state()
             restored = await self.async_get_last_sensor_data()
             if restored is not None:
-                self._restored_native_value = restored.native_value
+                calculation = (
+                    restored_state.attributes.get("calculation")
+                    if restored_state is not None
+                    else None
+                )
+                self._restored_native_value = _migrate_restored_deviation(
+                    restored.native_value,
+                    calculation,
+                )
 
     @property
     def available(self) -> bool:
@@ -312,7 +329,7 @@ class TargetDeviationSensor(AthbEntity, RestoreSensor):
             data_quality = "restored_stale"
         return {
             **super().extra_state_attributes,
-            "calculation": "directional_target_minus_current",
+            "calculation": "room_temperature_minus_reference",
             **(context or {}),
             "data_quality": data_quality,
             "last_valid_at": self.runtime.values.get("last_valid_at"),

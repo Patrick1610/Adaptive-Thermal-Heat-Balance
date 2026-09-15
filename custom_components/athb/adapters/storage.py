@@ -28,6 +28,7 @@ LAST_VALID_OUTPUT_KEYS = (
     "comfort_status",
     "surface_temperature",
     "surface_relative_humidity",
+    "surface_high_humidity",
     "surface_saturation",
     "effective_targets",
     "effective_target_details",

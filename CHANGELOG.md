@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.8
+
+- Group user-facing outputs under **Comfort range**, **Control point**, **Room**, **Surface** and
+  **Target**, while keeping only technical status entities diagnostic and preserving existing
+  entity unique IDs.
+- Define room deviations consistently as current room temperature minus the named target or
+  neutral reference, including one-time conversion of restored pre-0.2.8 target deviations.
+- Add a fixed 80% **Surface — high humidity** warning and clarify that the existing 100% signal is
+  **Surface — condensation risk**; legacy configurable warning thresholds no longer affect the
+  runtime calculation.
+
 ## 0.2.7
 
 - Use the concise **Target — deviation from current** name when a zone has only one control
