@@ -1002,9 +1002,7 @@ async def test_mold_indicator_mode_exposes_surface_diagnostic_entities(hass: Any
 
     assert "zone-1_surface_temperature" in {entity.unique_id for entity in sensors}
     assert "zone-1_surface_relative_humidity" in {entity.unique_id for entity in sensors}
-    assert "zone-1_surface_high_humidity" in {
-        entity.unique_id for entity in binary_sensors
-    }
+    assert "zone-1_surface_high_humidity" in {entity.unique_id for entity in binary_sensors}
     assert "zone-1_surface_saturation" in {entity.unique_id for entity in binary_sensors}
 
 

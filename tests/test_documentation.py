@@ -98,9 +98,7 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
     assert english_entities["sensor"]["upper_comfort_boundary"]["name"] == (
         "Comfort range — upper limit"
     )
-    assert english_entities["sensor"]["thermal_sensation"]["name"] == (
-        "Room — thermal sensation"
-    )
+    assert english_entities["sensor"]["thermal_sensation"]["name"] == ("Room — thermal sensation")
     assert english_entities["sensor"]["comfort_status"]["name"] == "Room — comfort status"
     assert english_entities["binary_sensor"]["occupancy"]["name"] == "Room — occupancy"
     assert english_entities["binary_sensor"]["surface_high_humidity"]["name"] == (
