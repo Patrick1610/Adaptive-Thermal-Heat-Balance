@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.9
+
+- Re-adopt persistent Home Assistant Repair issues after restart or reload, so recovered
+  conditions remove their existing notifications while unresolved conditions remain visible.
+- Reconcile the explicit-control-recovery warning on every calculation and remove all
+  zone-specific Repair issues when its config entry is deleted.
+- Add regression coverage for restart/reload adoption, automatic recovery and config-entry
+  removal.
+
 ## 0.2.8
 
 - Group user-facing outputs under **Comfort range**, **Control point**, **Room**, **Surface** and

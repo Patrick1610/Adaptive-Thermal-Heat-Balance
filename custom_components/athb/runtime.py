@@ -1024,10 +1024,9 @@ class ZoneRuntime:
         values["control_status"] = self._control_status()
         values["transition_reasons"] = transition_reasons
         values["resume_required"] = any(state.resume_required for state in self.ownership.values())
-        if values["resume_required"] or "resume_required" in self.repair_condition_started:
-            self._update_delayed_repair(
-                "resume_required", values["resume_required"], timedelta(hours=1)
-            )
+        self._update_delayed_repair(
+            "resume_required", values["resume_required"], timedelta(hours=1)
+        )
         values["control_eligible"] = (
             self.control_enabled
             and bool(result.targets)

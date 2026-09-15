@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 
 from .adapters.storage import HomeAssistantControlStorageBackend
 from .const import CONF_BOOST_MODE, CONF_COMFORT_STRATEGY, DOMAIN, PLATFORMS
+from .repairs import RepairManager
 from .runtime import AthbConfigEntry, runtime_from_entry
 
 
@@ -39,9 +40,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> bo
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> None:
-    """Remove only this zone's control-critical recovery journal."""
+    """Remove this zone's recovery journal and persistent Repair issues."""
 
     await HomeAssistantControlStorageBackend(hass, str(entry.data["zone_uuid"])).async_remove()
+    RepairManager(hass, entry.entry_id).clear_all()
 
 
 __all__ = [

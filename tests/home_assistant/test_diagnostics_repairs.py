@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -78,6 +79,38 @@ def test_repair_manager_creates_once_and_clears_issue(hass: HomeAssistant) -> No
     assert registry.async_get_issue("athb", "entry-1_incompatible_auto_mapping") is not None
     assert manager.update("incompatible_auto_mapping", False)
     assert registry.async_get_issue("athb", "entry-1_incompatible_auto_mapping") is None
+
+
+def test_reloaded_repair_manager_adopts_and_reconciles_persistent_issue(
+    hass: HomeAssistant,
+) -> None:
+    first_runtime = RepairManager(hass, "entry-reload")
+    assert first_runtime.update("mandatory_input_unavailable_1h", True)
+
+    reloaded_runtime = RepairManager(hass, "entry-reload")
+    assert reloaded_runtime.active == {"mandatory_input_unavailable_1h"}
+    assert not reloaded_runtime.update("mandatory_input_unavailable_1h", True)
+    assert reloaded_runtime.update("mandatory_input_unavailable_1h", False)
+    assert (
+        ir.async_get(hass).async_get_issue("athb", "entry-reload_mandatory_input_unavailable_1h")
+        is None
+    )
+
+
+def test_reloaded_runtime_clears_recovered_resume_issue(hass: HomeAssistant) -> None:
+    assert RepairManager(hass, "entry-resume").update("resume_required", True)
+    entry = SimpleNamespace(
+        title="Recovered room",
+        entry_id="entry-resume",
+        data={"zone_uuid": "zone-resume", "targets": ()},
+        options={},
+    )
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-resume", "balanced", "off", False)
+    runtime.repair_manager = RepairManager(hass, entry.entry_id)
+
+    runtime._update_delayed_repair("resume_required", False, timedelta(hours=1))
+
+    assert ir.async_get(hass).async_get_issue("athb", "entry-resume_resume_required") is None
 
 
 def test_transition_logger_emits_only_on_failure_and_recovery(caplog) -> None:

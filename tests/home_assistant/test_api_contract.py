@@ -12,6 +12,7 @@ from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.const import EntityCategory
 from homeassistant.core import Context, State
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -31,6 +32,7 @@ from custom_components.athb.binary_sensor import (
 from custom_components.athb.binary_sensor import async_setup_entry as async_setup_binary_entry
 from custom_components.athb.button import ResumeButton
 from custom_components.athb.core.climate import TARGET_TEMPERATURE, TARGET_TEMPERATURE_RANGE
+from custom_components.athb.repairs import REPAIR_TYPES, RepairManager
 from custom_components.athb.runtime import ZoneRuntime
 from custom_components.athb.select import BoostModeSelect, EcoIntensitySelect, StrategySelect
 from custom_components.athb.sensor import (
@@ -81,14 +83,24 @@ async def test_config_entry_removal_deletes_only_its_control_journal(hass: Any) 
     await backend.async_save('{"zone":"remove"}')
     retained = HomeAssistantControlStorageBackend(hass, "zone-retain")
     await retained.async_save('{"zone":"retain"}')
+    removed_repairs = RepairManager(hass, "entry-remove")
+    for repair_type in REPAIR_TYPES:
+        assert removed_repairs.update(repair_type, True)
 
     await async_remove_entry(
         hass,
-        cast(Any, SimpleNamespace(data={"zone_uuid": "zone-remove"})),
+        cast(
+            Any,
+            SimpleNamespace(entry_id="entry-remove", data={"zone_uuid": "zone-remove"}),
+        ),
     )
 
     assert await backend.async_readback() is None
     assert await retained.async_readback() == '{"zone":"retain"}'
+    assert all(
+        ir.async_get(hass).async_get_issue("athb", f"entry-remove_{repair_type}") is None
+        for repair_type in REPAIR_TYPES
+    )
 
 
 def test_climate_service_uses_exact_set_temperature_contract_and_context() -> None:

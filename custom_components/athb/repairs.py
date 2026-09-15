@@ -47,6 +47,20 @@ class RepairManager:
     entry_id: str
     active: set[str] = field(default_factory=set)
 
+    def __post_init__(self) -> None:
+        """Adopt persistent issues that survived a reload or restart."""
+
+        registry = ir.async_get(self.hass)
+        self.active.update(
+            repair_type
+            for repair_type in REPAIR_TYPES
+            if registry.async_get_issue(
+                DOMAIN,
+                f"{self.entry_id}_{repair_type}",
+            )
+            is not None
+        )
+
     def update(self, repair_type: str, active: bool) -> bool:
         if repair_type not in REPAIR_TYPES:
             raise ValueError("unknown ATHB repair type")
@@ -68,3 +82,9 @@ class RepairManager:
             self.active.remove(repair_type)
             return True
         return False
+
+    def clear_all(self) -> None:
+        """Delete every persistent repair belonging to this config entry."""
+
+        for repair_type in tuple(self.active):
+            self.update(repair_type, False)
