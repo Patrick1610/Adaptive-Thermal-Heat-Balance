@@ -171,20 +171,18 @@ or surface temperature, and measured air speed. The safe default is 30 minutes.
 
 A longer window is appropriate for a trustworthy battery sensor that reports only slowly or when
 its value changes. It is an observation-hold assumption, not proof that a new measurement occurred.
-Once the configured window expires, the source becomes stale and ATHB stops normal calculation and
-normal writes. The last valid calculated values remain visible rather than turning unavailable,
-but are explicitly marked `data_quality: stale` with `last_valid_at` and `data_age_minutes`; the
-input-status entity retains the exact stale reason. ATHB never substitutes a plausible temperature
-or humidity. The bounded last-valid display snapshot is stored with the zone's verified state and
-restored after an integration reload or Home Assistant restart when the configuration and comfort
-level still match. It remains display-only and stale until a valid calculation is available. Older
-installations without such a snapshot can still show `restored_stale` entity values until the first
-new valid calculation. The outdoor-history collector retains its separate two-hour maximum hold
-and builds adaptation only from completed local calendar days.
+Once the configured window expires, a numerically valid, available primary room temperature may
+still project new targets from its actual last reported value; the original timestamp is retained
+and `data_quality: stale` / `primary_temperature_stale_projection` make the assumption explicit.
+Heating writes are then bounded by the feedback guard below. Stale or invalid humidity, radiant
+data and other mandatory inputs still block new calculations and normal writes. Last valid outputs
+remain visible rather than turning unavailable, with `last_valid_at` and `data_age_minutes`.
+ATHB never fabricates a temperature or humidity. The last-valid display snapshot is stored with
+the zone's verified state and restored after a reload or restart. The outdoor-history collector
+retains its separate two-hour maximum hold and uses completed local calendar days.
 
-Only a calculation for which every mandatory environmental input is valid may replace this stored
-snapshot. A fresh room temperature combined with stale humidity, radiant data or another mandatory
-source therefore cannot erase previously valid room-target scenarios during startup.
+Only a calculation with a fresh primary report and valid other mandatory inputs may replace the
+stored last-valid snapshot. Stale projections do not become fresh evidence.
 
 When another input changes, ATHB may re-evaluate using the same already accepted primary report
 while it remains inside its freshness window. An identical value and timestamp are reuse of one
@@ -194,8 +192,8 @@ timestamp or a different value carrying the same timestamp remains invalid.
 Home Assistant's unchanged-state `state_reported` event is tracked for measured inputs. A sensor
 may therefore renew its freshness by reporting the same physical value with a genuinely newer
 `last_reported` timestamp. Climate target feedback remains independent from source validation.
-When one climate is both primary source and target, the same Home Assistant report can update its
-public `current_temperature` input and acknowledge its target endpoint without conflating roles.
+When one climate is both primary source and target, a target-only acknowledgement is not accepted
+as renewed temperature feedback. An independent same-value report may renew it.
 
 Age-only staleness clears on the first genuinely newer, valid timestamp. Recovery from unavailable,
 missing, malformed, out-of-range or implausibly jumping input remains subject to the stricter
@@ -203,23 +201,28 @@ multi-report stability gate.
 
 ### Stale-measurement safety
 
-One hour after the newest trustworthy primary room-temperature report, ATHB performs a one-shot
-safety check. If that last temperature is below the currently observed heating setpoint, it lowers
-the setpoint to `fallback_heating_c`. For cooling, the inverse applies and ATHB raises the setpoint
-to `fallback_cooling_c`. An atomic range can only be widened toward both fallback limits. If this
-would not strictly reduce an existing demand, nothing is sent.
+Possible heating demand begins when the normalized heating target is at least 0.5 °C above the
+last valid room measurement. This margin is adjustable from 0.1 to 2 °C under Advanced. With
+fresh feedback, each valid report renews a 30-minute active-demand deadline (configurable 15–60).
+If demand begins with an already stale but otherwise valid primary reading, ATHB allows one
+60-minute trial (configurable 30–60); the active-demand deadline does not run during this trial.
+Another valid report ends the trial and starts continuous active-demand monitoring. Repeated
+occupancy changes and reloads cannot grant another trial from the same old report.
 
-The timestamped, numerically valid Home Assistant state may be reused as safety evidence after an
-integration reload, but remains stale and is never admitted to the ATHB comfort calculation. An
-unavailable, malformed or physically invalid state cannot supply this reload evidence.
+After either deadline, heating demand is withdrawn monotonically toward `fallback_heating_c` at
+1 °C per 10 minutes (configurable 5–15 minutes per degree). It reaches fallback within 30 more
+minutes at most (configurable 15–60), accelerating evenly if needed. Source unavailability during
+an active demand begins withdrawal without granting another trial. The guard's phase, source age,
+next check and fallback deadline are exposed in diagnostics. A climate target acknowledgement by
+the climate used as primary source does not count as fresh temperature feedback. A restored state
+does not reset the persisted trial deadline; without reliable saved guard state ATHB does not
+grant a new stale trial on reload.
 
-This is not an adaptive calculation from stale data. It is a bounded withdrawal of an already
-present demand so a silent room sensor cannot leave a stale high-heating or low-cooling request in
-place indefinitely. It still requires enabled control, owned target, supported and available
-climate state, the current ATHB lease, matching generations and verified command persistence. The
-exact normalized fallback target goes through `CommandBroker`; no HVAC-mode or other climate
-setting is included. Manual override and disabled or unavailable targets remain untouched. A fully
-valid recovered calculation clears the one-shot state and resumes ordinary event-driven control.
+The established one-hour cooling safety remains separate: it can only raise an existing cooling
+request to `fallback_cooling_c`, and an atomic range is widened safely. Every safety command
+still requires enabled control, an owned and available target, current lease, verified persistence
+and `CommandBroker`; ATHB never changes HVAC mode. Manual override and disabled targets remain
+untouched. The fallback is a setpoint, not a guarantee that an external thermostat stops heating.
 
 ## Comfort and adaptation bounds
 

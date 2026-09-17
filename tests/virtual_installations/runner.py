@@ -624,8 +624,9 @@ async def _mandatory_variants(
             ),
         )
         stale_result = calculate_runtime_snapshot(stale)
-        assert stale_result.targets[0].result is None
-        assert stale_result.targets[0].suppression_reason == "primary_temperature_stale"
+        assert stale_result.primary_temperature_stale is True
+        assert stale_result.targets[0].result is not None
+        assert stale_result.targets[0].result.normalized is not None
         return ("missing", "unavailable", "nonfinite", "boolean", "malformed", "stale")
 
     if case == "invalid_rh":

@@ -112,6 +112,11 @@ OPTION_DEFAULTS: dict[str, object] = {
     "minimum_meaningful_change": 0.1,
     "feedback_resolution": 0.01,
     "primary_temperature_freshness_minutes": 30.0,
+    "stale_heat_demand_margin_c": 0.5,
+    "stale_heat_active_minutes": 30.0,
+    "stale_heat_start_minutes": 60.0,
+    "stale_heat_ramp_minutes_per_c": 10.0,
+    "stale_heat_ramp_max_minutes": 30.0,
     "relative_humidity_freshness_minutes": 30.0,
     "local_temperature_freshness_minutes": 30.0,
     "radiant_freshness_minutes": 30.0,
@@ -668,7 +673,11 @@ class _OptionsWizardMixin:
             relevant = {key: value for key, value in errors.items() if key in user_input}
             if not relevant:
                 self._pending_options = pending
-                return await self._begin_target_calibrations()
+                return (
+                    await self.async_step_stale_heat_safety()
+                    if self._advanced
+                    else await self._begin_target_calibrations()
+                )
             return self.async_show_form(
                 step_id="source_freshness",
                 data_schema=self._source_freshness_schema(),
@@ -719,6 +728,52 @@ class _OptionsWizardMixin:
                 )
             ] = _number(5.0, 360.0, 5.0, "min")
         return vol.Schema(fields)
+
+    async def async_step_stale_heat_safety(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Expose the heat feedback guard only in advanced settings."""
+
+        names = (
+            "stale_heat_demand_margin_c",
+            "stale_heat_active_minutes",
+            "stale_heat_start_minutes",
+            "stale_heat_ramp_minutes_per_c",
+            "stale_heat_ramp_max_minutes",
+        )
+        if user_input is not None:
+            pending = {**self._pending_options, **user_input}
+            errors = validate_options(pending)
+            relevant = {key: value for key, value in errors.items() if key in names}
+            if not relevant:
+                self._pending_options = pending
+                return await self._begin_target_calibrations()
+            return self.async_show_form(
+                step_id="stale_heat_safety",
+                data_schema=self._stale_heat_safety_schema(),
+                errors=relevant,
+            )
+        return self.async_show_form(
+            step_id="stale_heat_safety", data_schema=self._stale_heat_safety_schema()
+        )
+
+    def _stale_heat_safety_schema(self) -> vol.Schema:
+        defaults = self._pending_options
+        fields = {
+            "stale_heat_demand_margin_c": (0.1, 2.0, 0.1, "°C"),
+            "stale_heat_active_minutes": (15.0, 60.0, 1.0, "min"),
+            "stale_heat_start_minutes": (30.0, 60.0, 1.0, "min"),
+            "stale_heat_ramp_minutes_per_c": (5.0, 15.0, 1.0, "min/°C"),
+            "stale_heat_ramp_max_minutes": (15.0, 60.0, 1.0, "min"),
+        }
+        return vol.Schema(
+            {
+                vol.Required(name, default=defaults.get(name, OPTION_DEFAULTS[name])): _number(
+                    minimum, maximum, step, unit
+                )
+                for name, (minimum, maximum, step, unit) in fields.items()
+            }
+        )
 
     async def _begin_target_calibrations(self) -> ConfigFlowResult:
         self._calibration_index = 0

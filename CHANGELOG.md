@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.10
+
+- Continue calculating and updating setpoints from a last valid but quiet primary temperature
+  source, while marking those outputs as stale projections.
+- Guard possible heating demand with a 30-minute rolling feedback deadline or one 60-minute
+  stale-start trial. A genuine same-value report renews feedback; an ATHB setpoint acknowledgement
+  from a climate used as the primary source does not.
+- Withdraw heating demand gradually toward the configured fallback temperature after feedback
+  expires, with a 30-minute maximum ramp and durable deadlines across restart and reload.
+- Expose advanced heat-feedback settings and per-target guard diagnostics. Continue to use the
+  CommandBroker, ownership and lease checks for every safety command; leave cooling control
+  and HVAC mode unchanged.
+
 ## 0.2.9
 
 - Re-adopt persistent Home Assistant Repair issues after restart or reload, so recovered

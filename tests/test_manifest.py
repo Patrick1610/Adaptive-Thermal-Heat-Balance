@@ -30,7 +30,7 @@ def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None
         "issue_tracker": ("https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance/issues"),
         "name": "Adaptive Thermal Heat Balance",
         "requirements": [],
-        "version": "0.2.9",
+        "version": "0.2.10",
     }
     assert manifest["domain"] == DOMAIN
 
@@ -110,6 +110,7 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "core/radiant.py",
         "core/surface.py",
         "core/sources.py",
+        "core/stale_heating.py",
         "core/trace.py",
         "diagnostics.py",
         "entity.py",

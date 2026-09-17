@@ -39,6 +39,7 @@ from .core.contracts import (
     MeasuredMeanRadiantTemperature,
     MeasuredRelativeHumidity,
     MeasuredSurfaceTemperature,
+    ObservationValidity,
     RootSuccess,
     TargetShape,
 )
@@ -139,6 +140,7 @@ class RuntimeCalculation:
     hold_condition: str | None = None
     provenance: tuple[tuple[str, str], ...] = ()
     surface_high_humidity: bool | None = None
+    primary_temperature_stale: bool = False
 
 
 def _finite_option(options: dict[str, Any], name: str, default: float) -> float:
@@ -297,7 +299,18 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         now=snapshot.now,
         prior=prior_states.get("outdoor"),
     )
-    air_c = valid_value(primary)
+    primary_stale = (
+        primary.validity is ObservationValidity.STALE
+        and primary.observed_at is not None
+        and primary.observed_at <= snapshot.now
+    )
+    # A stale but valid numeric room reading remains useful for target projection.
+    # Keep its original timestamp and source state: this is never a fresh report.
+    air_c = (
+        primary.value
+        if primary_stale and snapshot.primary is not None and snapshot.primary.available
+        else valid_value(primary)
+    )
     outdoor_c = valid_value(outdoor)
     if snapshot.options.get("air_speed_mode", "fixed") == "measured":
         speed_observation, updated_states["air_speed"] = validate_state_value(
@@ -336,7 +349,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
     mandatory_reason = _measured_failure_reason(
         "primary_temperature",
         value=air_c,
-        reasons=primary.reasons,
+        reasons=() if primary_stale and air_c is not None else primary.reasons,
         recovering=updated_states["primary"].recovering,
     )
     if mandatory_reason is None:
@@ -409,6 +422,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             source_states=tuple(sorted(updated_states.items())),
             hold_condition=failure_reason,
             provenance=(*base_provenance, ("radiant", configured_radiant_provenance)),
+            primary_temperature_stale=primary_stale,
         )
     assert air_c is not None
     assert rh_value is not None
@@ -668,6 +682,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             dict.fromkeys(
                 (
                     *snapshot.context_reasons,
+                    *(("primary_temperature_stale_projection",) if primary_stale else ()),
                     *radiant_reasons,
                     *scientific_reasons,
                     *(("rapid_boost_mixed_adaptive",) if mixed_scalar_rapid else ()),
@@ -695,6 +710,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             if surface_rh is not None and not isinstance(surface_rh, SurfaceFailure)
             else None
         ),
+        primary_temperature_stale=primary_stale,
     )
 
 

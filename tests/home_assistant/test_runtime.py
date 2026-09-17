@@ -343,7 +343,7 @@ def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
     )
     held = runtime._observable_values(stale)
 
-    assert stale.hold_condition == "primary_temperature_stale"
+    assert stale.hold_condition == "primary_rh_stale"
     assert held["thermal_sensation"] == current["thermal_sensation"]
     assert held["lower_comfort_boundary"] == current["lower_comfort_boundary"]
     assert held["heating_control_target"] == current["heating_control_target"]
@@ -351,7 +351,7 @@ def test_stale_primary_keeps_last_valid_outputs_visible_and_labelled() -> None:
     assert held["root_sensation_votes"] == current["root_sensation_votes"]
     assert held["effective_targets"] == current["effective_targets"]
     assert held["target_scenarios"] == current["target_scenarios"]
-    assert held["input_status"] == "primary_temperature_stale"
+    assert held["input_status"] == "primary_rh_stale"
     assert held["data_quality"] == "stale"
     assert all(
         detail["stale"] is True and detail["mode"] == "stale_hold"
@@ -395,6 +395,540 @@ def test_stale_secondary_source_cannot_replace_fully_valid_snapshot() -> None:
     assert held["data_quality"] == "stale"
 
 
+def test_stale_primary_projects_targets_and_heat_guard_uses_one_trial() -> None:
+    scenario = load_scenarios()[0]
+    baseline = _captured(scenario)
+    assert baseline.primary is not None
+    assert baseline.relative_humidity is not None
+    initial = replace(baseline, primary=replace(baseline.primary, raw_state="18.0"))
+    accepted = calculate_runtime_snapshot(initial)
+    stale_at = initial.now + timedelta(hours=8)
+    stale = calculate_runtime_snapshot(
+        replace(
+            initial,
+            now=stale_at,
+            relative_humidity=replace(initial.relative_humidity, observed_at=stale_at),
+            source_states=accepted.source_states,
+        )
+    )
+    assert stale.primary_temperature_stale
+    assert stale.hold_condition is None
+    target = stale.targets[0]
+    assert target.result is not None
+    assert target.result.normalized is not None
+    assert target.mapping is not None
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options.update({"minimum_control_temperature": 16.0, "fallback_heating_c": 16.0})
+    runtime.primary_feedback_at = initial.now
+
+    normal, _changed = runtime._guard_heating_target(
+        target, target.result.normalized, target.mapping, stale, stale_at
+    ) or (None, False)
+    assert normal == target.result.normalized
+    assert runtime.heat_guards[target.registry_identity].phase.value == "stale_start"
+    runtime._guard_heating_target(
+        target, target.result.normalized, target.mapping, stale, stale_at + timedelta(minutes=60)
+    )
+    assert runtime.heat_guards[target.registry_identity].phase.value == "ramp"
+    withdrawn, _changed = runtime._guard_heating_target(
+        target, target.result.normalized, target.mapping, stale, stale_at + timedelta(minutes=70)
+    ) or (None, False)
+    assert withdrawn is not None
+    assert withdrawn.normalized_room_c < target.result.normalized.normalized_room_c
+    runtime._guard_heating_target(
+        target, target.result.normalized, target.mapping, stale, stale_at + timedelta(hours=2)
+    )
+    assert runtime.heat_guards[target.registry_identity].phase.value == "exhausted"
+    runtime._guard_heating_target(
+        target, target.result.normalized, target.mapping, stale, stale_at + timedelta(hours=3)
+    )
+    assert runtime.heat_guards[target.registry_identity].phase.value == "exhausted"
+
+
+async def test_stale_start_and_ramp_send_broker_intents_only(
+    hass: HomeAssistant,
+) -> None:
+    scenario = load_scenarios()[0]
+    snapshot = _captured(scenario)
+    assert snapshot.primary is not None
+    assert snapshot.relative_humidity is not None
+    snapshot = replace(snapshot, primary=replace(snapshot.primary, raw_state="18.0"))
+    accepted = calculate_runtime_snapshot(snapshot)
+    stale_at = snapshot.now + timedelta(hours=8)
+    stale = calculate_runtime_snapshot(
+        replace(
+            snapshot,
+            now=stale_at,
+            relative_humidity=replace(snapshot.relative_humidity, observed_at=stale_at),
+            source_states=accepted.source_states,
+        )
+    )
+    target = stale.targets[0]
+    assert target.result is not None
+    assert target.result.normalized is not None
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update({"minimum_control_temperature": 16.0, "fallback_heating_c": 16.0})
+    runtime.primary_feedback_at = snapshot.now
+    runtime.ownership[target.registry_identity] = OwnershipState(
+        target.registry_identity,
+        Ownership.OWNED,
+        DataReadiness.DEGRADED_READY,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations[target.registry_identity] = 1
+
+    class Persistence:
+        async def async_update_heat_guards(self, _serialized: str) -> bool:
+            return True
+
+    class Broker:
+        def __init__(self) -> None:
+            self.intents: list[Any] = []
+
+        async def async_submit(self, intent: Any, *, now: datetime) -> CommandOutcome:
+            self.intents.append(intent)
+            return CommandOutcome(
+                "guarded",
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "dispatched",
+            )
+
+    broker = Broker()
+    runtime.persistence = cast(Any, Persistence())
+    runtime.broker = cast(Any, broker)
+    await runtime._async_apply_calculation(stale)
+    assert len(broker.intents) == 1
+    assert broker.intents[0].temperature_ha == target.result.normalized.normalized_ha
+    assert broker.intents[0].safety_deescalation is False
+    guard = runtime.heat_guards[target.registry_identity]
+    assert guard.phase.value == "stale_start"
+    runtime.heat_guards[target.registry_identity] = replace(
+        guard,
+        phase=type(guard.phase).RAMP,
+        ramp_at=dt_util.utcnow() - timedelta(minutes=10),
+        ramp_start_c=target.result.normalized.normalized_room_c,
+    )
+    current_capability = replace(
+        target.capability, scalar_target_ha=target.result.normalized.normalized_ha
+    )
+    ramp_result = replace(stale, targets=(replace(target, capability=current_capability),))
+    await runtime._async_apply_calculation(ramp_result)
+    assert len(broker.intents) == 2
+    assert broker.intents[1].temperature_ha < broker.intents[0].temperature_ha
+    assert broker.intents[1].safety_deescalation is True
+    for cancel in runtime.timers.values():
+        cancel()
+
+
+async def test_stale_room_without_heat_demand_still_updates_climate_target(
+    hass: HomeAssistant,
+) -> None:
+    scenario = load_scenarios()[0]
+    snapshot = _captured(scenario)
+    assert snapshot.primary is not None
+    assert snapshot.relative_humidity is not None
+    snapshot = replace(snapshot, primary=replace(snapshot.primary, raw_state="24.0"))
+    accepted = calculate_runtime_snapshot(snapshot)
+    stale_at = snapshot.now + timedelta(hours=8)
+    stale = calculate_runtime_snapshot(
+        replace(
+            snapshot,
+            now=stale_at,
+            relative_humidity=replace(snapshot.relative_humidity, observed_at=stale_at),
+            source_states=accepted.source_states,
+        )
+    )
+    assert stale.primary_temperature_stale
+    assert stale.targets[0].result is not None
+    assert stale.targets[0].result.normalized is not None
+    target = stale.targets[0]
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.primary_feedback_at = snapshot.now
+    runtime.ownership[target.registry_identity] = OwnershipState(
+        target.registry_identity,
+        Ownership.OWNED,
+        DataReadiness.DEGRADED_READY,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations[target.registry_identity] = 1
+
+    class Persistence:
+        async def async_update_heat_guards(self, _serialized: str) -> bool:
+            return True
+
+    class Broker:
+        def __init__(self) -> None:
+            self.intents: list[Any] = []
+
+        async def async_submit(self, intent: Any, *, now: datetime) -> CommandOutcome:
+            self.intents.append(intent)
+            return CommandOutcome(
+                "updated",
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "dispatched",
+            )
+
+    broker = Broker()
+    runtime.persistence = cast(Any, Persistence())
+    runtime.broker = cast(Any, broker)
+    await runtime._async_apply_calculation(stale)
+    assert len(broker.intents) == 1
+    assert broker.intents[0].temperature_ha == target.result.normalized.normalized_ha
+    assert runtime.heat_guards[target.registry_identity].phase.value == "idle"
+    assert "heat_guard:" + target.registry_identity not in runtime.timers
+
+
+async def test_unavailable_primary_with_existing_heat_demand_ramps_to_fallback(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": 26.0,
+            "fallback_heating_c": 18.0,
+        }
+    )
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            19.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    hass.states.async_set(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+            "temperature": 22.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class Persistence:
+        async def async_update_heat_guards(self, _serialized: str) -> bool:
+            return True
+
+    class Broker:
+        def __init__(self) -> None:
+            self.intents: list[Any] = []
+
+        async def async_submit(self, intent: Any, *, now: datetime) -> CommandOutcome:
+            self.intents.append(intent)
+            return CommandOutcome(
+                "guarded",
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "dispatched",
+            )
+
+    broker = Broker()
+    runtime.persistence = cast(Any, Persistence())
+    runtime.broker = cast(Any, broker)
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.INVALID,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    target = runtime_module.TargetCalculation(
+        "target-1",
+        "registry-1",
+        "climate.target",
+        runtime_module.capability_from_state(hass.states.get("climate.target")),
+        None,
+        None,
+        "primary_temperature_invalid",
+    )
+    assert await runtime._async_guard_invalid_primary(target, now) == "dispatched"
+    assert broker.intents[-1].safety_deescalation
+    guard = runtime.heat_guards["registry-1"]
+    assert guard.phase.value == "ramp"
+    runtime.heat_guards["registry-1"] = replace(guard, ramp_at=now - timedelta(minutes=10))
+    assert await runtime._async_guard_invalid_primary(target, now) == "dispatched"
+    assert broker.intents[-1].temperature_ha < 22.0
+    runtime.heat_guards["registry-1"] = replace(
+        runtime.heat_guards["registry-1"], ramp_at=now - timedelta(minutes=30)
+    )
+    assert await runtime._async_guard_invalid_primary(target, now) == "dispatched"
+    assert broker.intents[-1].temperature_ha == 18.0
+    assert runtime.heat_guards["registry-1"].phase.value == "exhausted"
+
+
+async def test_invalid_primary_ramps_range_heat_without_increasing_cooling(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 15.0,
+            "maximum_control_temperature": 30.0,
+            "fallback_heating_c": 18.0,
+            "fallback_cooling_c": 27.0,
+        }
+    )
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            19.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    hass.states.async_set(
+        "climate.target",
+        "heat_cool",
+        {
+            "hvac_modes": ["off", "heat_cool"],
+            "supported_features": 2,
+            "min_temp": 5.0,
+            "max_temp": 35.0,
+            "target_temp_step": 0.5,
+            "target_temp_low": 22.0,
+            "target_temp_high": 26.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class Persistence:
+        async def async_update_heat_guards(self, _serialized: str) -> bool:
+            return True
+
+    class Broker:
+        def __init__(self) -> None:
+            self.intents: list[Any] = []
+
+        async def async_submit(self, intent: Any, *, now: datetime) -> CommandOutcome:
+            self.intents.append(intent)
+            return CommandOutcome(
+                "range-ramp",
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "dispatched",
+            )
+
+    broker = Broker()
+    runtime.persistence = cast(Any, Persistence())
+    runtime.broker = cast(Any, broker)
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.INVALID,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    target = runtime_module.TargetCalculation(
+        "target-1",
+        "registry-1",
+        "climate.target",
+        runtime_module.capability_from_state(hass.states.get("climate.target")),
+        None,
+        None,
+        "primary_temperature_invalid",
+    )
+    assert await runtime._async_guard_invalid_primary(target, now) == "dispatched"
+    assert broker.intents[-1].target_temp_low_ha == 22.0
+    runtime.heat_guards["registry-1"] = replace(
+        runtime.heat_guards["registry-1"], ramp_at=now - timedelta(minutes=30)
+    )
+    assert await runtime._async_guard_invalid_primary(target, now) == "dispatched"
+    assert broker.intents[-1].target_temp_low_ha == 18.0
+    assert broker.intents[-1].target_temp_high_ha == 26.0
+
+
+async def test_invalid_primary_guard_refuses_unsafe_or_unpersisted_actions(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    now = dt_util.utcnow()
+    empty = runtime_module.TargetCalculation(
+        "target-1",
+        "registry-1",
+        "climate.target",
+        runtime_module.capability_from_state(None),
+        None,
+        None,
+        "primary_temperature_invalid",
+    )
+    assert await runtime._async_guard_invalid_primary(empty, now) is None
+    runtime.broker = cast(Any, SimpleNamespace())
+    assert await runtime._async_guard_invalid_primary(empty, now) is None
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            20.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    assert await runtime._async_guard_invalid_primary(empty, now) is None
+    hass.states.async_set(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+            "temperature": 20.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+    target = replace(
+        empty, capability=runtime_module.capability_from_state(hass.states.get("climate.target"))
+    )
+    assert await runtime._async_guard_invalid_primary(target, now) is None
+    hass.states.async_set(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+            "temperature": 22.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+    assert (
+        await runtime._async_guard_invalid_primary(target, now) == "stale_heat_guard_storage_fault"
+    )
+    hass.states.async_set(
+        "climate.target",
+        "off",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "temperature": 22.0,
+        },
+    )
+    assert await runtime._async_guard_invalid_primary(target, now) is None
+
+
+async def test_invalid_primary_safety_uses_real_broker_and_lease(
+    hass: HomeAssistant,
+) -> None:
+    calls: list[ServiceCall] = []
+
+    async def capture(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("climate", "set_temperature", capture)
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "fallback_heating_c": 18.0,
+        }
+    )
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            19.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    hass.states.async_set(
+        "climate.target",
+        "heat",
+        {
+            "hvac_modes": ["off", "heat"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+            "temperature": 22.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class Persistence:
+        async def async_update_heat_guards(self, _guards: str) -> bool:
+            return True
+
+        async def async_persist_pending(self, _command: Any) -> bool:
+            return True
+
+        async def async_mark_dispatched(self, _command: Any) -> bool:
+            return True
+
+        async def async_resolve(self, _command: Any, _reason: str) -> bool:
+            return True
+
+    persistence = Persistence()
+    runtime.persistence = cast(Any, persistence)
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.INVALID,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    runtime_module.get_lease_registry(hass).acquire("registry-1", runtime.entry.entry_id)
+    runtime.broker = CommandBroker(
+        service=HomeAssistantClimateService(hass),
+        persistence=cast(Any, persistence),
+        preflight=runtime._broker_preflight,
+        command_id_factory=lambda: "stale-guard-command",
+        context_factory=runtime._context_token,
+    )
+    target = runtime_module.TargetCalculation(
+        "target-1",
+        "registry-1",
+        "climate.target",
+        runtime_module.capability_from_state(hass.states.get("climate.target")),
+        None,
+        None,
+        "primary_temperature_invalid",
+    )
+    outcome = await runtime._async_guard_invalid_primary(target, now)
+    for cancel in runtime.timers.values():
+        cancel()
+    assert outcome == "awaiting_acknowledgement"
+    assert len(calls) == 1
+    assert calls[0].data["temperature"] == 22.0
+    assert calls[0].data["entity_id"] == "climate.target"
+    assert runtime.heat_guards["registry-1"].phase.value == "ramp"
+
+
 def test_persisted_last_valid_outputs_are_used_after_runtime_reload() -> None:
     scenario = load_scenarios()[0]
     snapshot = _captured(scenario)
@@ -418,7 +952,7 @@ def test_persisted_last_valid_outputs_are_used_after_runtime_reload() -> None:
     assert restored["thermal_sensation"] == prior_values["thermal_sensation"]
     assert restored["effective_targets"] == prior_values["effective_targets"]
     assert restored["data_quality"] == "stale"
-    assert restored["input_status"] == "primary_temperature_stale"
+    assert restored["input_status"] == "primary_rh_stale"
 
 
 async def test_changed_last_valid_output_is_persisted_once() -> None:
@@ -531,24 +1065,11 @@ async def test_stale_safety_uses_configured_fallback_without_hvac_command(
 
     await runtime._async_apply_stale_safety()
 
-    assert len(broker.intents) == 1
-    intent = broker.intents[0]
-    assert intent.temperature_ha == 17.5
-    assert intent.safety_deescalation is True
-    assert intent.explicit_transition is True
-    assert runtime.values["effective_targets"] == {"target-1": {"temperature": 17.5}}
-    assert runtime.values["effective_target_details"]["target-1"] == {
-        "mode": "stale_safety",
-        "reason": "primary_temperature_stale",
-        "fallback": True,
-        "stale": True,
-        "safety_deescalation": True,
-    }
-    assert runtime.values["control_status"] == "stale_safety"
-    assert runtime.values["control_eligible"] is False
+    # Heating is now managed by the feedback guard, never the legacy cooling path.
+    assert broker.intents == []
 
     await runtime._async_apply_stale_safety()
-    assert len(broker.intents) == 1
+    assert broker.intents == []
 
 
 async def test_stale_safety_runs_through_real_broker_to_exact_service_payload(
@@ -626,11 +1147,7 @@ async def test_stale_safety_runs_through_real_broker_to_exact_service_payload(
 
     await runtime._async_apply_stale_safety()
 
-    assert [dict(call.data) for call in calls] == [
-        {"entity_id": "climate.target", "temperature": 18.0}
-    ]
-    assert all("hvac_mode" not in call.data for call in calls)
-    assert runtime.values["control_status"] == "stale_safety"
+    assert calls == []
     for cancel in runtime.timers.values():
         cancel()
 
@@ -689,9 +1206,145 @@ async def test_stale_safety_reports_unready_and_unneeded_targets(
 
     assert runtime.values["command_outcomes"] == {
         "unready": "stale_safety_target_not_ready",
-        "settled": "stale_safety_not_required",
     }
     assert runtime.values["stale_safety_active"] is False
+
+
+async def test_stale_cooling_safety_uses_broker_and_never_lowers_cooling_target(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update({"fallback_cooling_c": 27.0, "maximum_control_temperature": 30.0})
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.INVALID,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            29.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    hass.states.async_set(
+        "climate.target",
+        "cool",
+        {
+            "hvac_modes": ["off", "cool"],
+            "supported_features": 1,
+            "min_temp": 5.0,
+            "max_temp": 35.0,
+            "target_temp_step": 0.5,
+            "temperature": 23.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class Broker:
+        def __init__(self) -> None:
+            self.intents: list[Any] = []
+
+        async def async_submit(self, intent: Any, *, now: datetime) -> CommandOutcome:
+            self.intents.append(intent)
+            return CommandOutcome(
+                "cooling-safety",
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "dispatched",
+            )
+
+    broker = Broker()
+    runtime.broker = cast(Any, broker)
+    await runtime._async_apply_stale_safety()
+    assert len(broker.intents) == 1
+    assert broker.intents[0].temperature_ha >= 27.0
+    assert broker.intents[0].safety_deescalation
+    assert runtime.stale_safety_applied == {"registry-1"}
+    await runtime._async_apply_stale_safety()
+    assert len(broker.intents) == 1
+
+
+async def test_stale_range_cooling_safety_preserves_heat_endpoint(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 15.0,
+            "maximum_control_temperature": 30.0,
+            "fallback_heating_c": 18.0,
+            "fallback_cooling_c": 27.0,
+        }
+    )
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1",
+        Ownership.OWNED,
+        DataReadiness.INVALID,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    runtime.capability_generations["registry-1"] = 1
+    now = dt_util.utcnow()
+    runtime.source_states["primary"] = SourceState(
+        last_accepted=Observation(
+            "registry:room",
+            29.0,
+            "°C",
+            now - timedelta(hours=2),
+            now - timedelta(hours=2),
+            Provenance.MEASURED,
+            ObservationValidity.VALID,
+        )
+    )
+    hass.states.async_set(
+        "climate.target",
+        "heat_cool",
+        {
+            "hvac_modes": ["off", "heat_cool"],
+            "supported_features": 2,
+            "min_temp": 5.0,
+            "max_temp": 35.0,
+            "target_temp_step": 0.5,
+            "target_temp_low": 20.0,
+            "target_temp_high": 24.0,
+            "unit_of_measurement": "°C",
+        },
+    )
+
+    class Broker:
+        def __init__(self) -> None:
+            self.intents: list[Any] = []
+
+        async def async_submit(self, intent: Any, *, now: datetime) -> CommandOutcome:
+            self.intents.append(intent)
+            return CommandOutcome(
+                "range-safety",
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "dispatched",
+            )
+
+    broker = Broker()
+    runtime.broker = cast(Any, broker)
+    await runtime._async_apply_stale_safety()
+    assert len(broker.intents) == 1
+    assert broker.intents[0].target_temp_low_ha <= 20.0
+    assert broker.intents[0].target_temp_high_ha >= 27.0
+    assert broker.intents[0].safety_deescalation
+    assert runtime.stale_safety_applied == {"registry-1"}
+    await runtime._async_apply_stale_safety()
+    assert len(broker.intents) == 1
 
 
 async def test_stale_safety_requires_control_broker_and_old_accepted_value(
@@ -821,6 +1474,75 @@ def test_stale_safety_normalizes_cooling_and_range_away_from_demand(
     )
 
 
+def test_heat_guard_on_range_preserves_existing_cooling_endpoint(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": 28.0,
+            "fallback_heating_c": 18.0,
+            "fallback_cooling_c": 27.0,
+        }
+    )
+    capability = ClimateCapabilitySnapshot(
+        "heat_cool",
+        ("off", "heat_cool"),
+        2,
+        5.0,
+        30.0,
+        0.5,
+        TemperatureUnit.CELSIUS,
+        None,
+        21.0,
+        24.0,
+    )
+    mapping = runtime_module.resolve_capability(capability)
+    assert not isinstance(mapping, runtime_module.ClimateFailure)
+    normal = runtime_module.normalize_range_target(
+        requested_heating_room_c=22.0,
+        requested_cooling_room_c=25.0,
+        snapshot=capability,
+        options=runtime_module.GridOptions(16.0, 28.0, 0.0),
+    )
+    assert isinstance(normal, NormalizedRangeTarget)
+    target = runtime_module.TargetCalculation(
+        "target-1", "registry-1", "climate.target", capability, mapping, None, None
+    )
+    now = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    runtime.primary_feedback_at = now - timedelta(hours=8)
+    result = replace(
+        calculate_runtime_snapshot(_captured(load_scenarios()[0])),
+        primary_value_c=18.0,
+        primary_temperature_stale=True,
+    )
+    guarded = runtime._guard_heating_target(target, normal, mapping, result, now)
+    assert guarded is not None
+    assert isinstance(guarded[0], NormalizedRangeTarget)
+    assert guarded[0].heating.normalized_room_c == normal.heating.normalized_room_c
+    assert guarded[0].cooling.normalized_room_c == 24.0
+    runtime.heat_guards["registry-1"] = replace(
+        runtime.heat_guards["registry-1"],
+        phase=runtime_module.HeatGuardPhase.RAMP,
+        ramp_at=now - timedelta(minutes=10),
+        ramp_start_c=22.0,
+    )
+    withdrawn = runtime._guard_heating_target(target, normal, mapping, result, now)
+    assert withdrawn is not None
+    assert isinstance(withdrawn[0], NormalizedRangeTarget)
+    assert withdrawn[0].heating.normalized_room_c < 22.0
+    assert withdrawn[0].cooling.normalized_room_c == 24.0
+    runtime.stale_safety_applied.add("registry-1")
+    with_cooling_safety = runtime._guard_heating_target(target, normal, mapping, result, now)
+    assert with_cooling_safety is not None
+    assert isinstance(with_cooling_safety[0], NormalizedRangeTarget)
+    assert with_cooling_safety[0].cooling.normalized_room_c >= 27.0
+    for cancel in runtime.timers.values():
+        cancel()
+
+
 def test_stale_safety_timer_arms_cancels_and_clears_after_valid_recovery(
     hass: HomeAssistant,
 ) -> None:
@@ -837,6 +1559,16 @@ def test_stale_safety_timer_arms_cancels_and_clears_after_valid_recovery(
     runtime = _runtime()
     runtime.hass = hass
     runtime.control_enabled = True
+    hass.states.async_set(
+        "climate.target",
+        "cool",
+        {
+            "hvac_modes": ["off", "cool"],
+            "supported_features": 1,
+            "temperature": 22.0,
+            "unit_of_measurement": "°C",
+        },
+    )
 
     runtime._schedule_stale_safety(stale)
     assert "stale_safety" in runtime.timers
@@ -2084,10 +2816,128 @@ async def test_climate_can_be_primary_source_and_target_on_the_same_event(
 
     runtime._handle_state_event(cast(Any, event))
     await hass.async_block_till_done()
-
     assert runtime.input_generation == generation + 1
     assert runtime.debounce_cancel is not None
     runtime.debounce_cancel()
+
+
+def test_primary_report_filter_distinguishes_real_feedback_from_target_ack(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.data["primary_temperature"] = "climate.target"
+    before = datetime(2026, 9, 15, 10, tzinfo=UTC)
+    later = before + timedelta(minutes=1)
+    baseline = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 19.0},
+        last_reported=before,
+    )
+    same_reading = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 19.0},
+        last_reported=later,
+    )
+    assert not runtime._record_primary_feedback("sensor.other", baseline, same_reading)
+    assert not runtime._record_primary_feedback("climate.target", baseline, None)
+    assert not runtime._record_primary_feedback(
+        "climate.target",
+        baseline,
+        State("climate.target", "unavailable", last_reported=later),
+    )
+    assert not runtime._record_primary_feedback(
+        "climate.target",
+        baseline,
+        State("climate.target", "heat", {"current_temperature": "invalid"}, last_reported=later),
+    )
+    runtime.primary_feedback_at = before
+    assert runtime._record_primary_feedback("climate.target", baseline, same_reading)
+    assert runtime.primary_feedback_at == later
+    assert not runtime._record_primary_feedback("climate.target", baseline, same_reading)
+    target_only = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 21.0},
+        last_reported=later + timedelta(minutes=1),
+    )
+    assert not runtime._record_primary_feedback("climate.target", baseline, target_only)
+    assert runtime.primary_feedback_at == later
+    runtime.persistence = cast(
+        Any,
+        SimpleNamespace(
+            state=SimpleNamespace(
+                actuators=(SimpleNamespace(last_command_context_id="own-context"),)
+            )
+        ),
+    )
+    own_command_report = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 19.0},
+        last_reported=later + timedelta(minutes=2),
+        context=Context(id="own-context"),
+    )
+    assert not runtime._record_primary_feedback("climate.target", baseline, own_command_report)
+    assert runtime.primary_feedback_at == later
+    runtime.persistence = None
+    runtime.broker = cast(Any, SimpleNamespace(state_counts=lambda _identity: (1, 0)))
+    assert not runtime._record_primary_feedback(
+        "climate.target",
+        baseline,
+        State(
+            "climate.target",
+            "heat",
+            {
+                "supported_features": 1,
+                "current_temperature": 20.0,
+                "temperature": 19.0,
+            },
+            last_reported=later + timedelta(minutes=3),
+        ),
+    )
+    assert runtime.primary_feedback_at == later
+
+
+def test_climate_target_ack_does_not_renew_primary_temperature_feedback(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.data["primary_temperature"] = "climate.target"
+    before = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    after = before + timedelta(minutes=1)
+    old = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 19.0},
+        last_changed=before,
+        last_updated=before,
+        last_reported=before,
+    )
+    target_ack = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 21.0},
+        last_changed=before,
+        last_updated=after,
+        last_reported=after,
+    )
+    runtime.primary_feedback_at = before
+    assert not runtime._record_primary_feedback("climate.target", old, target_ack)
+    assert runtime.primary_feedback_at == before
+    independent_report = State(
+        "climate.target",
+        "heat",
+        {"supported_features": 1, "current_temperature": 20.0, "temperature": 19.0},
+        last_changed=before,
+        last_updated=before,
+        last_reported=after,
+    )
+    assert runtime._record_primary_feedback("climate.target", old, independent_report)
+    assert runtime.primary_feedback_at == after
 
 
 async def test_broker_timer_callbacks_cover_timeout_and_queue_paths(
@@ -2209,10 +3059,21 @@ async def test_startup_restores_persisted_display_values_before_stale_calculatio
             return True
 
     monkeypatch.setattr(runtime_module, "ZoneCommandPersistence", Persistence)
+    hass.states.async_set("sensor.room", "20.0", {"unit_of_measurement": "°C"})
     entry = MockConfigEntry(
         domain="athb",
         entry_id="startup-restored-output",
-        data={"zone_uuid": "startup-restored-output", "targets": []},
+        data={
+            "zone_uuid": "startup-restored-output",
+            "primary_temperature": "sensor.room",
+            "targets": [
+                {
+                    "target_uuid": "target-1",
+                    "registry_identity": "registry-1",
+                    "entity_id": "climate.target",
+                }
+            ],
+        },
         options={"control_enabled": False},
     )
     entry.add_to_hass(hass)
@@ -2232,7 +3093,77 @@ async def test_startup_restores_persisted_display_values_before_stale_calculatio
     assert runtime.values["thermal_sensation"] == -0.2
     assert runtime.values["data_quality"] == "stale"
     assert runtime.last_valid_at == datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
+    assert runtime.primary_feedback_at == runtime.last_valid_at
+    assert runtime.heat_guards["registry-1"].phase.value == "exhausted"
 
+    await runtime.async_unload()
+
+
+@pytest.mark.parametrize(
+    ("stored_guards", "expected_phase"),
+    [
+        (
+            '{"registry-1":{"phase":"stale_start","started_at":"2026-09-13T10:00:00+00:00","report_at":"2026-09-13T09:00:00+00:00","ramp_at":null,"ramp_start_c":null,"evidence_at":"2026-09-13T09:00:00+00:00"}}',
+            "stale_start",
+        ),
+        ('{"registry-1":{"phase":"stale_start","started_at":"not-a-date"}}', "exhausted"),
+        (
+            '{"registry-1":{"phase":"stale_start","started_at":"2026-09-13T10:00:00","report_at":"2026-09-13T09:00:00+00:00"}}',
+            "exhausted",
+        ),
+    ],
+)
+async def test_startup_restores_heat_guard_without_new_trial(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    stored_guards: str,
+    expected_phase: str,
+) -> None:
+    class Persistence:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self.state = SimpleNamespace(
+                boost_expiry_utc=None,
+                rapid_boost_reached=False,
+                actuators=(),
+                heat_guards_json=stored_guards,
+                last_valid_values_json=None,
+                last_valid_at=None,
+            )
+            self.requires_resume = False
+
+        async def async_start(self) -> bool:
+            return True
+
+        async def async_mark_clean(self, *, now: datetime) -> bool:
+            return True
+
+    monkeypatch.setattr(runtime_module, "ZoneCommandPersistence", Persistence)
+    hass.states.async_set("sensor.room", "20.0", {"unit_of_measurement": "°C"})
+    entry = MockConfigEntry(
+        domain="athb",
+        entry_id=f"heat-guard-{expected_phase}",
+        data={
+            "zone_uuid": f"heat-guard-{expected_phase}",
+            "primary_temperature": "sensor.room",
+            "targets": [
+                {
+                    "target_uuid": "target-1",
+                    "registry_identity": "registry-1",
+                    "entity_id": "climate.target",
+                }
+            ],
+        },
+        options={"control_enabled": False},
+    )
+    entry.add_to_hass(hass)
+    runtime = ZoneRuntime(hass, cast(Any, entry), entry.entry_id, "balanced", "off", False)
+    await runtime.async_start()
+    assert runtime.heat_guards["registry-1"].phase.value == expected_phase
+    if expected_phase == "stale_start":
+        assert runtime.primary_feedback_at == datetime(2026, 9, 13, 9, tzinfo=UTC)
+        assert runtime.heat_guards["registry-1"].started_at == datetime(2026, 9, 13, 10, tzinfo=UTC)
+    assert runtime.controller is not None
+    await runtime.controller.async_wait_idle()
     await runtime.async_unload()
 
 

@@ -146,6 +146,8 @@ class AthbSensor(AthbEntity, RestoreSensor):
             "last_valid_at": self.runtime.values.get("last_valid_at"),
             "data_age_minutes": self.runtime.values.get("data_age_minutes"),
             "stale_safety_active": self.runtime.values.get("stale_safety_active", False),
+            "heat_guard": self.runtime.values.get("heat_guard_details", {}),
+            "command_outcomes": self.runtime.values.get("command_outcomes", {}),
         }
         if context := ROOT_SENSOR_CONTEXT.get(self.description.key):
             root_name, range_role = context

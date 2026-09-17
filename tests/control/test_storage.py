@@ -87,6 +87,29 @@ def test_control_state_round_trip_is_canonical_and_versioned() -> None:
     assert serialize_control_state(loaded.state) == serialized
 
 
+def test_heat_guard_deadlines_round_trip_without_breaking_older_store() -> None:
+    original = serialize_control_state(_state())
+    legacy = json.loads(original)
+    legacy.pop("heat_guards_json")
+    assert load_control_state(json.dumps(legacy)).state is not None
+    guards = json.dumps(
+        {
+            "registry-1": {
+                "phase": "stale_start",
+                "started_at": "2026-09-11T12:00:00+00:00",
+                "report_at": "2026-09-11T04:00:00+00:00",
+                "ramp_at": None,
+                "ramp_start_c": None,
+                "evidence_at": "2026-09-11T04:00:00+00:00",
+            }
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    state = replace(_state(), heat_guards_json=guards)
+    assert load_control_state(serialize_control_state(state)).state == state
+
+
 def test_last_valid_display_output_round_trips_and_old_store_remains_compatible() -> None:
     values_json = json.dumps(
         {

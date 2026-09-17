@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import Callable, Coroutine
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any, cast
@@ -115,11 +115,17 @@ from .core.policy import (
     resolve_occupancy_profile,
 )
 from .core.sources import SourceKind, SourceState, convert_source_value
+from .core.stale_heating import (
+    HeatGuard,
+    HeatGuardPhase,
+    advance_heat_guard,
+    ramp_heating_target,
+)
 from .core.trace import DecisionTraceRing
 from .repairs import RepairManager, TransitionLogger
 
 _LOGGER = logging.getLogger(__name__)
-STALE_SAFETY_DELAY = timedelta(hours=1)
+STALE_SAFETY_DELAY = timedelta(hours=1)  # Cooling safety remains on the established path.
 _HELD_VALUE_KEYS = LAST_VALID_OUTPUT_KEYS
 
 
@@ -173,6 +179,8 @@ class ZoneRuntime:
     last_meaningful_source_values: dict[str, float | None] = field(default_factory=dict)
     last_source_availability: dict[str, bool] = field(default_factory=dict)
     suppressed_source_reports: int = 0
+    primary_feedback_at: datetime | None = None
+    heat_guards: dict[str, HeatGuard] = field(default_factory=dict)
 
     async def async_start(self) -> None:
         """Acquire recovery state, shared history, listeners and initial calculation."""
@@ -205,6 +213,44 @@ class ZoneRuntime:
                     self.last_valid_values = restored
                     self.last_valid_at = datetime.fromisoformat(stored_at)
                     self.last_valid_persistence_payload = stored_values
+            stored_guards = getattr(self.persistence.state, "heat_guards_json", None)
+            if stored_guards is not None:
+                try:
+                    for identity, raw in json.loads(stored_guards).items():
+                        if identity not in identities or not isinstance(raw, dict):
+                            continue
+                        times = {
+                            key: datetime.fromisoformat(raw[key]) if raw.get(key) else None
+                            for key in ("started_at", "report_at", "ramp_at", "evidence_at")
+                        }
+                        if any(
+                            value is not None and value.tzinfo is None for value in times.values()
+                        ):
+                            raise ValueError("naive heat guard deadline")
+                        self.heat_guards[identity] = HeatGuard(
+                            HeatGuardPhase(raw["phase"]),
+                            times["started_at"],
+                            times["report_at"],
+                            times["ramp_at"],
+                            float(raw["ramp_start_c"])
+                            if raw.get("ramp_start_c") is not None
+                            else None,
+                            times["evidence_at"],
+                        )
+                except TypeError, ValueError, KeyError:
+                    self.heat_guards = {
+                        identity: HeatGuard(
+                            HeatGuardPhase.EXHAUSTED, evidence_at=self.last_valid_at
+                        )
+                        for identity in identities
+                    }
+            elif self.last_valid_at is not None:
+                # Old stores have no durable trial deadline. Never grant a new
+                # stale-start trial merely because an entry was reloaded.
+                self.heat_guards = {
+                    identity: HeatGuard(HeatGuardPhase.EXHAUSTED, evidence_at=self.last_valid_at)
+                    for identity in identities
+                }
         if self.boost_mode != "off" and self.persistence.state is not None:
             stored_expiry = self.persistence.state.boost_expiry_utc
             expiry = datetime.fromisoformat(stored_expiry) if stored_expiry is not None else None
@@ -290,6 +336,29 @@ class ZoneRuntime:
             )
         )
         self._initialize_target_fingerprints()
+        primary_state = self.hass.states.get(str(self.entry.data.get("primary_temperature", "")))
+        if (
+            primary_state is not None
+            and self._source_numeric_value(
+                primary_state.entity_id, primary_state, SourceKind.PRIMARY_AIR
+            )
+            is not None
+        ):
+            observed = getattr(primary_state, "last_reported", None) or primary_state.last_updated
+            persisted_evidence = [
+                guard.evidence_at
+                for guard in self.heat_guards.values()
+                if guard.evidence_at is not None
+            ]
+            # A state restored during HA startup is not proof of a new physical
+            # reading. Only a report observed after listeners start can advance it.
+            self.primary_feedback_at = (
+                max(persisted_evidence)
+                if persisted_evidence
+                else min(observed, self.last_valid_at)
+                if self.last_valid_at is not None
+                else observed
+            )
         self.async_request_snapshot()
 
     async def _async_start_history(self) -> None:
@@ -369,6 +438,8 @@ class ZoneRuntime:
         if target is not None:
             self._create_task(self._async_handle_target_state(target, old_state, new_state))
         source_event = entity_id in self._reported_source_entity_ids()
+        if source_event:
+            self._record_primary_feedback(entity_id, old_state, new_state)
         material_source_event = source_event and self._source_report_is_material(
             entity_id, new_state
         )
@@ -384,10 +455,50 @@ class ZoneRuntime:
 
         entity_id = str(event.data.get("entity_id", ""))
         new_state = cast(State | None, event.data.get("new_state"))
-        if self._source_report_is_material(entity_id, new_state):
+        primary_report = self._record_primary_feedback(entity_id, None, new_state)
+        if self._source_report_is_material(entity_id, new_state) or primary_report:
             self.input_generation += 1
             self._update_critical_delta(entity_id, new_state)
             self.schedule_environmental_snapshot()
+
+    def _record_primary_feedback(
+        self, entity_id: str, old_state: State | None, state: State | None
+    ) -> bool:
+        """Count real numeric reports, excluding our climate-target acknowledgements."""
+
+        if entity_id != str(self.entry.data.get("primary_temperature", "")) or state is None:
+            return False
+        if state.state in {"unknown", "unavailable"}:
+            return False
+        value = self._source_numeric_value(entity_id, state, SourceKind.PRIMARY_AIR)
+        if value is None:
+            return False
+        if any(
+            target.get("entity_id") == entity_id for target in self.entry.data.get("targets", ())
+        ):
+            if self.persistence is not None and self.persistence.state is not None:
+                own_contexts = {
+                    actuator.last_command_context_id
+                    for actuator in self.persistence.state.actuators
+                    if actuator.last_command_context_id is not None
+                }
+                if state.context.id in own_contexts or state.context.parent_id in own_contexts:
+                    return False
+            if old_state is not None and self._fingerprint(
+                capability_from_state(old_state)
+            ) != self._fingerprint(capability_from_state(state)):
+                return False
+            if self.broker is not None and any(
+                self.broker.state_counts(str(target["registry_identity"]))[0]
+                for target in self.entry.data.get("targets", ())
+                if target.get("entity_id") == entity_id
+            ):
+                return False
+        reported = getattr(state, "last_reported", None) or state.last_updated
+        if self.primary_feedback_at is not None and reported <= self.primary_feedback_at:
+            return False
+        self.primary_feedback_at = reported
+        return True
 
     def _source_report_is_material(self, entity_id: str, state: State | None) -> bool:
         """Coalesce bounded input noise while retaining availability and cumulative changes."""
@@ -929,11 +1040,16 @@ class ZoneRuntime:
         if state is None:
             return None
         registry_entry = er.async_get(self.hass).async_get(state.entity_id)
-        return snapshot_primary_temperature(
+        captured = snapshot_primary_temperature(
             state,
             climate_unit=str(self.hass.config.units.temperature_unit),
             registry_identity=(registry_entry.id if registry_entry is not None else None),
             source_generation=self.source_generation,
+        )
+        return (
+            replace(captured, observed_at=self.primary_feedback_at)
+            if captured is not None and self.primary_feedback_at is not None
+            else captured
         )
 
     def _snapshot_mold_indicator(self, state: State | None) -> StateValue | None:
@@ -1008,6 +1124,7 @@ class ZoneRuntime:
             },
         )
         recovery_reassertions = self._reconcile_targets(result)
+        # Preserve the established cooling safety while heat uses its own guard.
         self._schedule_stale_safety(result)
         values = {**self.values, **self._observable_values(result)}
         values["calculation_generation"] = generation
@@ -1072,7 +1189,8 @@ class ZoneRuntime:
         primary = dict(result.source_states).get("primary")
         accepted = primary.last_accepted if primary is not None else None
         primary_fresh = (
-            result.primary_value_c is not None
+            not result.primary_temperature_stale
+            and result.primary_value_c is not None
             and primary is not None
             and not primary.recovering
             and accepted is not None
@@ -1143,9 +1261,12 @@ class ZoneRuntime:
             "current"
             if outputs_current
             else "stale"
-            if self.last_valid_values and result.hold_condition is not None
+            if result.primary_temperature_stale
+            or (self.last_valid_values and result.hold_condition is not None)
             else "unavailable"
         )
+        if result.primary_temperature_stale and result.hold_condition is None:
+            projected["input_status"] = "primary_temperature_stale_projection"
         projected["last_valid_at"] = (
             self.last_valid_at.isoformat() if self.last_valid_at is not None else None
         )
@@ -1192,10 +1313,7 @@ class ZoneRuntime:
                 cancel()
             self.stale_safety_applied.clear()
             return
-        if not (
-            result.hold_condition is not None
-            and result.hold_condition.startswith("primary_temperature_")
-        ):
+        if not result.primary_temperature_stale:
             if (cancel := self.timers.pop("stale_safety", None)) is not None:
                 cancel()
             if any(
@@ -1209,7 +1327,15 @@ class ZoneRuntime:
             return
         _value, observed_at = reference
         pending = {
-            str(target["registry_identity"]) for target in self.entry.data.get("targets", ())
+            str(target["registry_identity"])
+            for target in self.entry.data.get("targets", ())
+            if isinstance(
+                mapping := resolve_capability(
+                    capability_from_state(self.hass.states.get(str(target["entity_id"])))
+                ),
+                CapabilityMapping,
+            )
+            and mapping.direction in {ActuationDirection.COOLING_ONLY, ActuationDirection.RANGED}
         } - self.stale_safety_applied
         if not pending:
             return
@@ -1245,6 +1371,14 @@ class ZoneRuntime:
             if not isinstance(mapping, CapabilityMapping):
                 outcomes[str(configured["target_uuid"])] = "stale_safety_target_not_ready"
                 continue
+            if mapping.direction is ActuationDirection.HEATING_ONLY:
+                continue
+            if mapping.direction is ActuationDirection.RANGED:
+                current_high_ha = capability.target_temp_high_ha
+                if current_high_ha is None or last_primary_c <= ha_to_celsius(
+                    current_high_ha, capability.temperature_unit
+                ):
+                    continue
             normalized = self._stale_safety_target(
                 str(configured["target_uuid"]),
                 capability,
@@ -1415,6 +1549,8 @@ class ZoneRuntime:
         self,
         target_uuid: str,
         normalized: NormalizedScalarTarget | NormalizedRangeTarget,
+        *,
+        mode: str = "stale_safety",
     ) -> None:
         effective = deepcopy(self.values.get("effective_targets", {}))
         details = deepcopy(self.values.get("effective_target_details", {}))
@@ -1427,9 +1563,9 @@ class ZoneRuntime:
             }
         details[target_uuid] = {
             **details.get(target_uuid, {}),
-            "mode": "stale_safety",
+            "mode": mode,
             "reason": "primary_temperature_stale",
-            "fallback": True,
+            "fallback": mode == "stale_safety",
             "stale": True,
             "safety_deescalation": True,
         }
@@ -1693,24 +1829,70 @@ class ZoneRuntime:
                 or target.suppression_reason is not None
             ):
                 outcomes[target.target_uuid] = target.suppression_reason or "no_executable_target"
+                if result.hold_condition is not None and result.hold_condition.startswith(
+                    "primary_temperature_"
+                ):
+                    safety_outcome = await self._async_guard_invalid_primary(target, now)
+                    if safety_outcome is not None:
+                        outcomes[target.target_uuid] = safety_outcome
                 continue
             if (
                 coordination_reason := self._runtime_coordination_reason(target, result)
             ) is not None:
                 outcomes[target.target_uuid] = coordination_reason
                 continue
+            if (
+                result.primary_temperature_stale
+                and mapping.direction is ActuationDirection.COOLING_ONLY
+            ):
+                outcomes[target.target_uuid] = "stale_cooling_held_for_safety"
+                continue
+            guarded = self._guard_heating_target(
+                target, calculation.normalized, mapping, result, now
+            )
+            if guarded is None:
+                outcomes[target.target_uuid] = "stale_heat_guard_not_ready"
+                continue
+            normalized, guard_changed = guarded
+            if (
+                guard_changed
+                and self.persistence is not None
+                and not await self.persistence.async_update_heat_guards(
+                    self._serialized_heat_guards()
+                )
+            ):
+                outcomes[target.target_uuid] = "stale_heat_guard_storage_fault"
+                continue
             intent = self._intent_from_result(
                 target,
-                calculation.normalized,
+                normalized,
                 mapping,
                 now,
                 explicit_transition=(
-                    result.explicit_transition or target.registry_identity in recovery_reassertions
+                    result.explicit_transition
+                    or target.registry_identity in recovery_reassertions
+                    or self.heat_guards.get(target.registry_identity, HeatGuard()).phase
+                    in {HeatGuardPhase.RAMP, HeatGuardPhase.EXHAUSTED}
                 ),
                 recovery_reassertion=(target.registry_identity in recovery_reassertions),
+                safety_deescalation=self.heat_guards.get(
+                    target.registry_identity, HeatGuard()
+                ).phase
+                in {HeatGuardPhase.RAMP, HeatGuardPhase.EXHAUSTED},
             )
             outcome = await self.broker.async_submit(intent, now=now)
             outcomes[target.target_uuid] = outcome.reason
+            if self.heat_guards.get(target.registry_identity, HeatGuard()).phase in {
+                HeatGuardPhase.RAMP,
+                HeatGuardPhase.EXHAUSTED,
+            } and (
+                outcome.dispatch_status is DispatchStatus.DISPATCHED
+                or outcome.reason in {"command_pending", "command_interval", "target_unchanged"}
+            ):
+                self._publish_stale_safety_target(
+                    target.target_uuid, normalized, mode="heat_feedback_ramp"
+                )
+                self.values["stale_safety_active"] = True
             self._schedule_broker_deadline(
                 target.registry_identity,
                 acknowledgement=outcome.acknowledgement_status
@@ -1733,6 +1915,337 @@ class ZoneRuntime:
                 },
             },
         )
+
+    async def _async_guard_invalid_primary(
+        self, target: TargetCalculation, now: datetime
+    ) -> str | None:
+        """Withdraw an existing heating demand when the source becomes invalid."""
+
+        if self.broker is None:
+            return None
+        reference = self._primary_safety_reference()
+        if reference is None:
+            return None
+        last_primary_c, _observed_at = reference
+        capability = capability_from_state(self.hass.states.get(target.entity_id))
+        mapping = resolve_capability(capability)
+        if (
+            not isinstance(mapping, CapabilityMapping)
+            or mapping.direction is ActuationDirection.COOLING_ONLY
+        ):
+            return None
+        calibration = float(self.entry.options.get(f"calibration_{target.target_uuid}", 0.0))
+        actual_ha = (
+            capability.target_temp_low_ha
+            if mapping.direction is ActuationDirection.RANGED
+            else capability.scalar_target_ha
+        )
+        if actual_ha is None:
+            return None
+        current_c = ha_to_celsius(actual_ha, capability.temperature_unit) - calibration
+        guard = self.heat_guards.get(target.registry_identity, HeatGuard())
+        if guard.phase not in {HeatGuardPhase.RAMP, HeatGuardPhase.EXHAUSTED}:
+            if current_c < last_primary_c + float(
+                self.entry.options.get("stale_heat_demand_margin_c", 0.5)
+            ):
+                return None
+            guard = replace(
+                guard,
+                phase=HeatGuardPhase.RAMP,
+                ramp_at=now,
+                ramp_start_c=current_c,
+            )
+            self.heat_guards[target.registry_identity] = guard
+            if self.persistence is None or not await self.persistence.async_update_heat_guards(
+                self._serialized_heat_guards()
+            ):
+                return "stale_heat_guard_storage_fault"
+        if guard.ramp_at is not None and now >= guard.ramp_at + timedelta(
+            minutes=float(self.entry.options.get("stale_heat_ramp_max_minutes", 30.0))
+        ):
+            guard = replace(guard, phase=HeatGuardPhase.EXHAUSTED)
+            self.heat_guards[target.registry_identity] = guard
+        self._schedule_heat_guard(target.registry_identity, guard, now)
+        fallback_c = float(self.entry.options.get("fallback_heating_c", 18.0))
+        ramp_c = ramp_heating_target(
+            guard,
+            now=now,
+            fallback_c=fallback_c,
+            minutes_per_degree=float(self.entry.options.get("stale_heat_ramp_minutes_per_c", 10.0)),
+            maximum_minutes=float(self.entry.options.get("stale_heat_ramp_max_minutes", 30.0)),
+        )
+        if ramp_c is None:
+            return None
+        grid = GridOptions(
+            float(self.entry.options.get("minimum_control_temperature", 18.0)),
+            float(self.entry.options.get("maximum_control_temperature", 26.0)),
+            calibration,
+            minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+        )
+        normalized: NormalizedRangeTarget | NormalizedScalarTarget | ClimateFailure
+        if mapping.direction is ActuationDirection.RANGED:
+            high_ha = capability.target_temp_high_ha
+            if high_ha is None:
+                return None
+            normalized = normalize_range_target(
+                requested_heating_room_c=min(current_c, ramp_c),
+                requested_cooling_room_c=ha_to_celsius(high_ha, capability.temperature_unit)
+                - calibration,
+                snapshot=capability,
+                options=grid,
+            )
+        else:
+            normalized = normalize_scalar_target(
+                requested_room_c=min(current_c, ramp_c),
+                direction=ActuationDirection.HEATING_ONLY,
+                snapshot=capability,
+                options=grid,
+            )
+        if isinstance(normalized, ClimateFailure):
+            return "stale_heat_guard_target_not_ready"
+        guarded_target = replace(target, capability=capability, mapping=mapping)
+        intent = self._intent_from_result(
+            guarded_target,
+            normalized,
+            mapping,
+            now,
+            explicit_transition=True,
+            safety_deescalation=True,
+        )
+        outcome = await self.broker.async_submit(intent, now=now)
+        if outcome.dispatch_status is DispatchStatus.DISPATCHED or outcome.reason in {
+            "command_pending",
+            "command_interval",
+            "target_unchanged",
+        }:
+            self._publish_stale_safety_target(
+                target.target_uuid, normalized, mode="heat_feedback_ramp"
+            )
+            self.values["stale_safety_active"] = True
+        return outcome.reason
+
+    def _serialized_heat_guards(self) -> str:
+        return json.dumps(
+            {
+                identity: {
+                    "phase": guard.phase.value,
+                    "started_at": guard.started_at.isoformat() if guard.started_at else None,
+                    "report_at": guard.report_at.isoformat() if guard.report_at else None,
+                    "ramp_at": guard.ramp_at.isoformat() if guard.ramp_at else None,
+                    "ramp_start_c": guard.ramp_start_c,
+                    "evidence_at": guard.evidence_at.isoformat() if guard.evidence_at else None,
+                }
+                for identity, guard in self.heat_guards.items()
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    def _guard_heating_target(
+        self,
+        target: TargetCalculation,
+        normalized: NormalizedScalarTarget | NormalizedRangeTarget,
+        mapping: CapabilityMapping,
+        result: RuntimeCalculation,
+        now: datetime,
+    ) -> tuple[NormalizedScalarTarget | NormalizedRangeTarget, bool] | None:
+        if mapping.direction is ActuationDirection.COOLING_ONLY:
+            return normalized, False
+        primary_c = result.primary_value_c
+        if self.primary_feedback_at is None:
+            primary = dict(result.source_states).get("primary")
+            accepted = primary.last_accepted if primary is not None else None
+            if accepted is not None:
+                self.primary_feedback_at = accepted.observed_at
+        if primary_c is None or self.primary_feedback_at is None:
+            return None
+        heating = (
+            normalized.heating if isinstance(normalized, NormalizedRangeTarget) else normalized
+        )
+        demand = heating.normalized_room_c >= primary_c + float(
+            self.entry.options.get("stale_heat_demand_margin_c", 0.5)
+        )
+        identity = target.registry_identity
+        previous = self.heat_guards.get(identity, HeatGuard())
+        guard = advance_heat_guard(
+            previous,
+            now=now,
+            report_at=self.primary_feedback_at,
+            source_stale=result.primary_temperature_stale,
+            demand=demand,
+            active_timeout=timedelta(
+                minutes=float(self.entry.options.get("stale_heat_active_minutes", 30.0))
+            ),
+            stale_start_timeout=timedelta(
+                minutes=float(self.entry.options.get("stale_heat_start_minutes", 60.0))
+            ),
+            ramp_maximum=timedelta(
+                minutes=float(self.entry.options.get("stale_heat_ramp_max_minutes", 30.0))
+            ),
+            start_target_c=heating.normalized_room_c,
+        )
+        self.heat_guards[identity] = guard
+        self._schedule_heat_guard(identity, guard, now)
+        fallback_c = float(self.entry.options.get("fallback_heating_c", 18.0))
+        ramp_c = ramp_heating_target(
+            guard,
+            now=now,
+            fallback_c=fallback_c,
+            minutes_per_degree=float(self.entry.options.get("stale_heat_ramp_minutes_per_c", 10.0)),
+            maximum_minutes=float(self.entry.options.get("stale_heat_ramp_max_minutes", 30.0)),
+        )
+        self.values["heat_guard_phase"] = guard.phase.value
+        self.values["heat_guard_report_at"] = (
+            self.primary_feedback_at.isoformat() if self.primary_feedback_at else None
+        )
+        self.values["heat_guard_ramp_target_c"] = ramp_c
+        if ramp_c is None:
+            if isinstance(normalized, NormalizedRangeTarget) and result.primary_temperature_stale:
+                high_ha = target.capability.target_temp_high_ha
+                if high_ha is None:
+                    return None
+                calibration = float(
+                    self.entry.options.get(f"calibration_{target.target_uuid}", 0.0)
+                )
+                cooling_c = ha_to_celsius(high_ha, target.capability.temperature_unit) - calibration
+                if identity in self.stale_safety_applied:
+                    cooling_c = max(
+                        cooling_c,
+                        float(self.entry.options.get("fallback_cooling_c", 26.0)),
+                    )
+                grid = GridOptions(
+                    float(self.entry.options.get("minimum_control_temperature", 18.0)),
+                    float(self.entry.options.get("maximum_control_temperature", 26.0)),
+                    calibration,
+                    minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+                )
+                held = normalize_range_target(
+                    requested_heating_room_c=normalized.heating.normalized_room_c,
+                    requested_cooling_room_c=cooling_c,
+                    snapshot=target.capability,
+                    options=grid,
+                )
+                return None if isinstance(held, ClimateFailure) else (held, guard != previous)
+            return normalized, guard != previous
+        calibration = float(self.entry.options.get(f"calibration_{target.target_uuid}", 0.0))
+        grid = GridOptions(
+            float(self.entry.options.get("minimum_control_temperature", 18.0)),
+            float(self.entry.options.get("maximum_control_temperature", 26.0)),
+            calibration,
+            minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+        )
+        requested_heat = min(heating.normalized_room_c, ramp_c)
+        actual_ha = (
+            target.capability.target_temp_low_ha
+            if isinstance(normalized, NormalizedRangeTarget)
+            else target.capability.scalar_target_ha
+        )
+        if actual_ha is not None:
+            requested_heat = min(
+                requested_heat,
+                ha_to_celsius(actual_ha, target.capability.temperature_unit) - calibration,
+            )
+        guarded: NormalizedRangeTarget | NormalizedScalarTarget | ClimateFailure
+        if isinstance(normalized, NormalizedRangeTarget):
+            current_high_ha = target.capability.target_temp_high_ha
+            current_cooling_c = (
+                ha_to_celsius(current_high_ha, target.capability.temperature_unit) - calibration
+                if current_high_ha is not None
+                else normalized.cooling.normalized_room_c
+            )
+            requested_cooling = (
+                max(
+                    current_cooling_c,
+                    float(self.entry.options.get("fallback_cooling_c", 26.0)),
+                )
+                if identity in self.stale_safety_applied
+                else current_cooling_c
+                if result.primary_temperature_stale
+                else normalized.cooling.normalized_room_c
+            )
+            guarded = normalize_range_target(
+                requested_heating_room_c=requested_heat,
+                requested_cooling_room_c=requested_cooling,
+                snapshot=target.capability,
+                options=grid,
+            )
+        else:
+            guarded = normalize_scalar_target(
+                requested_room_c=requested_heat,
+                direction=ActuationDirection.HEATING_ONLY,
+                snapshot=target.capability,
+                options=grid,
+            )
+        if isinstance(guarded, ClimateFailure):
+            return None
+        return guarded, guard != previous
+
+    def _schedule_heat_guard(self, identity: str, guard: HeatGuard, now: datetime) -> None:
+        key = f"heat_guard:{identity}"
+        deadline: datetime | None = None
+        if guard.phase is HeatGuardPhase.STALE_START and guard.started_at is not None:
+            deadline = guard.started_at + timedelta(
+                minutes=float(self.entry.options.get("stale_heat_start_minutes", 60.0))
+            )
+        elif guard.phase is HeatGuardPhase.MONITORING:
+            anchor = max(
+                (value for value in (guard.started_at, guard.report_at) if value is not None),
+                default=now,
+            )
+            deadline = anchor + timedelta(
+                minutes=float(self.entry.options.get("stale_heat_active_minutes", 30.0))
+            )
+        elif guard.phase is HeatGuardPhase.RAMP:
+            deadline = now + timedelta(minutes=1)
+        else:
+            if (cancel := self.timers.pop(key, None)) is not None:
+                cancel()
+            self._publish_heat_guard_details(identity, guard, now, None)
+            return
+        self._publish_heat_guard_details(identity, guard, now, deadline)
+        self._replace_timer(
+            key,
+            max(0.0, (deadline - now).total_seconds()),
+            self.async_request_snapshot,
+        )
+
+    def _publish_heat_guard_details(
+        self, identity: str, guard: HeatGuard, now: datetime, deadline: datetime | None
+    ) -> None:
+        details = dict(self.values.get("heat_guard_details", {}))
+        details[identity] = {
+            "phase": guard.phase.value,
+            "last_temperature_report_at": (
+                guard.report_at.isoformat() if guard.report_at is not None else None
+            ),
+            "temperature_report_age_minutes": (
+                max(0.0, (now - guard.report_at).total_seconds() / 60.0)
+                if guard.report_at is not None
+                else None
+            ),
+            "next_check_at": deadline.isoformat() if deadline is not None else None,
+            "fallback_due_at": (
+                (
+                    guard.ramp_at
+                    + timedelta(
+                        minutes=float(self.entry.options.get("stale_heat_ramp_max_minutes", 30.0))
+                    )
+                ).isoformat()
+                if guard.ramp_at is not None
+                else None
+            ),
+            "ramp_started_at": guard.ramp_at.isoformat() if guard.ramp_at is not None else None,
+            "ramp_target_c": ramp_heating_target(
+                guard,
+                now=now,
+                fallback_c=float(self.entry.options.get("fallback_heating_c", 18.0)),
+                minutes_per_degree=float(
+                    self.entry.options.get("stale_heat_ramp_minutes_per_c", 10.0)
+                ),
+                maximum_minutes=float(self.entry.options.get("stale_heat_ramp_max_minutes", 30.0)),
+            ),
+        }
+        self.values["heat_guard_details"] = details
 
     def _runtime_coordination_reason(
         self, target: TargetCalculation, result: RuntimeCalculation

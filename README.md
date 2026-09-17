@@ -31,10 +31,12 @@ environment is used only to generate and audit independent development goldens.
   air-speed inputs remain explicitly `declared`.
 - The primary room-temperature source may be a temperature/numeric sensor or a climate entity;
   climate sources use only their public `current_temperature` attribute.
-- A stale measurement stops normal adaptive writes while the last valid outputs remain visibly
-  marked stale, including across reloads once a valid snapshot has been stored. After one hour, a
-  one-shot safeguard may only reduce existing demand to the configured fallback temperature; it
-  still uses the sole CommandBroker and never changes mode.
+- A numerically valid but stale primary room temperature may still project updated targets,
+  explicitly labelled stale. Possible heating demand is watched continuously: 30 minutes without
+  another report while heating is requested, or a single 60-minute trial when demand begins from
+  an already stale reading. Demand then ramps down to the configured heating fallback within
+  30 more minutes. Other invalid mandatory inputs still block normal commands. ATHB uses only
+  its CommandBroker and never changes HVAC mode.
 
 ## Installation and configuration
 

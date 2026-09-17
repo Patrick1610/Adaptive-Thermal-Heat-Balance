@@ -32,6 +32,29 @@ def test_primary_temperature_selector_accepts_temperature_sensors_and_climates()
     ]
 
 
+async def test_stale_heat_wizard_rejects_out_of_range_advanced_settings() -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data={"zone_uuid": "guard-options", "targets": []})
+    flow = AthbOptionsFlow(entry)
+    flow._pending_options = {"comfort_strategy": "balanced"}
+    result = await flow.async_step_stale_heat_safety(
+        {
+            "stale_heat_demand_margin_c": 0.0,
+            "stale_heat_active_minutes": 61.0,
+            "stale_heat_start_minutes": 29.0,
+            "stale_heat_ramp_minutes_per_c": 16.0,
+            "stale_heat_ramp_max_minutes": 14.0,
+        }
+    )
+    assert result["step_id"] == "stale_heat_safety"
+    assert set(result["errors"]) == {
+        "stale_heat_demand_margin_c",
+        "stale_heat_active_minutes",
+        "stale_heat_start_minutes",
+        "stale_heat_ramp_minutes_per_c",
+        "stale_heat_ramp_max_minutes",
+    }
+
+
 async def test_setup_rejects_available_malformed_primary_source(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
@@ -748,6 +771,24 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
             "primary_temperature_freshness_minutes": 120.0,
             "local_temperature_freshness_minutes": 60.0,
             "radiant_freshness_minutes": 90.0,
+        },
+    )
+    assert result["step_id"] == "stale_heat_safety"
+    assert _schema_keys(result) == {
+        "stale_heat_demand_margin_c",
+        "stale_heat_active_minutes",
+        "stale_heat_start_minutes",
+        "stale_heat_ramp_minutes_per_c",
+        "stale_heat_ramp_max_minutes",
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "stale_heat_demand_margin_c": 0.5,
+            "stale_heat_active_minutes": 30.0,
+            "stale_heat_start_minutes": 60.0,
+            "stale_heat_ramp_minutes_per_c": 10.0,
+            "stale_heat_ramp_max_minutes": 30.0,
         },
     )
     assert result["step_id"] == "target_calibration"

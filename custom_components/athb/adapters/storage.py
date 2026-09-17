@@ -84,6 +84,7 @@ class ControlStoreState:
     rapid_boost_reached: bool = False
     last_valid_values_json: str | None = None
     last_valid_at: str | None = None
+    heat_guards_json: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,6 +224,10 @@ def serialize_control_state(state: ControlStoreState) -> str:
         if boost_expiry.tzinfo is None or boost_expiry.utcoffset() is None:
             raise ValueError("invalid boost expiry")
     _validate_last_valid_output(state.last_valid_values_json, state.last_valid_at)
+    if state.heat_guards_json is not None:
+        parsed_guards = json.loads(state.heat_guards_json)
+        if not isinstance(parsed_guards, dict):
+            raise ValueError("heat guards must be an object")
     if not state.run_id or not state.configuration_fingerprint or not state.strategy:
         raise ValueError("control state identity fields are required")
     identities = [actuator.target_identity for actuator in state.actuators]
@@ -264,6 +269,7 @@ def load_control_state(serialized: str | None) -> ControlLoadResult:
             rapid_boost_reached=raw.get("rapid_boost_reached", False),
             last_valid_values_json=raw.get("last_valid_values_json"),
             last_valid_at=raw.get("last_valid_at"),
+            heat_guards_json=raw.get("heat_guards_json"),
         )
         serialize_control_state(state)
     except KeyError, TypeError, ValueError, json.JSONDecodeError:
@@ -481,6 +487,21 @@ class ZoneCommandPersistence:
                 storage_generation=self.state.storage_generation + 1,
                 last_valid_values_json=values_json,
                 last_valid_at=observed_at,
+            )
+            return (await self._verified.async_write_critical(self.state)).verified
+
+    async def async_update_heat_guards(self, guards_json: str) -> bool:
+        """Persist feedback-guard deadlines without altering command correlation."""
+
+        if not isinstance(json.loads(guards_json), dict):
+            raise ValueError("heat guards must be an object")
+        async with self._lock:
+            if self.state is None:
+                return False
+            self.state = replace(
+                self.state,
+                storage_generation=self.state.storage_generation + 1,
+                heat_guards_json=guards_json,
             )
             return (await self._verified.async_write_critical(self.state)).verified
 
