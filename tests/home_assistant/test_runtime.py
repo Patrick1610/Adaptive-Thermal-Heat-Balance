@@ -2279,9 +2279,65 @@ def test_service_and_registry_events_distinguish_own_context_and_removal(
     runtime._entity_registry_event(
         cast(Any, SimpleNamespace(data={"action": "remove", "entity_id": "climate.target"}))
     )
-    assert repair_calls[-1] == ("removed_source_or_target", True)
+    assert repair_calls == []
+    assert runtime_module.REMOVED_ENTITY_REPAIR_TIMER in runtime.timers
     for cancel in runtime.timers.values():
         cancel()
+    if runtime.debounce_cancel is not None:
+        runtime.debounce_cancel()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_registry_removal_repair_ignores_transient_startup_removal(
+    hass: HomeAssistant,
+) -> None:
+    registry = er.async_get(hass)
+    entity = registry.async_get_or_create("climate", "test", "target", suggested_object_id="target")
+    assert entity.entity_id == "climate.target"
+    runtime = _runtime()
+    runtime.hass = hass
+    repair_calls: list[tuple[str, bool]] = []
+    runtime.repair_manager = cast(
+        Any, SimpleNamespace(update=lambda name, active: repair_calls.append((name, active)))
+    )
+
+    runtime._entity_registry_event(
+        cast(Any, SimpleNamespace(data={"action": "remove", "entity_id": entity.entity_id}))
+    )
+    assert repair_calls == []
+
+    async_fire_time_changed(
+        hass,
+        dt_util.utcnow() + runtime_module.REMOVED_ENTITY_REPAIR_SETTLE + timedelta(seconds=1),
+    )
+    await hass.async_block_till_done()
+
+    assert repair_calls == [("removed_source_or_target", False)]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_registry_removal_repair_reports_entity_still_missing(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    repair_calls: list[tuple[str, bool]] = []
+    runtime.repair_manager = cast(
+        Any, SimpleNamespace(update=lambda name, active: repair_calls.append((name, active)))
+    )
+
+    runtime._entity_registry_event(
+        cast(Any, SimpleNamespace(data={"action": "remove", "entity_id": "climate.target"}))
+    )
+    assert repair_calls == []
+
+    async_fire_time_changed(
+        hass,
+        dt_util.utcnow() + runtime_module.REMOVED_ENTITY_REPAIR_SETTLE + timedelta(seconds=1),
+    )
+    await hass.async_block_till_done()
+
+    assert repair_calls == [("removed_source_or_target", True)]
 
 
 def test_registry_rename_preserves_target_identity_and_updates_live_tracking(

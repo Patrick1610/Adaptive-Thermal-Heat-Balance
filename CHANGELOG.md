@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.12
+
+- Defer entity-registry removal repairs for 30 seconds and revalidate configured sources and
+  targets against both the registry and loaded states, preventing transient startup removals from
+  producing persistent false notifications.
+- Reconcile an already persisted removal repair after restart or reload, while still reporting an
+  entity that remains genuinely absent after the settling period. Runtime input and target safety
+  checks remain immediate and unchanged.
+
 ## 0.2.11
 
 - Determine temperature and measured-humidity freshness from the newest valid `last_reported`

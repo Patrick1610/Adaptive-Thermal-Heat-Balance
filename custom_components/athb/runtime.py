@@ -135,6 +135,9 @@ from .repairs import RepairManager, TransitionLogger
 
 _LOGGER = logging.getLogger(__name__)
 STALE_SAFETY_DELAY = timedelta(hours=1)  # Cooling safety remains on the established path.
+REMOVED_ENTITY_REPAIR_SETTLE = timedelta(seconds=30)
+REMOVED_ENTITY_REPAIR = "removed_source_or_target"
+REMOVED_ENTITY_REPAIR_TIMER = f"repair:{REMOVED_ENTITY_REPAIR}"
 _HELD_VALUE_KEYS = LAST_VALID_OUTPUT_KEYS
 
 
@@ -347,6 +350,8 @@ class ZoneRuntime:
                 er.EVENT_ENTITY_REGISTRY_UPDATED, self._entity_registry_event
             )
         )
+        if self.repair_manager is not None and REMOVED_ENTITY_REPAIR in self.repair_manager.active:
+            self._schedule_removed_entity_repair_reconciliation()
         self._initialize_target_fingerprints()
         primary_state = self.hass.states.get(str(self.entry.data.get("primary_temperature", "")))
         if (
@@ -874,14 +879,9 @@ class ZoneRuntime:
             str(event.data.get("entity_id", "")),
             str(event.data.get("old_entity_id", "")),
         }
-        configured_ids = {
-            *self._tracked_entity_ids(),
-            str(self.entry.data.get("outdoor_source", "")),
-            str(self.entry.data.get(CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY, "")),
-            str(self.entry.data.get(CONF_RH_DEVICE_ACTIVITY_ENTITY, "")),
-        }
+        configured_ids = self._configured_registry_entity_ids()
         if affected & configured_ids and event.data.get("action") == "remove":
-            self.repair_manager.update("removed_source_or_target", True)
+            self._schedule_removed_entity_repair_reconciliation()
             return
         old_entity_id = str(event.data.get("old_entity_id", ""))
         entity_id = str(event.data.get("entity_id", ""))
@@ -974,6 +974,38 @@ class ZoneRuntime:
             )
         self.input_generation += 1
         self.schedule_environmental_snapshot()
+
+    def _configured_registry_entity_ids(self) -> set[str]:
+        """Return configured source and target entity ids relevant to registry events."""
+        entity_ids = {
+            *self._tracked_entity_ids(),
+            str(self.entry.data.get("outdoor_source", "")),
+            str(self.entry.data.get(CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY, "")),
+            str(self.entry.data.get(CONF_RH_DEVICE_ACTIVITY_ENTITY, "")),
+        }
+        entity_ids.discard("")
+        return entity_ids
+
+    @callback
+    def _schedule_removed_entity_repair_reconciliation(self) -> None:
+        """Revalidate registry removals after Home Assistant startup settles."""
+
+        @callback
+        def reconcile() -> None:
+            if self.repair_manager is None:
+                return
+            registry = er.async_get(self.hass)
+            missing = any(
+                registry.async_get(entity_id) is None and self.hass.states.get(entity_id) is None
+                for entity_id in self._configured_registry_entity_ids()
+            )
+            self.repair_manager.update(REMOVED_ENTITY_REPAIR, missing)
+
+        self._replace_timer(
+            REMOVED_ENTITY_REPAIR_TIMER,
+            REMOVED_ENTITY_REPAIR_SETTLE.total_seconds(),
+            reconcile,
+        )
 
     def _update_critical_delta(self, entity_id: str, state: State | None) -> None:
         primary_state = self.hass.states.get(str(self.entry.data.get("primary_temperature", "")))
