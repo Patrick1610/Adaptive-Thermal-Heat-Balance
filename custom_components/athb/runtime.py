@@ -70,6 +70,10 @@ from .const import (
     CONF_CONTROL_ENABLED,
     CONF_ECO_INTENSITY,
     CONF_MOLD_INDICATOR_ENTITY,
+    CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY,
+    CONF_PRIMARY_TEMPERATURE,
+    CONF_RH_DEVICE_ACTIVITY_ENTITY,
+    CONF_RH_ENTITY,
     DEFAULT_BOOST_MODE,
     DEFAULT_STRATEGY,
     DOMAIN,
@@ -122,6 +126,11 @@ from .core.stale_heating import (
     ramp_heating_target,
 )
 from .core.trace import DecisionTraceRing
+from .device_activity import (
+    activity_entity_is_compatible,
+    source_device_id,
+    sources_share_device,
+)
 from .repairs import RepairManager, TransitionLogger
 
 _LOGGER = logging.getLogger(__name__)
@@ -180,6 +189,9 @@ class ZoneRuntime:
     last_source_availability: dict[str, bool] = field(default_factory=dict)
     suppressed_source_reports: int = 0
     primary_feedback_at: datetime | None = None
+    reported_event_at: dict[str, datetime] = field(default_factory=dict)
+    freshness_reported_at: dict[str, datetime] = field(default_factory=dict)
+    freshness_details: dict[str, dict[str, Any]] = field(default_factory=dict)
     heat_guards: dict[str, HeatGuard] = field(default_factory=dict)
 
     async def async_start(self) -> None:
@@ -403,6 +415,11 @@ class ZoneRuntime:
     def _reported_source_entity_ids(self) -> set[str]:
         """Return measured inputs whose unchanged reports renew freshness."""
 
+        return self._measurement_source_entity_ids() | self._activity_source_entity_ids()
+
+    def _measurement_source_entity_ids(self) -> set[str]:
+        """Return entities whose values are numerical model inputs."""
+
         ids = {
             str(self.entry.data.get("primary_temperature", "")),
             str(self.entry.data.get("rh_entity", "")),
@@ -416,6 +433,15 @@ class ZoneRuntime:
                 ids.add(str(item.get("entity_id", "")))
         ids.discard("")
         return ids
+
+    def _activity_source_entity_ids(self) -> set[str]:
+        """Return compatible configured entities used only as device-liveness evidence."""
+
+        return {
+            entity_id
+            for source_key in ("primary", "rh")
+            if (entity_id := self._configured_activity_entity(source_key)) is not None
+        }
 
     def _reported_target_entity_ids(self) -> set[str]:
         """Return climate targets whose unchanged reports may acknowledge a command."""
@@ -437,17 +463,25 @@ class ZoneRuntime:
         )
         if target is not None:
             self._create_task(self._async_handle_target_state(target, old_state, new_state))
-        source_event = entity_id in self._reported_source_entity_ids()
-        if source_event:
+        measurement_event = entity_id in self._measurement_source_entity_ids()
+        activity_event = entity_id in self._activity_source_entity_ids()
+        if measurement_event:
+            self._record_source_report_time(entity_id, new_state)
             self._record_primary_feedback(entity_id, old_state, new_state)
-        material_source_event = source_event and self._source_report_is_material(
+        if activity_event:
+            self._record_source_report_time(entity_id, new_state)
+        material_source_event = measurement_event and self._source_report_is_material(
             entity_id, new_state
         )
+        recovered = self._refresh_freshness_evidence(dt_util.utcnow()) if activity_event else set()
         if material_source_event:
-            self.input_generation += 1
             self._update_critical_delta(entity_id, new_state)
-        if target is not None or material_source_event:
+        if material_source_event or recovered:
+            self.input_generation += 1
+        if target is not None or material_source_event or recovered:
             self.schedule_environmental_snapshot()
+        elif activity_event:
+            self._reschedule_freshness_only()
 
     @callback
     def _handle_source_report_event(self, event: Event[Any]) -> None:
@@ -455,14 +489,33 @@ class ZoneRuntime:
 
         entity_id = str(event.data.get("entity_id", ""))
         new_state = cast(State | None, event.data.get("new_state"))
-        primary_report = self._record_primary_feedback(entity_id, None, new_state)
-        if self._source_report_is_material(entity_id, new_state) or primary_report:
+        reported_at = cast(datetime | None, event.data.get("last_reported"))
+        measurement_event = entity_id in self._measurement_source_entity_ids()
+        activity_event = entity_id in self._activity_source_entity_ids()
+        if measurement_event or activity_event:
+            self._record_source_report_time(entity_id, new_state, reported_at=reported_at)
+        primary_report = (
+            self._record_primary_feedback(entity_id, None, new_state, reported_at=reported_at)
+            if measurement_event
+            else False
+        )
+        material = measurement_event and self._source_report_is_material(entity_id, new_state)
+        recovered = self._refresh_freshness_evidence(dt_util.utcnow())
+        if material or primary_report or recovered:
             self.input_generation += 1
-            self._update_critical_delta(entity_id, new_state)
+            if measurement_event:
+                self._update_critical_delta(entity_id, new_state)
             self.schedule_environmental_snapshot()
+        elif measurement_event or activity_event:
+            self._reschedule_freshness_only()
 
     def _record_primary_feedback(
-        self, entity_id: str, old_state: State | None, state: State | None
+        self,
+        entity_id: str,
+        old_state: State | None,
+        state: State | None,
+        *,
+        reported_at: datetime | None = None,
     ) -> bool:
         """Count real numeric reports, excluding our climate-target acknowledgements."""
 
@@ -494,11 +547,187 @@ class ZoneRuntime:
                 if target.get("entity_id") == entity_id
             ):
                 return False
-        reported = getattr(state, "last_reported", None) or state.last_updated
+        reported = reported_at or getattr(state, "last_reported", None) or state.last_updated
         if self.primary_feedback_at is not None and reported <= self.primary_feedback_at:
             return False
         self.primary_feedback_at = reported
         return True
+
+    def _record_source_report_time(
+        self,
+        entity_id: str,
+        state: State | None,
+        *,
+        reported_at: datetime | None = None,
+    ) -> None:
+        """Retain the immutable event timestamp for unchanged Home Assistant reports."""
+
+        if state is None:
+            return
+        observed = reported_at or getattr(state, "last_reported", None) or state.last_updated
+        prior = self.reported_event_at.get(entity_id)
+        if prior is None or observed > prior:
+            self.reported_event_at[entity_id] = observed
+
+    def _activity_exclusions(self) -> set[str]:
+        """Return configured model and actuator entities that cannot prove device activity."""
+
+        excluded = {
+            str(self.entry.data.get(CONF_PRIMARY_TEMPERATURE, "")),
+            str(self.entry.data.get(CONF_RH_ENTITY, "")),
+        }
+        excluded.update(
+            str(target.get("entity_id", ""))
+            for target in self.entry.data.get("targets", ())
+            if isinstance(target, dict)
+        )
+        excluded.discard("")
+        return excluded
+
+    def _activity_validation_sources(self, source_key: str) -> tuple[str, ...]:
+        """Return the source identities an activity entity must match."""
+
+        primary = str(self.entry.data.get(CONF_PRIMARY_TEMPERATURE, ""))
+        rh = (
+            str(self.entry.data.get(CONF_RH_ENTITY, ""))
+            if self.entry.data.get("rh_mode") == "measured"
+            else ""
+        )
+        if primary and rh and sources_share_device(self.hass, primary, rh):
+            return primary, rh
+        source = primary if source_key == "primary" else rh
+        return (source,) if source else ()
+
+    def _configured_activity_entity(self, source_key: str) -> str | None:
+        """Resolve one currently compatible optional activity source."""
+
+        config_key = (
+            CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY
+            if source_key == "primary"
+            else CONF_RH_DEVICE_ACTIVITY_ENTITY
+        )
+        entity_id = str(self.entry.data.get(config_key, ""))
+        sources = self._activity_validation_sources(source_key)
+        if not entity_id or not sources:
+            return None
+        return (
+            entity_id
+            if activity_entity_is_compatible(
+                self.hass,
+                entity_id,
+                sources,
+                excluded_entity_ids=self._activity_exclusions(),
+            )
+            else None
+        )
+
+    def _measurement_reported_at(self, source_key: str) -> datetime | None:
+        """Return the source's own latest valid measurement report."""
+
+        if source_key == "primary":
+            entity_id = str(self.entry.data.get(CONF_PRIMARY_TEMPERATURE, ""))
+            state = self.hass.states.get(entity_id)
+            return (
+                self.primary_feedback_at
+                if state is not None
+                and self._source_numeric_value(entity_id, state, SourceKind.PRIMARY_AIR) is not None
+                else None
+            )
+        entity_id = str(self.entry.data.get(CONF_RH_ENTITY, ""))
+        state = self.hass.states.get(entity_id)
+        if (
+            state is None
+            or self._source_numeric_value(entity_id, state, SourceKind.RELATIVE_HUMIDITY) is None
+        ):
+            return None
+        state_reported = getattr(state, "last_reported", None) or state.last_updated
+        return max(state_reported, self.reported_event_at.get(entity_id, state_reported))
+
+    def _activity_reported_at(self, source_key: str) -> datetime | None:
+        """Return an available configured activity entity's latest report."""
+
+        entity_id = self._configured_activity_entity(source_key)
+        state = self.hass.states.get(entity_id) if entity_id is not None else None
+        if state is None or state.state in {"unknown", "unavailable"}:
+            return None
+        assert entity_id is not None
+        state_reported = cast(datetime, getattr(state, "last_reported", None) or state.last_updated)
+        return max(state_reported, self.reported_event_at.get(entity_id, state_reported))
+
+    def _freshness_evidence(self, source_key: str) -> tuple[datetime | None, dict[str, Any]]:
+        """Resolve own, shared-device, and configured device-liveness evidence."""
+
+        entity_key = CONF_PRIMARY_TEMPERATURE if source_key == "primary" else CONF_RH_ENTITY
+        entity_id = str(self.entry.data.get(entity_key, ""))
+        own = self._measurement_reported_at(source_key)
+        evidence: list[tuple[datetime, str]] = []
+        if own is not None:
+            evidence.append((own, "own"))
+        peer_key = "rh" if source_key == "primary" else "primary"
+        peer_entity_key = CONF_RH_ENTITY if peer_key == "rh" else CONF_PRIMARY_TEMPERATURE
+        peer_entity_id = str(self.entry.data.get(peer_entity_key, ""))
+        if (
+            entity_id
+            and peer_entity_id
+            and self.entry.data.get("rh_mode") == "measured"
+            and sources_share_device(self.hass, entity_id, peer_entity_id)
+            and (peer := self._measurement_reported_at(peer_key)) is not None
+        ):
+            evidence.append((peer, "shared_device"))
+        activity_entity = self._configured_activity_entity(source_key)
+        if (activity := self._activity_reported_at(source_key)) is not None:
+            evidence.append((activity, "configured_activity"))
+        effective, basis = max(evidence, key=lambda item: item[0]) if evidence else (None, "own")
+        configured_key = (
+            CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY
+            if source_key == "primary"
+            else CONF_RH_DEVICE_ACTIVITY_ENTITY
+        )
+        configured_activity = str(self.entry.data.get(configured_key, "")) or None
+        detail = {
+            "entity_id": entity_id or None,
+            "device_id": source_device_id(self.hass, entity_id) if entity_id else None,
+            "measurement_reported_at": own,
+            "freshness_reported_at": effective,
+            "freshness_basis": basis,
+            "activity_entity": activity_entity,
+            "activity_entity_valid": configured_activity is None or activity_entity is not None,
+        }
+        return effective, detail
+
+    def _refresh_freshness_evidence(self, now: datetime) -> set[str]:
+        """Refresh effective timestamps and report stale-to-fresh transitions."""
+
+        recovered: set[str] = set()
+        active_keys = {"primary"}
+        if self.entry.data.get("rh_mode") == "measured" and self.entry.data.get(CONF_RH_ENTITY):
+            active_keys.add("rh")
+        for source_key in active_keys:
+            previous = self.freshness_reported_at.get(source_key)
+            effective, detail = self._freshness_evidence(source_key)
+            if effective is not None:
+                self.freshness_reported_at[source_key] = effective
+            else:
+                self.freshness_reported_at.pop(source_key, None)
+            self.freshness_details[source_key] = detail
+            kind = (
+                SourceKind.PRIMARY_AIR if source_key == "primary" else SourceKind.RELATIVE_HUMIDITY
+            )
+            freshness = configured_freshness(self.entry.options, kind)
+            was_stale = previous is not None and previous + freshness <= now
+            is_fresh = effective is not None and effective + freshness > now
+            if was_stale and is_fresh:
+                recovered.add(source_key)
+        for stale_key in set(self.freshness_details) - active_keys:
+            self.freshness_details.pop(stale_key, None)
+            self.freshness_reported_at.pop(stale_key, None)
+        self.values["source_freshness"] = self.freshness_details
+        return recovered
+
+    def _reschedule_freshness_only(self) -> None:
+        """Move expiry timers without starting an otherwise unnecessary calculation."""
+
+        self._schedule_freshness_expiries(dt_util.utcnow(), self._current_radiant_id())
 
     def _source_report_is_material(self, entity_id: str, state: State | None) -> bool:
         """Coalesce bounded input noise while retaining availability and cumulative changes."""
@@ -648,12 +877,28 @@ class ZoneRuntime:
         configured_ids = {
             *self._tracked_entity_ids(),
             str(self.entry.data.get("outdoor_source", "")),
+            str(self.entry.data.get(CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY, "")),
+            str(self.entry.data.get(CONF_RH_DEVICE_ACTIVITY_ENTITY, "")),
         }
         if affected & configured_ids and event.data.get("action") == "remove":
             self.repair_manager.update("removed_source_or_target", True)
             return
         old_entity_id = str(event.data.get("old_entity_id", ""))
         entity_id = str(event.data.get("entity_id", ""))
+        topology_ids = {
+            str(self.entry.data.get(CONF_PRIMARY_TEMPERATURE, "")),
+            str(self.entry.data.get(CONF_RH_ENTITY, "")),
+            str(self.entry.data.get(CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY, "")),
+            str(self.entry.data.get(CONF_RH_DEVICE_ACTIVITY_ENTITY, "")),
+        }
+        if (
+            event.data.get("action") == "update"
+            and not old_entity_id
+            and entity_id in topology_ids
+            and self.hass.config_entries.async_get_entry(self.entry.entry_id) is not None
+        ):
+            self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
+            return
         if (
             event.data.get("action") != "update"
             or not old_entity_id
@@ -664,7 +909,13 @@ class ZoneRuntime:
         data = dict(self.entry.data)
         options = dict(self.entry.options)
         changed = False
-        for key in ("primary_temperature", "outdoor_source", "rh_entity"):
+        for key in (
+            CONF_PRIMARY_TEMPERATURE,
+            "outdoor_source",
+            CONF_RH_ENTITY,
+            CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY,
+            CONF_RH_DEVICE_ACTIVITY_ENTITY,
+        ):
             if data.get(key) == old_entity_id:
                 data[key] = entity_id
                 changed = True
@@ -877,6 +1128,7 @@ class ZoneRuntime:
         if self.controller is None:
             return
         now = dt_util.utcnow()
+        self._refresh_freshness_evidence(now)
         history = (
             self.history_collector.result(
                 now=now, alpha=float(self.entry.options.get("running_mean_alpha", 0.8))
@@ -889,19 +1141,7 @@ class ZoneRuntime:
             if history.quality in {HistoryQuality.COMPLETE, HistoryQuality.PARTIAL}
             else None
         )
-        radiant_id = next(
-            (
-                str(self.entry.options.get(name))
-                for name in (
-                    "mrt_entity",
-                    "globe_temperature_entity",
-                    "surface_temperature_entity",
-                    CONF_MOLD_INDICATOR_ENTITY,
-                )
-                if self.entry.options.get(name)
-            ),
-            "",
-        )
+        radiant_id = self._current_radiant_id()
         primary_state = self.hass.states.get(str(self.entry.data.get("primary_temperature", "")))
         critical = self._capture_critical_locations(primary_state, now)
         targets = tuple(
@@ -916,7 +1156,9 @@ class ZoneRuntime:
         snapshot = CapturedZoneSnapshot(
             now,
             self._snapshot_primary_temperature(primary_state),
-            self._snapshot_state(self.hass.states.get(str(self.entry.data.get("rh_entity", "")))),
+            self._snapshot_relative_humidity(
+                self.hass.states.get(str(self.entry.data.get(CONF_RH_ENTITY, "")))
+            ),
             (
                 float(self.entry.data["rh_declared"])
                 if self.entry.data.get("rh_mode") == "declared"
@@ -1046,9 +1288,21 @@ class ZoneRuntime:
             registry_identity=(registry_entry.id if registry_entry is not None else None),
             source_generation=self.source_generation,
         )
+        effective = self.freshness_reported_at.get("primary")
         return (
-            replace(captured, observed_at=self.primary_feedback_at)
-            if captured is not None and self.primary_feedback_at is not None
+            replace(captured, observed_at=effective)
+            if captured is not None and effective
+            else captured
+        )
+
+    def _snapshot_relative_humidity(self, state: State | None) -> StateValue | None:
+        """Capture RH value while applying only its effective device-freshness timestamp."""
+
+        captured = self._snapshot_state(state)
+        effective = self.freshness_reported_at.get("rh")
+        return (
+            replace(captured, observed_at=effective)
+            if captured is not None and effective
             else captured
         )
 
@@ -1713,9 +1967,13 @@ class ZoneRuntime:
                 cancel()
             state = self.hass.states.get(entity_id) if entity_id else None
             observed = (
-                getattr(state, "last_reported", None) or state.last_updated
-                if state is not None
-                else None
+                self.freshness_reported_at.get(key)
+                if key in {"primary", "rh"}
+                else (
+                    getattr(state, "last_reported", None) or state.last_updated
+                    if state is not None
+                    else None
+                )
             )
             if observed is None:
                 continue
@@ -1730,6 +1988,23 @@ class ZoneRuntime:
                 self.async_request_snapshot()
 
             self.timers[timer_key] = async_track_point_in_utc_time(self.hass, expire, deadline)
+
+    def _current_radiant_id(self) -> str:
+        """Return the configured radiant or surface measurement entity."""
+
+        return next(
+            (
+                str(self.entry.options.get(name))
+                for name in (
+                    "mrt_entity",
+                    "globe_temperature_entity",
+                    "surface_temperature_entity",
+                    CONF_MOLD_INDICATOR_ENTITY,
+                )
+                if self.entry.options.get(name)
+            ),
+            "",
+        )
 
     def _radiant_source_kind(self) -> SourceKind:
         return {

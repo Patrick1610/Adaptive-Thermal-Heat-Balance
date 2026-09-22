@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.11
+
+- Determine temperature and measured-humidity freshness from the newest valid `last_reported`
+  timestamp when both sources share one Home Assistant device; keep their values and validity
+  independent.
+- Offer optional same-device activity sources such as enabled ZHA LQI or RSSI, with exact
+  device/integration allowlists that exclude helpers and derived sensors.
+- Keep HeatGuard temperature feedback unchanged, avoid recalculation storms for ordinary liveness
+  reports, and expose own versus effective freshness evidence in diagnostics.
+
 ## 0.2.10
 
 - Continue calculating and updating setpoints from a last valid but quiet primary temperature

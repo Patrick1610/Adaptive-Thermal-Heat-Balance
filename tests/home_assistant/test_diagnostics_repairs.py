@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.util import dt as dt_util
 
 from custom_components.athb.diagnostics import async_get_config_entry_diagnostics
 from custom_components.athb.repairs import RepairManager, TransitionLogger
@@ -41,6 +42,16 @@ async def test_diagnostics_pseudonymize_identifiers_and_drop_private_data(
         "source_states": {"sensor.bedroom_private": {"state": "20"}},
         "external_url": "https://private.example",
     }
+    reported = dt_util.utcnow() - timedelta(minutes=20)
+    effective = dt_util.utcnow() - timedelta(minutes=2)
+    runtime.freshness_details["primary"] = {
+        "measurement_reported_at": reported,
+        "freshness_reported_at": effective,
+        "freshness_basis": "configured_activity",
+        "device_id": "private-device-id",
+        "activity_entity": "sensor.private_lqi",
+        "activity_entity_valid": True,
+    }
     runtime.trace_ring.add(
         generation=1,
         payload={
@@ -67,6 +78,11 @@ async def test_diagnostics_pseudonymize_identifiers_and_drop_private_data(
     assert "athb-" in serialized
     assert diagnostics["sources"][0]["kind"] == "primary"
     assert diagnostics["sources"][0]["entity_id"].startswith("sensor.athb-")
+    assert diagnostics["sources"][0]["reported_age_minutes"] >= 20.0
+    assert diagnostics["sources"][0]["effective_freshness_age_minutes"] >= 2.0
+    assert diagnostics["sources"][0]["freshness_basis"] == "configured_activity"
+    assert diagnostics["sources"][0]["activity_entity"].startswith("sensor.athb-")
+    assert diagnostics["sources"][0].get("activity_warning") is None
     assert diagnostics["active_repairs"] == []
 
 

@@ -14,8 +14,10 @@ PLATFORMS = (
 )
 CONF_ZONE_UUID = "zone_uuid"
 CONF_PRIMARY_TEMPERATURE = "primary_temperature"
+CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY = "primary_device_activity_entity"
 CONF_RH_MODE = "rh_mode"
 CONF_RH_ENTITY = "rh_entity"
+CONF_RH_DEVICE_ACTIVITY_ENTITY = "rh_device_activity_entity"
 CONF_RH_DECLARED = "rh_declared"
 CONF_OUTDOOR_SOURCE = "outdoor_source"
 CONF_TARGETS = "targets"

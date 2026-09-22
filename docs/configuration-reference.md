@@ -169,6 +169,17 @@ freshness window from 5 to 360 minutes for each measured source type that is act
 primary room temperature, measured indoor humidity, critical local-air points, measured radiant
 or surface temperature, and measured air speed. The safe default is 30 minutes.
 
+When measured room temperature and indoor humidity belong to the same registered Home Assistant
+device, ATHB uses the newest valid `last_reported` timestamp of either measurement as device
+freshness for both. Their measured values, availability and validation remain independent. When
+they belong to different devices, each keeps its own freshness timestamp.
+
+The source wizard may additionally offer a direct `sensor` or `binary_sensor` from the same device
+and source integration, such as enabled ZHA LQI or RSSI. This optional activity entity contributes
+only its report timestamp. Helpers and derived entities—including Mold Indicator, Template,
+Statistics, Derivative, Filter, Group and Min/Max—are excluded. Device activity never becomes a
+temperature or humidity value and never resets the heating-feedback report timestamp.
+
 A longer window is appropriate for a trustworthy battery sensor that reports only slowly or when
 its value changes. It is an observation-hold assumption, not proof that a new measurement occurred.
 Once the configured window expires, a numerically valid, available primary room temperature may

@@ -31,8 +31,10 @@ from .const import (
     CONF_ECO_INTENSITY,
     CONF_MOLD_INDICATOR_ENTITY,
     CONF_OUTDOOR_SOURCE,
+    CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY,
     CONF_PRIMARY_TEMPERATURE,
     CONF_RH_DECLARED,
+    CONF_RH_DEVICE_ACTIVITY_ENTITY,
     CONF_RH_ENTITY,
     CONF_RH_MODE,
     CONF_TARGETS,
@@ -49,6 +51,7 @@ from .const import (
 )
 from .core.climate import CapabilityMapping, ClimateFailure, resolve_capability
 from .core.sources import SourceKind
+from .device_activity import compatible_activity_entities, sources_share_device
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig())
 PRIMARY_TEMPERATURE = selector.EntitySelector(
@@ -64,6 +67,7 @@ CLIMATES = selector.EntitySelector(selector.EntitySelectorConfig(domain="climate
 MOLD_INDICATORS = selector.EntitySelector(
     selector.EntitySelectorConfig(domain="sensor", integration="mold_indicator")
 )
+_SHARED_DEVICE_ACTIVITY_ENTITY = "device_activity_entity"
 
 
 def _select(options: tuple[str, ...], translation_key: str) -> selector.SelectSelector:
@@ -158,6 +162,7 @@ class _OptionsWizardMixin:
 
     async_show_form: Callable[..., ConfigFlowResult]
     add_suggested_values_to_schema: Callable[[vol.Schema, Mapping[str, Any] | None], vol.Schema]
+    hass: HomeAssistant
     _pending_options: dict[str, Any]
     _wizard_targets: list[dict[str, str]]
     _advanced: bool
@@ -167,6 +172,106 @@ class _OptionsWizardMixin:
     _critical_index: int
     _calibration_index: int
     _wizard_environment: dict[str, Any]
+
+    def _activity_exclusions(self, environment: Mapping[str, Any]) -> set[str]:
+        """Return entities that can never be selected as device activity evidence."""
+
+        excluded = {
+            str(environment.get(CONF_PRIMARY_TEMPERATURE, "")),
+            str(environment.get(CONF_RH_ENTITY, "")),
+        }
+        excluded.update(
+            str(target.get("entity_id", ""))
+            for target in environment.get(CONF_TARGETS, ())
+            if isinstance(target, dict)
+        )
+        excluded.discard("")
+        return excluded
+
+    def _activity_field_specs(
+        self, environment: Mapping[str, Any]
+    ) -> tuple[tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...]:
+        """Build one or two optional fields from current device topology."""
+
+        primary = str(environment.get(CONF_PRIMARY_TEMPERATURE, ""))
+        rh = (
+            str(environment.get(CONF_RH_ENTITY, ""))
+            if environment.get(CONF_RH_MODE) == "measured"
+            else ""
+        )
+        excluded = self._activity_exclusions(environment)
+        if primary and rh and sources_share_device(self.hass, primary, rh):
+            candidates = compatible_activity_entities(
+                self.hass, (primary, rh), excluded_entity_ids=excluded
+            )
+            return (
+                (
+                    (
+                        _SHARED_DEVICE_ACTIVITY_ENTITY,
+                        (primary, rh),
+                        (CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY, CONF_RH_DEVICE_ACTIVITY_ENTITY),
+                        candidates,
+                    ),
+                )
+                if candidates
+                else ()
+            )
+        specs: list[tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = []
+        if primary:
+            candidates = compatible_activity_entities(
+                self.hass, (primary,), excluded_entity_ids=excluded
+            )
+            if candidates:
+                specs.append(
+                    (
+                        CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY,
+                        (primary,),
+                        (CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY,),
+                        candidates,
+                    )
+                )
+        if rh:
+            candidates = compatible_activity_entities(
+                self.hass, (rh,), excluded_entity_ids=excluded
+            )
+            if candidates:
+                specs.append(
+                    (
+                        CONF_RH_DEVICE_ACTIVITY_ENTITY,
+                        (rh,),
+                        (CONF_RH_DEVICE_ACTIVITY_ENTITY,),
+                        candidates,
+                    )
+                )
+        return tuple(specs)
+
+    def _device_activity_schema(self, environment: Mapping[str, Any]) -> vol.Schema:
+        """Return an exact allowlisted selector schema for activity evidence."""
+
+        fields: dict[vol.Marker, object] = {}
+        for field, _sources, storage_keys, candidates in self._activity_field_specs(environment):
+            stored = str(environment.get(storage_keys[0], ""))
+            marker = (
+                vol.Optional(field, default=stored) if stored in candidates else vol.Optional(field)
+            )
+            fields[marker] = selector.EntitySelector(
+                selector.EntitySelectorConfig(include_entities=list(candidates))
+            )
+        return vol.Schema(fields)
+
+    def _apply_device_activity(
+        self, environment: dict[str, Any], user_input: Mapping[str, Any]
+    ) -> None:
+        """Replace activity selections without retaining obsolete device links."""
+
+        environment.pop(CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY, None)
+        environment.pop(CONF_RH_DEVICE_ACTIVITY_ENTITY, None)
+        for field, _sources, storage_keys, candidates in self._activity_field_specs(environment):
+            selected = str(user_input.get(field, ""))
+            if selected not in candidates:
+                continue
+            for storage_key in storage_keys:
+                environment[storage_key] = selected
 
     def _initialize_options_wizard(
         self,
@@ -892,7 +997,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                 self._data.update(user_input)
                 stale_key = CONF_RH_DECLARED if mode == "measured" else CONF_RH_ENTITY
                 self._data.pop(stale_key, None)
-                return await self.async_step_targets()
+                return await self.async_step_device_activity()
         if mode == "measured":
             schema = vol.Schema(
                 {_required_entity(CONF_RH_ENTITY, self._data.get(CONF_RH_ENTITY)): ENTITY}
@@ -908,6 +1013,20 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         if self._is_reconfigure:
             schema = self.add_suggested_values_to_schema(schema, self._data)
         return self.async_show_form(step_id="humidity", data_schema=schema, errors=errors)
+
+    async def async_step_device_activity(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Optionally select direct same-device activity evidence."""
+
+        schema = self._device_activity_schema(self._data)
+        if user_input is not None:
+            self._apply_device_activity(self._data, user_input)
+            return await self.async_step_targets()
+        if not schema.schema:
+            self._apply_device_activity(self._data, {})
+            return await self.async_step_targets()
+        return self.async_show_form(step_id="device_activity", data_schema=schema)
 
     async def async_step_targets(
         self, user_input: dict[str, Any] | None = None
@@ -1248,7 +1367,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
                 self._pending_data.update(user_input)
                 stale_key = CONF_RH_DECLARED if mode == "measured" else CONF_RH_ENTITY
                 self._pending_data.pop(stale_key, None)
-                return self._save_data_settings()
+                return await self.async_step_source_device_activity()
         if mode == "measured":
             schema = vol.Schema(
                 {
@@ -1272,6 +1391,20 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             data_schema=schema,
             errors=errors,
         )
+
+    async def async_step_source_device_activity(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit direct same-device activity evidence from Configure > Sources."""
+
+        schema = self._device_activity_schema(self._pending_data)
+        if user_input is not None:
+            self._apply_device_activity(self._pending_data, user_input)
+            return self._save_data_settings()
+        if not schema.schema:
+            self._apply_device_activity(self._pending_data, {})
+            return self._save_data_settings()
+        return self.async_show_form(step_id="source_device_activity", data_schema=schema)
 
     async def async_step_target_entities(
         self, user_input: dict[str, Any] | None = None

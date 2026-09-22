@@ -45,6 +45,9 @@ _IDENTITY_KEYS = {
     "globe_temperature_entity",
     "surface_temperature_entity",
     "mold_indicator_entity",
+    "primary_device_activity_entity",
+    "rh_device_activity_entity",
+    "activity_entity",
 }
 
 
@@ -116,10 +119,20 @@ async def async_get_config_entry_diagnostics(
             if state is not None
             else None
         )
-        age_minutes = (
-            max(0.0, (now - reported).total_seconds() / 60.0) if reported is not None else None
-        )
         source_key = "rh" if kind == "humidity" else kind
+        freshness_detail = runtime.freshness_details.get(source_key, {})
+        measurement_reported = freshness_detail.get("measurement_reported_at", reported)
+        effective_reported = freshness_detail.get("freshness_reported_at", reported)
+        age_minutes = (
+            max(0.0, (now - measurement_reported).total_seconds() / 60.0)
+            if measurement_reported is not None
+            else None
+        )
+        effective_age_minutes = (
+            max(0.0, (now - effective_reported).total_seconds() / 60.0)
+            if effective_reported is not None
+            else None
+        )
         accepted = runtime.source_states.get(source_key)
         sources.append(
             {
@@ -127,6 +140,16 @@ async def async_get_config_entry_diagnostics(
                 "entity_id": entity_id,
                 "available": state is not None and state.state not in {"unknown", "unavailable"},
                 "reported_age_minutes": age_minutes,
+                "effective_freshness_age_minutes": effective_age_minutes,
+                "freshness_basis": freshness_detail.get("freshness_basis", "own"),
+                "device_id": freshness_detail.get("device_id"),
+                "activity_entity": freshness_detail.get("activity_entity"),
+                "activity_entity_valid": freshness_detail.get("activity_entity_valid", True),
+                "activity_warning": (
+                    None
+                    if freshness_detail.get("activity_entity_valid", True)
+                    else "configured_activity_entity_no_longer_matches_source_device"
+                ),
                 "configured_freshness_minutes": (
                     entry.options.get(freshness_key) if freshness_key is not None else 120.0
                 ),
