@@ -18,6 +18,7 @@ from .core.climate import (
     ClimateCapabilitySnapshot,
     ClimateFailure,
     GridOptions,
+    GridRoundingMode,
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     ha_to_celsius,
@@ -66,6 +67,12 @@ from .core.surface import (
     estimate_surface_temperature,
     surface_humidity_diagnostic,
 )
+
+
+def _grid_rounding_mode(value: object) -> GridRoundingMode | None:
+    """Return a configured mode while preserving legacy directional rounding."""
+
+    return None if value is None else GridRoundingMode(str(value))
 
 
 @dataclass(frozen=True, slots=True)
@@ -551,6 +558,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             _finite_option(snapshot.options, "maximum_control_temperature", 26.0),
             _finite_option(snapshot.options, f"calibration_{target.target_uuid}", 0.0),
             minimum_range_gap_c=_finite_option(snapshot.options, "minimum_range_gap", 1.0),
+            rounding_mode=_grid_rounding_mode(snapshot.options.get("target_rounding_mode")),
         )
         result = calculate_zone(
             ZoneCalculationInput(

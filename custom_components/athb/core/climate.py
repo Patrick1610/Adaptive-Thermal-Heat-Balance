@@ -1,4 +1,4 @@
-"""Pure climate capability, unit, and inward-grid compatibility contracts."""
+"""Pure climate capability, unit, and configurable-grid compatibility contracts."""
 
 from __future__ import annotations
 
@@ -27,6 +27,14 @@ class StepUnit(StrEnum):
     HA = "ha_unit"
     CELSIUS = "°C"
     FAHRENHEIT = "°F"
+
+
+class GridRoundingMode(StrEnum):
+    """Configured target-grid rounding policy."""
+
+    CEILING = "ceiling"
+    FLOOR = "floor"
+    MATHEMATICAL = "mathematical"
 
 
 class AutoMapping(StrEnum):
@@ -89,6 +97,7 @@ class GridOptions:
     step_unit: StepUnit = StepUnit.HA
     grid_origin_override_ha: float | None = None
     minimum_range_gap_c: float = 1.0
+    rounding_mode: GridRoundingMode | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +134,7 @@ class NormalizedScalarTarget:
 
 @dataclass(frozen=True, slots=True)
 class NormalizedRangeTarget:
-    """Atomic inward-normalized range."""
+    """Atomic grid-normalized range."""
 
     requested_heating_room_c: float
     requested_cooling_room_c: float
@@ -330,7 +339,13 @@ def _normalize_scalar_with_grid(
         limitations.append("device_bound_applied")
     requested_ha = celsius_to_ha(bounded, snapshot.temperature_unit)
     position = (requested_ha - grid.origin_ha) / grid.step_ha
-    if direction is ActuationDirection.HEATING_ONLY:
+    if options.rounding_mode is GridRoundingMode.CEILING:
+        index = math.ceil(position - GRID_TOLERANCE_HA)
+    elif options.rounding_mode is GridRoundingMode.FLOOR:
+        index = math.floor(position + GRID_TOLERANCE_HA)
+    elif options.rounding_mode is GridRoundingMode.MATHEMATICAL:
+        index = math.floor(position + 0.5 + GRID_TOLERANCE_HA)
+    elif direction is ActuationDirection.HEATING_ONLY:
         index = math.ceil(position - GRID_TOLERANCE_HA)
     else:
         index = math.floor(position + GRID_TOLERANCE_HA)
@@ -344,7 +359,11 @@ def _normalize_scalar_with_grid(
         return ClimateFailure("no_legal_inward_target")
     normalized_c = ha_to_celsius(normalized_ha, snapshot.temperature_unit)
     if abs(normalized_ha - requested_ha) > GRID_TOLERANCE_HA:
-        limitations.append("grid_inward_adjustment")
+        limitations.append(
+            "grid_inward_adjustment"
+            if options.rounding_mode is None
+            else "grid_rounding_adjustment"
+        )
     if grid.assumed_step:
         limitations.append("assumed_target_step")
     return NormalizedScalarTarget(
@@ -367,7 +386,7 @@ def normalize_scalar_target(
     snapshot: ClimateCapabilitySnapshot,
     options: GridOptions,
 ) -> NormalizedScalarTarget | ClimateFailure:
-    """Clamp then normalize one heating or cooling target inward."""
+    """Clamp then normalize one heating or cooling target to the selected grid policy."""
 
     grid = build_grid(snapshot, options)
     if isinstance(grid, ClimateFailure):
@@ -388,7 +407,7 @@ def normalize_range_target(
     snapshot: ClimateCapabilitySnapshot,
     options: GridOptions,
 ) -> NormalizedRangeTarget | ClimateFailure:
-    """Normalize an atomic range inward and preserve its minimum gap."""
+    """Normalize an atomic range and preserve its minimum gap."""
 
     grid = build_grid(snapshot, options)
     if isinstance(grid, ClimateFailure):

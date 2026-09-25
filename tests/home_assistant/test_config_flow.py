@@ -564,6 +564,7 @@ async def test_no_write_history_mode_still_collects_stale_safety_temperatures(
 
     result = await flow.async_step_command_behavior(
         {
+            "target_rounding_mode": "floor",
             "minimum_range_gap": 1.0,
             "minimum_meaningful_change": 0.1,
             "feedback_resolution": 0.01,
@@ -736,6 +737,7 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
+            "target_rounding_mode": "mathematical",
             "minimum_range_gap": 1.0,
             "minimum_meaningful_change": 0.1,
             "feedback_resolution": 0.01,

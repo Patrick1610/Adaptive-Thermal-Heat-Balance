@@ -113,6 +113,7 @@ OPTION_DEFAULTS: dict[str, object] = {
     "minimum_control_temperature": DEFAULT_MINIMUM_CONTROL_TEMPERATURE,
     "maximum_control_temperature": DEFAULT_MAXIMUM_CONTROL_TEMPERATURE,
     "minimum_range_gap": 1.0,
+    "target_rounding_mode": "mathematical",
     "minimum_meaningful_change": 0.1,
     "feedback_resolution": 0.01,
     "primary_temperature_freshness_minutes": 30.0,
@@ -642,6 +643,10 @@ class _OptionsWizardMixin:
             step_id="command_behavior",
             data_schema=vol.Schema(
                 {
+                    vol.Required(
+                        "target_rounding_mode",
+                        default=defaults.get("target_rounding_mode", "mathematical"),
+                    ): _select(("ceiling", "floor", "mathematical"), "target_rounding_mode"),
                     vol.Required(
                         "minimum_range_gap", default=defaults.get("minimum_range_gap", 1.0)
                     ): _number(1.0, 10.0, 0.1, "°C"),

@@ -944,7 +944,7 @@ Order:
 5. Apply environmental slew limits.
 6. Add per-actuator fixed calibration offset.
 7. Apply user command bounds.
-8. Apply device bounds and inward grid normalization.
+8. Apply device bounds and configured grid normalization.
 9. Check cross-actuator conflicts in room-reference coordinates.
 10. Check ownership and freshness.
 11. Dispatch only through the command broker.
@@ -985,7 +985,7 @@ Fallback:
 - Does not apply eco or boost.
 - Requires valid fresh primary air temperature and eligible primary RH: a valid fresh measurement or a valid explicit fixed declaration.
 - Requires available equipment, known capability mapping and ownership.
-- Uses ordinary calibration, bounds, inward normalization and the command broker.
+- Uses ordinary calibration, bounds, configured normalization and the command broker.
 - Does not change HVAC mode.
 - Is inhibited for cooling if its final room-equivalent normalized target lies below the current dew-point constraint.
 - Can be replaced by advanced `fallback_policy=no_write`.
@@ -1094,6 +1094,7 @@ step_override
 step_unit = HA unit | °C | °F
 grid_origin_override
 minimum_range_gap
+target_rounding_mode = ceiling | floor | mathematical
 ```
 
 Defaults:
@@ -1107,25 +1108,26 @@ Defaults:
 
 First apply user and device bounds to the continuous actuator-coordinate request and record each clamp. Convert once to HA service units, including step differences correctly. Let `G = {o + k·s}` be the legal grid within the intersection of user/device bounds, with configured/advertised origin `o` and positive step `s`.
 
-Use **inward directional normalization**:
+Use the configured absolute grid-normalization policy:
 
 \[
-Q_H(t)=\min\{g\in G:g\geq t\},\qquad
-Q_C(t)=\max\{g\in G:g\leq t\}
+Q_{ceil}(t)=\min\{g\in G:g\geq t\},\qquad
+Q_{floor}(t)=\max\{g\in G:g\leq t\}
 \]
 
-- Heating uses the smallest legal grid value at or above the bounded request.
-- Cooling uses the largest legal grid value at or below the bounded request.
+- Ceiling uses the smallest legal grid value at or above the bounded request.
+- Floor uses the largest legal grid value at or below the bounded request.
+- Mathematical uses the nearest legal grid value and resolves an exact half upward.
 - An already legal value is unchanged.
-- No legal value on the required side → `no_legal_inward_target`; no command.
-- Do not select an outward value because it is nearer or because the inward grid point is unavailable.
-- The rule applies equally to strategy, eco, boost and fallback requests. Explicit bound clamping is recorded before normalization; rounding must not add an unreported outward movement.
+- No legal value under the selected policy → `no_legal_inward_target`; no command.
+- The selected rule applies equally to strategy, eco, boost and fallback requests. Explicit bound clamping is recorded before normalization and every non-exact grid adjustment is reported.
+- Existing entries without the setting retain legacy directional behavior: heating uses Ceiling and cooling uses Floor. New or reconfigured entries default to Mathematical.
 
-For a range, calculate `[Q_H(low), Q_C(high)]` and require the applicable minimum gap in common temperature-difference units. This pair maximizes the remaining gap among all inward choices. If it fails, no more inward pair can succeed: return `no_legal_range`. Do not widen outward, minimize distance to a different pair, swap endpoints or use the outer comfort band.
+For a range, apply the same selected policy independently to both endpoints and require the applicable minimum gap in common temperature-difference units. If the normalized pair fails, return `no_legal_range`; do not swap endpoints or substitute the outer comfort band.
 
 Use integer grid indices with a documented floating-point tolerance of `1e-9` HA temperature units for representational equality at a grid point; bounds checks use the same tolerance and retain the exact canonical grid value. This is numerical equality handling, not a temperature deadband. Limit the grid to 2,000 points; a finer unsupported grid requires configuration correction.
 
-Example: a heating request of 19.362709 °C on a 1 °C grid becomes **20 °C**, although 19 °C is nearer. A cooling request of 23.481038 °C on a 2 °C grid with origin 18 °C becomes **22 °C**, although 24 °C is nearer. A range on that grid becomes `[20,22] °C`. With a 4 °C step and the same origin, both inward endpoints become 22 °C and the range is suppressed. These examples concern representation of a steady-state target, not predictions of emitter response.
+Example: on a 0.5 °C grid, 20.75 °C becomes **21.0 °C** with Ceiling or Mathematical and **20.5 °C** with Floor. These examples concern representation of a steady-state target, not predictions of emitter response.
 
 ### 8.6 Anti-chatter defaults
 
@@ -2200,7 +2202,7 @@ The following scenario library is mandatory. Every unchanged field inherits the 
 | **VI-020 — Unsupported auto semantics** | Valid numerical preview may remain, but zero writes and exact `unsupported_auto_mapping`; never choose a neutral scalar substitute. |
 | **VI-021 — Climate off** | Numerical preview remains; zero writes, no turn-on/mode change; readiness suspended. External off does not automatically create a manual target override. |
 | **VI-022 — Fahrenheit and one conversion** | Verify HA-unit service semantics, legal grid and no double conversion. |
-| **VI-023 — Coarse-grid inward normalization** | Heating always rounds inward/up, cooling inward/down; ranged failure does not widen to comfort band. |
+| **VI-023 — Coarse-grid normalization** | Ceiling, Floor and Mathematical follow their exact grid policy; ranged failure does not substitute the comfort band. |
 | **VI-024 — Manual external setpoint change** | External temperature target change enters `MANUAL_OVERRIDE` and suppresses further ATHB writes until reconciliation/resume. |
 | **VI-025 — ATHB-originated acknowledgement** | Own-context and permissible contextless exact pending feedback acknowledge without override or duplicate write. |
 | **VI-026 — Obsolete delayed acknowledgement** | Obsolete feedback cannot restore ownership or overwrite current command state. |
@@ -2228,7 +2230,7 @@ In addition to the canonical installations, retain focused tests for:
 - Directional root eligibility, including irrelevant-root failure for scalar heat/cool and required paired roots for ranged control.
 - Critical warm-up boundaries, ±3 K filtered limit, raw >6 K rejection, aggregate 2 K cap, heating/cooling eligibility, tie-breaking, monitoring-only exclusion and ranged conflicts.
 - `auto` occupancy resolution, eco setbacks, scalar/ranged boost limiting/expiry, fixed fallback/no-write mode, user bounds and calibration ordering.
-- Inward normalization, exact grid points, mixed units, no legal inward target/range, gap conversion and directional release hysteresis.
+- Configurable normalization, exact grid points, mixed units, no legal target/range, gap conversion and directional release hysteresis.
 - Measured versus directly declared RH; absent/invalid declarations; zero RH; declared air speed; changing source modes; stale observations; no helper dependency; no fabricated freshness or automatic RH substitution.
 - Time-weighted unequal sampling, unchanged reports, gaps, availability boundaries, exact maximum hold, 23/25-hour DST days, midnight splits, source/timezone changes, synthetic start states, bootstrap/event overlap, partial weighted positions, corrupt history and downtime.
 - Every climate matrix row, supported/unmapped auto, Fahrenheit/native-unit differences, missing/misleading step, coarse readback, invalid capabilities, range rejection, coercion, preset changes and target replacement.
@@ -2290,7 +2292,7 @@ The implementation must enforce these invariants through core validation and the
 3. **Fallback is explicitly labelled policy and never presented as ATHB output.** It cannot bypass invalid mandatory actuation data, ownership or mode checks.
 4. **No NaN or infinity reaches entity state, persistence or service data.** Invalid quantities use typed absence/failure.
 5. **Every command satisfies user bounds and advertised device bounds**, including calibration and unit conversion.
-6. **Every command lies on the selected legal actuator grid.** Normalization rounds heating inward upward and cooling inward downward from the bounded request; inability to do so suppresses the command.
+6. **Every command lies on the selected legal actuator grid.** Normalization follows Ceiling, Floor or Mathematical policy from the bounded request; inability to do so suppresses the command. Entries without the setting retain the legacy heating-up/cooling-down policy.
 7. **Every commanded range is ordered and meets minimum separation.** An infeasible control band is not widened to comfort boundaries or silently swapped.
 8. **No command changes HVAC mode or unrelated climate functionality.** Off and unsupported modes suspend target writes.
 9. **No write while disabled, overridden, unavailable, incompatible or awaiting required reconciliation.**
@@ -2327,7 +2329,7 @@ All phases belong to one full production implementation. Completing the numerica
 | 3. Inverse and locations | Five semantic root attempts, strategy-vote derivation, mapped critical locations and directional actuation eligibility | Phases 1–2 | Root matrix for every strategy, directional-root failures, local mapping/warm-up, failure limits | Deterministic roots and typed failures |
 | 4. Shared environmental history | History math, sources, Recorder/storage adapters | Phase 1 contracts | Coverage, DST, bootstrap, simulated restart and sharing | Reproducible running mean without helper dependencies |
 | 5. Product policy | Comfort levels, occupancy setback, Boost, caps, bounds and coordination | Phases 3–4 | Same-vote critical influence, control band, setback/Boost/fallback | Exact directional target semantics for every control state |
-| 6. Climate compatibility | Climate adapter, units and inward normalization | Phase 5 | Complete capability/unit/grid matrix | Exact supported payload or suppression reason |
+| 6. Climate compatibility | Climate adapter, units and configurable normalization | Phase 5 | Complete capability/unit/grid matrix | Exact supported payload or suppression reason |
 | 7. Ownership and broker | Ownership reducer, sole broker, recovery journal | Phases 5–6 | Manual-target intervention, HVAC-mode readiness, acknowledgement, storage and race simulations | Every write-boundary invariant passes |
 | 8. Native HA configuration | Config/reconfigure/options, runtime, entities, lightweight strategy select | Phases 4–7 | Repository HA flow/API-contract and load/unload tests | Complete configuration and production service path exercised through test doubles |
 | 9. Observability and documentation | Diagnostics, repairs, translations, fixture schema and scenario reports | Phases 1–8 | Redaction, transition logs, schema validation, documentation examples | Every target decision and test expectation inspectable |
@@ -2357,7 +2359,7 @@ The build agent may return **`SOFTWARE_COMPLETE`** when every item below is sati
 - Heating, cooling and range policies use the selected strategy targets; raw comfort/control bands remain distinct where their component roots are available.
 - Critical influence, occupancy setback, Adaptive/Rapid Boost, occupancy resolution, calibration, bounds and fallback tests pass.
 - Production `climate.set_temperature` calls exist solely in the command-broker path and are verified with exact payload assertions against controlled HA service doubles.
-- Entire climate-capability matrix passes, including unsupported/off suppression and inward normalization.
+- Entire climate-capability matrix passes, including unsupported/off suppression and configurable normalization.
 - Ownership, manual **target** override, HVAC-mode readiness/reconciliation, disable/resume, acknowledgements and clean/unclean restart simulations pass.
 - Event ordering, stale work, bounded queues, storage failure/readback and conflict simulations pass.
 - Comfort-level, Boost and setback select updates are lightweight and do not unload/reload the config entry.
@@ -2422,7 +2424,7 @@ Use the canonical working copy and remote identity from §1. Each task's tests a
 | **ATHB-012** | Implement time-weighted daily summaries, calendar weighting, coverage and DST behavior. | 004, 011 |
 | **ATHB-013** | Implement Recorder bootstrap, persisted history, source-lineage changes and corrupt-history recovery with fake history/storage tests. | 012 |
 | **ATHB-014** | Implement strategy-based directional/control-band policy, critical caps/conflicts, comfort/auto/eco/boost, fixed fallback, bounds and cross-actuator coordination. | 009–010, 013 |
-| **ATHB-015** | Implement the complete climate-capability matrix, HA-unit handling, inward grid normalization and range feasibility. | 014 |
+| **ATHB-015** | Implement the complete climate-capability matrix, HA-unit handling, configurable grid normalization and range feasibility. | 014 |
 | **ATHB-016** | Implement pure per-target ownership transitions, distinguishing external target intervention from external HVAC-mode readiness/reconciliation, plus deterministic acknowledgement classification. | 004, 015 |
 | **ATHB-017** | Implement versioned control recovery storage, verified critical writes and simulated clean/unclean restart reconciliation. | 013, 016 |
 | **ATHB-018** | Implement the sole broker, generation preflight, coalescing, directional release hysteresis, slew/rate limits and acknowledgement handling. | 015–017 |

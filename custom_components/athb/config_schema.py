@@ -160,6 +160,12 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         errors["inactive_cooling_temperature"] = "invalid_option"
     if data.get("fallback_mode", "fixed") not in {"fixed", "no_write"}:
         errors["fallback_mode"] = "invalid_option"
+    if data.get("target_rounding_mode", "mathematical") not in {
+        "ceiling",
+        "floor",
+        "mathematical",
+    }:
+        errors["target_rounding_mode"] = "invalid_option"
     if "control_bounds" not in errors:
         heating = data.get("fallback_heating_c", minimum)
         cooling = data.get("fallback_cooling_c", maximum)

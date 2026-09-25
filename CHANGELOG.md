@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.13
+
+- Add an advanced target-grid rounding choice: Ceiling, Floor or Mathematical nearest-value
+  rounding. The selected policy applies consistently to scalar and heat/cool range targets.
+- Keep the established heating-up/cooling-down policy for existing entries until the new setting
+  is saved; new and reconfigured entries default to Mathematical rounding.
+
 ## 0.2.12
 
 - Defer entity-registry removal repairs for 30 seconds and revalidate configured sources and

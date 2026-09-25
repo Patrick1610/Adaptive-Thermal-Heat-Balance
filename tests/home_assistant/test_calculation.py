@@ -293,7 +293,11 @@ def test_humid_cooling_uses_valid_directional_root_despite_unrelated_failures() 
             "complete_history",
             "balanced",
             "comfort",
-            {"minimum_control_temperature": 18.0, "maximum_control_temperature": 30.0},
+            {
+                "minimum_control_temperature": 18.0,
+                "maximum_control_temperature": 30.0,
+                "target_rounding_mode": "floor",
+            },
             (_target(mode="cool"),),
             explicit_transition=True,
         )

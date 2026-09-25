@@ -61,6 +61,7 @@ from .calculation import (
     CapturedZoneSnapshot,
     RuntimeCalculation,
     TargetCalculation,
+    _grid_rounding_mode,
     calculate_runtime_snapshot,
     result_values,
 )
@@ -1771,6 +1772,7 @@ class ZoneRuntime:
             float(self.entry.options.get("maximum_control_temperature", 26.0)),
             calibration,
             minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+            rounding_mode=_grid_rounding_mode(self.entry.options.get("target_rounding_mode")),
         )
         if mapping.direction is ActuationDirection.RANGED:
             if capability.target_temp_low_ha is None or capability.target_temp_high_ha is None:
@@ -2288,6 +2290,7 @@ class ZoneRuntime:
             float(self.entry.options.get("maximum_control_temperature", 26.0)),
             calibration,
             minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+            rounding_mode=_grid_rounding_mode(self.entry.options.get("target_rounding_mode")),
         )
         normalized: NormalizedRangeTarget | NormalizedScalarTarget | ClimateFailure
         if mapping.direction is ActuationDirection.RANGED:
@@ -2425,6 +2428,9 @@ class ZoneRuntime:
                     float(self.entry.options.get("maximum_control_temperature", 26.0)),
                     calibration,
                     minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+                    rounding_mode=_grid_rounding_mode(
+                        self.entry.options.get("target_rounding_mode")
+                    ),
                 )
                 held = normalize_range_target(
                     requested_heating_room_c=normalized.heating.normalized_room_c,
@@ -2440,6 +2446,7 @@ class ZoneRuntime:
             float(self.entry.options.get("maximum_control_temperature", 26.0)),
             calibration,
             minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+            rounding_mode=_grid_rounding_mode(self.entry.options.get("target_rounding_mode")),
         )
         requested_heat = min(heating.normalized_room_c, ramp_c)
         actual_ha = (

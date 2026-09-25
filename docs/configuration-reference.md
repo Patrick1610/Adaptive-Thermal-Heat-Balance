@@ -29,7 +29,7 @@ showing plausible but false values.
 
 Choose one to eight registered climate entities. ATHB inspects each entity's supported features
 and exposes only its real scalar `temperature` endpoint or ranged `target_low`/`target_high`
-endpoints. Heating is normalized inward upward; cooling inward downward. Device bounds and grid
+endpoints. Targets use the configured Ceiling, Floor or Mathematical grid policy. Device bounds and grid
 are applied after ATHB policy. A ranged write is atomic and is suppressed if the configured gap
 cannot be preserved.
 
@@ -264,7 +264,7 @@ entity present the choices from maximum saving to greatest comfort, with Custom 
 Boundary limit uses the configured minimum and maximum command temperatures directly. Any eligible critical
 local-air location can still add
 its already bounded, directional correction of at most 2 °C. The result is then intersected with
-the configured control bounds and device bounds and rounded inward to the device grid. Existing
+the configured control bounds and device bounds and rounded with the selected target-grid policy. Existing
 entries created before Setback retain their configured offsets through the Custom mode; new entries
 default to Comfort — 2 °C. Only the two offsets used by Custom appear, and only when an occupancy
 source is configured.
@@ -295,6 +295,14 @@ Home Assistant capabilities:
 No Auto-mapping choice is shown to the user. Capability inference never causes an HVAC-mode call.
 
 ## Command normalization and fallback
+
+`target_rounding_mode` selects how every calculated target is represented on the climate grid:
+`ceiling` always chooses the next legal value upward, `floor` always chooses downward, and
+`mathematical` chooses the nearest value with an exact half rounded upward. The same absolute
+policy applies to both endpoints of a heat/cool range, after which the normal ordering and minimum
+gap checks still apply. Existing entries without this option retain the earlier directional
+heating-up/cooling-down policy until their advanced settings are saved; new and reconfigured
+entries default to Mathematical.
 
 `minimum_range_gap` is 1–10 °C and preserves separation between ranged endpoints.
 `minimum_meaningful_change` suppresses normalized commands smaller than 0–5 °C.

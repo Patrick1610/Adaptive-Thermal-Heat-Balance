@@ -1,4 +1,4 @@
-"""Pure capability, unit, and inward-grid tests."""
+"""Pure capability, unit, and configurable-grid tests."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from custom_components.athb.core.climate import (
     ClimateCapabilitySnapshot,
     ClimateFailure,
     GridOptions,
+    GridRoundingMode,
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     StepUnit,
@@ -220,6 +221,76 @@ def test_coarse_grid_examples_round_strictly_inward() -> None:
     )
     assert isinstance(ranged, NormalizedRangeTarget)
     assert (ranged.heating.normalized_ha, ranged.cooling.normalized_ha) == (20.0, 22.0)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        (GridRoundingMode.CEILING, 21.0),
+        (GridRoundingMode.FLOOR, 20.5),
+        (GridRoundingMode.MATHEMATICAL, 21.0),
+    ],
+)
+def test_configured_grid_rounding_is_absolute_and_direction_independent(
+    mode: GridRoundingMode, expected: float
+) -> None:
+    options = GridOptions(15.0, 30.0, rounding_mode=mode)
+    for direction in (ActuationDirection.HEATING_ONLY, ActuationDirection.COOLING_ONLY):
+        result = normalize_scalar_target(
+            requested_room_c=20.75,
+            direction=direction,
+            snapshot=_snapshot(minimum=4.0, maximum=35.0, step=0.5),
+            options=options,
+        )
+        assert isinstance(result, NormalizedScalarTarget)
+        assert result.normalized_ha == expected
+        assert result.limitations == ("grid_rounding_adjustment",)
+
+
+def test_mathematical_rounding_selects_the_nearest_grid_value() -> None:
+    options = GridOptions(15.0, 30.0, rounding_mode=GridRoundingMode.MATHEMATICAL)
+    lower = normalize_scalar_target(
+        requested_room_c=20.74,
+        direction=ActuationDirection.HEATING_ONLY,
+        snapshot=_snapshot(minimum=4.0, maximum=35.0, step=0.5),
+        options=options,
+    )
+    upper = normalize_scalar_target(
+        requested_room_c=20.76,
+        direction=ActuationDirection.COOLING_ONLY,
+        snapshot=_snapshot(minimum=4.0, maximum=35.0, step=0.5),
+        options=options,
+    )
+    assert isinstance(lower, NormalizedScalarTarget)
+    assert isinstance(upper, NormalizedScalarTarget)
+    assert (lower.normalized_ha, upper.normalized_ha) == (20.5, 21.0)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        (GridRoundingMode.CEILING, (20.5, 26.0)),
+        (GridRoundingMode.FLOOR, (20.0, 25.5)),
+        (GridRoundingMode.MATHEMATICAL, (20.0, 26.0)),
+    ],
+)
+def test_configured_grid_rounding_applies_to_both_range_endpoints(
+    mode: GridRoundingMode, expected: tuple[float, float]
+) -> None:
+    result = normalize_range_target(
+        requested_heating_room_c=20.24,
+        requested_cooling_room_c=25.76,
+        snapshot=_snapshot(
+            mode="heat_cool",
+            features=TARGET_TEMPERATURE_RANGE,
+            minimum=4.0,
+            maximum=35.0,
+            step=0.5,
+        ),
+        options=GridOptions(15.0, 30.0, rounding_mode=mode),
+    )
+    assert isinstance(result, NormalizedRangeTarget)
+    assert (result.heating.normalized_ha, result.cooling.normalized_ha) == expected
 
 
 def test_no_outward_grid_substitution_and_no_range_widening() -> None:

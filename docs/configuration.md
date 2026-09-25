@@ -48,8 +48,10 @@ setting and related-value attributes so a displayed result can be traced without
 entities to the device page.
 
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
-normalization. Heating rounds inward upward; cooling rounds inward downward. Ranged targets remain
-atomic, ordered and separated by at least the configured gap. An infeasible range is suppressed.
+normalization. Advanced settings offer Ceiling, Floor and Mathematical nearest-value rounding;
+new and reconfigured entries default to Mathematical. Existing entries retain the earlier
+heating-up/cooling-down behavior until that setting is saved. Ranged targets remain atomic,
+ordered and separated by at least the configured gap. An infeasible range is suppressed.
 
 ## Climate support
 

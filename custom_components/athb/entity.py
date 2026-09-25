@@ -168,6 +168,11 @@ def _settings_for_entity(key: str, options: Any) -> dict[str, Any]:
     }:
         return {
             **shared_model,
+            **(
+                {"target_rounding_mode": options.get("target_rounding_mode", "directional_legacy")}
+                if key in {"target_current", "target_occupied", "target_unoccupied"}
+                else {}
+            ),
             "lower_comfort_vote": options.get("lower_comfort_vote", -0.5),
             "upper_comfort_vote": options.get("upper_comfort_vote", 0.5),
         }
