@@ -644,10 +644,6 @@ class _OptionsWizardMixin:
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        "target_rounding_mode",
-                        default=defaults.get("target_rounding_mode", "mathematical"),
-                    ): _select(("ceiling", "floor", "mathematical"), "target_rounding_mode"),
-                    vol.Required(
                         "minimum_range_gap", default=defaults.get("minimum_range_gap", 1.0)
                     ): _number(1.0, 10.0, 0.1, "°C"),
                     vol.Required(
@@ -1040,6 +1036,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         if user_input is not None:
             errors, targets = self._resolve_targets(user_input.get(CONF_TARGETS))
             if not errors:
+                target_rounding_mode = user_input["target_rounding_mode"]
                 self._data[CONF_TARGETS] = targets
                 existing = self._get_reconfigure_entry().options if self._is_reconfigure else {}
                 self._initialize_options_wizard(
@@ -1047,14 +1044,32 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     targets=targets,
                     environment_data=self._data,
                 )
+                self._pending_options["target_rounding_mode"] = target_rounding_mode
                 return await self.async_step_preferences()
         defaults = [target["entity_id"] for target in self._data.get(CONF_TARGETS, ())]
         marker = (
             vol.Required(CONF_TARGETS, default=defaults) if defaults else vol.Required(CONF_TARGETS)
         )
-        schema = vol.Schema({marker: CLIMATES})
+        existing_options = self._get_reconfigure_entry().options if self._is_reconfigure else {}
+        schema = vol.Schema(
+            {
+                marker: CLIMATES,
+                vol.Required(
+                    "target_rounding_mode",
+                    default=existing_options.get("target_rounding_mode", "mathematical"),
+                ): _select(("ceiling", "floor", "mathematical"), "target_rounding_mode"),
+            }
+        )
         if self._is_reconfigure:
-            schema = self.add_suggested_values_to_schema(schema, {CONF_TARGETS: defaults})
+            schema = self.add_suggested_values_to_schema(
+                schema,
+                {
+                    CONF_TARGETS: defaults,
+                    "target_rounding_mode": existing_options.get(
+                        "target_rounding_mode", "mathematical"
+                    ),
+                },
+            )
         return self.async_show_form(step_id="targets", data_schema=schema, errors=errors)
 
     def _resolve_targets(self, raw_targets: object) -> tuple[dict[str, str], list[dict[str, str]]]:
@@ -1421,6 +1436,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             errors, targets = self._resolve_targets(user_input.get(CONF_TARGETS))
             if not errors:
                 self._pending_data[CONF_TARGETS] = targets
+                self._pending_options["target_rounding_mode"] = user_input["target_rounding_mode"]
                 self._wizard_targets = targets
                 valid_calibrations = {f"calibration_{target['target_uuid']}" for target in targets}
                 for key in tuple(self._pending_options):
@@ -1435,7 +1451,15 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         marker = vol.Required(CONF_TARGETS, default=defaults)
         return self.async_show_form(
             step_id="target_entities",
-            data_schema=vol.Schema({marker: CLIMATES}),
+            data_schema=vol.Schema(
+                {
+                    marker: CLIMATES,
+                    vol.Required(
+                        "target_rounding_mode",
+                        default=self._pending_options.get("target_rounding_mode", "mathematical"),
+                    ): _select(("ceiling", "floor", "mathematical"), "target_rounding_mode"),
+                }
+            ),
             errors=errors,
         )
 

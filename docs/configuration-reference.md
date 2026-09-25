@@ -300,9 +300,10 @@ No Auto-mapping choice is shown to the user. Capability inference never causes a
 `ceiling` always chooses the next legal value upward, `floor` always chooses downward, and
 `mathematical` chooses the nearest value with an exact half rounded upward. The same absolute
 policy applies to both endpoints of a heat/cool range, after which the normal ordering and minimum
-gap checks still apply. Existing entries without this option retain the earlier directional
-heating-up/cooling-down policy until their advanced settings are saved; new and reconfigured
-entries default to Mathematical.
+gap checks still apply. This choice is shown together with the controlled climate entities because
+it directly determines the command sent to those targets. Existing entries without this option
+retain the earlier directional heating-up/cooling-down policy until their target settings are
+saved; new and reconfigured entries default to Mathematical.
 
 `minimum_range_gap` is 1–10 °C and preserves separation between ranged endpoints.
 `minimum_meaningful_change` suppresses normalized commands smaller than 0–5 °C.

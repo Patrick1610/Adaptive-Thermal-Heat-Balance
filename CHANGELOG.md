@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.14
+
+- Show target-grid rounding directly on the **Controlled climate entities** page in setup,
+  reconfiguration and options, next to the targets whose commands it affects.
+- Remove the duplicate rounding choice from the advanced command-behaviour page while preserving
+  the existing setting and runtime behaviour.
+
 ## 0.2.13
 
 - Add an advanced target-grid rounding choice: Ceiling, Floor or Mathematical nearest-value

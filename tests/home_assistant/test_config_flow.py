@@ -24,6 +24,11 @@ def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
     return marker.description["suggested_value"]
 
 
+def _default_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
+    marker = next(item for item in result["data_schema"].schema if str(item.schema) == key)
+    return marker.default()
+
+
 def test_primary_temperature_selector_accepts_temperature_sensors_and_climates() -> None:
     assert PRIMARY_TEMPERATURE.config["filter"] == [
         {"domain": ["sensor"], "device_class": ["temperature"]},
@@ -207,8 +212,11 @@ async def _complete_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"rh_declared": 47.0}
     )
+    assert result["step_id"] == "targets"
+    assert _schema_keys(result) == {"targets", "target_rounding_mode"}
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"targets": ["climate.target"]}
+        result["flow_id"],
+        {"targets": ["climate.target"], "target_rounding_mode": "mathematical"},
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -243,6 +251,7 @@ async def test_config_flow_stores_tagged_declaration_stable_target_identity_and_
     assert result["options"]["comfort_strategy"] == "balanced"
     assert "eco_intensity" not in result["options"]
     assert result["options"]["boost_mode"] == "off"
+    assert result["options"]["target_rounding_mode"] == "mathematical"
     assert result["options"]["control_enabled"] is False
 
 
@@ -269,7 +278,8 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
         result["flow_id"], {"rh_declared": 50.0}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"targets": ["climate.target"]}
+        result["flow_id"],
+        {"targets": ["climate.target"], "target_rounding_mode": "mathematical"},
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -456,6 +466,7 @@ async def test_configure_menu_edits_targets_and_preserves_existing_target_identi
         options={
             "comfort_strategy": "balanced",
             "control_enabled": False,
+            "target_rounding_mode": "ceiling",
             "calibration_stable-target-uuid": 0.5,
             "calibration_obsolete-target-uuid": -0.5,
         },
@@ -465,9 +476,14 @@ async def test_configure_menu_edits_targets_and_preserves_existing_target_identi
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await _open_options_section(hass, result, "target_entities")
     assert result["step_id"] == "target_entities"
-    assert _schema_keys(result) == {"targets"}
+    assert _schema_keys(result) == {"targets", "target_rounding_mode"}
+    assert _default_value(result, "target_rounding_mode") == "ceiling"
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"targets": [first.entity_id, second.entity_id]}
+        result["flow_id"],
+        {
+            "targets": [first.entity_id, second.entity_id],
+            "target_rounding_mode": "floor",
+        },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -480,6 +496,7 @@ async def test_configure_menu_edits_targets_and_preserves_existing_target_identi
     assert entry.data["targets"][1]["target_uuid"]
     assert entry.options["calibration_stable-target-uuid"] == 0.5
     assert "calibration_obsolete-target-uuid" not in entry.options
+    assert entry.options["target_rounding_mode"] == "floor"
     await hass.async_block_till_done()
     await hass.config_entries.async_unload(entry.entry_id)
 
@@ -564,7 +581,6 @@ async def test_no_write_history_mode_still_collects_stale_safety_temperatures(
 
     result = await flow.async_step_command_behavior(
         {
-            "target_rounding_mode": "floor",
             "minimum_range_gap": 1.0,
             "minimum_meaningful_change": 0.1,
             "feedback_resolution": 0.01,
@@ -649,8 +665,10 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
     )
     assert result["step_id"] == "targets"
     assert _suggested_value(result, "targets") == [target.entity_id]
+    assert _suggested_value(result, "target_rounding_mode") == "mathematical"
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"targets": [target.entity_id]}
+        result["flow_id"],
+        {"targets": [target.entity_id], "target_rounding_mode": "floor"},
     )
     assert result["step_id"] == "preferences"
     assert {"comfort_strategy", "radiant_model", "advanced_settings"} <= _schema_keys(result)
@@ -673,6 +691,7 @@ async def test_reconfigure_preserves_target_uuid_for_registry_identity(
     assert entry.data["rh_declared"] == 45.0
     assert "rh_entity" not in entry.data
     assert entry.options["comfort_strategy"] == "comfort"
+    assert entry.options["target_rounding_mode"] == "floor"
     assert "occupancy_entity" not in entry.options
     await hass.async_block_till_done()
     if entry.state is config_entries.ConfigEntryState.LOADED:
@@ -734,10 +753,15 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
         },
     )
     assert result["step_id"] == "command_behavior"
+    assert _schema_keys(result) == {
+        "minimum_range_gap",
+        "minimum_meaningful_change",
+        "feedback_resolution",
+        "fallback_mode",
+    }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            "target_rounding_mode": "mathematical",
             "minimum_range_gap": 1.0,
             "minimum_meaningful_change": 0.1,
             "feedback_resolution": 0.01,
@@ -831,10 +855,16 @@ async def test_config_flow_reports_invalid_environment_and_target_registration(
         result["flow_id"], {"rh_entity": "sensor.rh"}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"targets": ["climate.not_registered"]}
+        result["flow_id"],
+        {
+            "targets": ["climate.not_registered"],
+            "target_rounding_mode": "mathematical",
+        },
     )
     assert result["errors"] == {"targets": "target_not_registered"}
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"targets": []})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"targets": [], "target_rounding_mode": "mathematical"}
+    )
     assert result["errors"] == {"targets": "invalid_targets"}
 
 
@@ -877,7 +907,8 @@ async def test_config_flow_rejects_target_claimed_by_enabled_entry(
         result["flow_id"], {"rh_declared": 50.0}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"targets": [target.entity_id]}
+        result["flow_id"],
+        {"targets": [target.entity_id], "target_rounding_mode": "mathematical"},
     )
     assert result["errors"] == {"targets": "target_already_controlled"}
 
