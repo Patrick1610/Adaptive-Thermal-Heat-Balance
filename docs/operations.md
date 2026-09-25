@@ -6,8 +6,9 @@ and only the newest queued snapshot survives an event burst.
 
 ## Status and “Why this temperature?”
 
-Entity state stays compact. **Target — current** exposes the active scenario, comfort/setback/Boost
-policy, pre-slew and requested values, quality/recovery state, and per-climate temperature,
+Entity state stays compact. **Target — current** shows the common normalized setpoint ATHB offers
+to the climate and exposes the active scenario, comfort/setback/Boost policy, pre-slew and
+requested values, quality/recovery state, and per-climate temperature,
 setpoint, bounds, grid, normalized command and outcome as native attributes. Downloaded diagnostics contain the latest coherent decision and at
 most 20 material traces: source provenance and validity, history quality, radiant assumptions,
 comfort-level votes, attempted roots, occupancy/Boost and critical transforms, normalized target, ownership and

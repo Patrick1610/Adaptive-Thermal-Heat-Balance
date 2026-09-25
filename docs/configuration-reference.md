@@ -82,18 +82,21 @@ The outer comfort limits remain descriptive even when a constant-moisture invers
 saturation: only that display envelope continues at 100% RH. Heating/cooling control points,
 eligibility and climate commands retain the stricter moisture constraint.
 
-For ordinary scalar heating-only or cooling-only zones, three room-coordinate sensors make the
-policy result explicit:
+For ordinary scalar heating-only or cooling-only zones, three target sensors make the policy and
+actuator result explicit:
 
 - **Target — occupied** is the target for the selected comfort level with no occupancy setback and
   with Boost off.
 - **Target — unoccupied** is the corresponding target with the configured occupancy setback and
   with Boost off.
-- **Target — current** is the target that applies now, including occupancy, Boost and any ordinary
-  environmental slew limiting.
+- **Target — current** is the common normalized actuator setpoint ATHB offers now, including
+  occupancy, Boost, ordinary environmental slew limiting, calibration, limits and configured grid
+  rounding.
 
-These sensor states are the common room target before per-actuator calibration, device limits and
-grid rounding. **Target — current** exposes a structured `decision` attribute with scenario,
+Occupied and Unoccupied remain room-coordinate policy values before per-actuator calibration,
+device limits and grid rounding. When multiple controlled climates normalize Current differently,
+the single Current state is unavailable and its `per_climate` attribute remains authoritative.
+**Target — current** exposes a structured `decision` attribute with scenario,
 comfort, occupancy/setback, Boost phase, governing control point, pre-slew/requested values,
 transition, quality, suppression and recovery state. Its `per_climate` attribute includes current
 temperature, reported setpoint, calibration, bounds, grid, HVAC mode/action, availability,

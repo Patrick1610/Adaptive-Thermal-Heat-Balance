@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.15
+
+- Show the normalized, grid-rounded actuator request on **Target — current** while retaining the
+  unrounded room-policy values on **Target — occupied** and **Target — unoccupied**.
+- Remove the duplicated **Room — current temperature** entity and clean its existing entity-registry
+  entry on upgrade; the configured source sensor or climate remains the room-temperature entity.
+
 ## 0.2.14
 
 - Show target-grid rounding directly on the **Controlled climate entities** page in setup,

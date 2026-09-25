@@ -41,11 +41,6 @@ DESCRIPTIONS = (
         suggested_display_precision=2,
     ),
     Description(
-        "comfort_range_current",
-        temperature=True,
-        suggested_display_precision=2,
-    ),
-    Description(
         "comfort_range_neutral_delta",
         temperature=True,
         suggested_display_precision=2,
@@ -154,9 +149,6 @@ class AthbSensor(AthbEntity, RestoreSensor):
             votes = self.runtime.values.get("root_sensation_votes", {})
             attributes["sensation_vote"] = votes.get(root_name) if isinstance(votes, dict) else None
             attributes["range_role"] = range_role
-        elif self.description.key == "comfort_range_current":
-            attributes["range_role"] = "current_observation"
-            attributes["source_entity"] = self.runtime.entry.data.get("primary_temperature")
         elif self.description.key == "comfort_range_neutral_delta":
             attributes["range_role"] = "neutral_delta"
             attributes["calculation"] = "room_temperature_minus_reference"
@@ -182,9 +174,16 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
 
     def _live_value(self) -> float | None:
         values: list[float] = []
-        for target in self.runtime.values.get("target_scenarios", {}).values():
-            room = target.get(self.scenario, {}).get("room", {})
-            value = room.get("temperature")
+        if self.scenario == "current":
+            targets = self.runtime.values.get("effective_targets", {}).values()
+            target_values = (target.get("temperature") for target in targets)
+        else:
+            targets = self.runtime.values.get("target_scenarios", {}).values()
+            target_values = (
+                target.get(self.scenario, {}).get("room", {}).get("temperature")
+                for target in targets
+            )
+        for value in target_values:
             if isinstance(value, int | float) and not isinstance(value, bool):
                 values.append(float(value))
         if values and max(values) - min(values) <= 1e-6:
@@ -215,7 +214,11 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
             data_quality = "restored_stale"
         attributes = {
             **super().extra_state_attributes,
-            "target_basis": "room_policy_before_actuator_adjustments",
+            "target_basis": (
+                "normalized_actuator_request"
+                if self.scenario == "current"
+                else "room_policy_before_actuator_adjustments"
+            ),
             "scenario": self.scenario,
             "data_quality": data_quality,
             "last_valid_at": self.runtime.values.get("last_valid_at"),
@@ -639,6 +642,7 @@ def _remove_stale_sensor_entities(
     managed_suffixes = tuple(f"_{endpoint}" for endpoint in TARGET_ENDPOINTS)
     core_ids = {
         *(f"{entry.runtime_data.zone_uuid}_{item.key}" for item in DESCRIPTIONS),
+        f"{entry.runtime_data.zone_uuid}_comfort_range_current",
         *(f"{entry.runtime_data.zone_uuid}_target_{scenario}" for scenario in TARGET_SCENARIOS),
         f"{entry.runtime_data.zone_uuid}_target_heating_deviation",
         f"{entry.runtime_data.zone_uuid}_target_cooling_deviation",

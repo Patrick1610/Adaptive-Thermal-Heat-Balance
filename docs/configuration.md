@@ -36,16 +36,20 @@ The device page groups occupant-facing outputs under semantic names such as **Co
 **Surface**, and **Weather**. The diagnostic section separates the outer **Comfort range**
 (lower limit, neutral reference and upper limit) from the selected inner heating and
 cooling **Control points**. Input readiness, control state, and eligibility are also diagnostic
-entities. Non-target unique IDs remain stable. The former per-climate scalar target entities are
-deliberately replaced by the three room-target entities below; dashboards or automations that
-referenced an old scalar target must select the new Current target once after updating.
+entities. The measured room temperature remains available from its configured source sensor or
+climate entity and is deliberately not duplicated as an ATHB entity. The former per-climate scalar
+target entities are deliberately replaced by the three target entities below; dashboards or
+automations that referenced an old scalar target must select the new Current target once after
+updating.
 
 For a normal scalar heat-only or cool-only zone, **Target — current**, **Target — occupied** and
-**Target — unoccupied** show the common room target without repeating climate names. Open
-**Target — current** to inspect the decision chain, actual temperature, reported setpoint, limits,
-grid and exact normalized ATHB request for every controlled climate. Other ATHB entities also expose relevant source, provenance,
-setting and related-value attributes so a displayed result can be traced without adding more
-entities to the device page.
+**Target — unoccupied** avoid repeating climate names. Current shows the common normalized
+setpoint ATHB offers to the climate after calibration, limits and configured grid rounding;
+Occupied and Unoccupied retain the unrounded room-policy values. Open **Target — current** to
+inspect the decision chain, actual temperature, reported setpoint, limits, grid and exact
+normalized ATHB request for every controlled climate. Other ATHB entities also expose relevant
+source, provenance, setting and related-value attributes so a displayed result can be traced
+without adding more entities to the device page.
 
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
 normalization. Advanced settings offer Ceiling, Floor and Mathematical nearest-value rounding;

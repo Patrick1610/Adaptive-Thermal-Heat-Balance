@@ -582,6 +582,13 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
         config_entry=entry,
         suggested_object_id="obsolete_cooling_deviation",
     )
+    obsolete_room_temperature = registry.async_get_or_create(
+        "sensor",
+        "athb",
+        "zone-1_comfort_range_current",
+        config_entry=entry,
+        suggested_object_id="obsolete_room_temperature",
+    )
     added: list[Any] = []
     await async_setup_sensor_entry(hass, cast(Any, entry), added.extend)
 
@@ -604,6 +611,8 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
     assert registry.async_get(obsolete_surface.entity_id) is None
     assert registry.async_get(obsolete_scalar.entity_id) is None
     assert registry.async_get(obsolete_cooling_deviation.entity_id) is None
+    assert registry.async_get(obsolete_room_temperature.entity_id) is None
+    assert "zone-1_comfort_range_current" not in unique_ids
     assert "zone-1_input_status" in unique_ids
 
 
@@ -667,6 +676,7 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
     )
     runtime.publish(
         {
+            "effective_targets": {"target-1": {"temperature": 19.5}},
             "target_scenarios": {
                 "target-1": {
                     "entity_id": "climate.roommind_override",
@@ -690,7 +700,8 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
     )
 
     sensor = ZoneTargetSensor(runtime, "current")
-    assert sensor.native_value == 19.37
+    assert sensor.native_value == 19.5
+    assert sensor.extra_state_attributes["target_basis"] == "normalized_actuator_request"
     attributes = sensor.extra_state_attributes
     climate = attributes["per_climate"]["climate.roommind_override"]
     assert climate == {
@@ -739,10 +750,13 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
     occupied = ZoneTargetSensor(runtime, "occupied")
     assert occupied.native_value == 21.37
     assert occupied.available
+    assert occupied.extra_state_attributes["target_basis"] == (
+        "room_policy_before_actuator_adjustments"
+    )
     assert "per_climate" not in occupied.extra_state_attributes
 
 
-def test_zone_target_requires_one_numeric_common_room_value() -> None:
+def test_current_zone_target_requires_one_common_normalized_actuator_value() -> None:
     runtime = _runtime()
     sensor = ZoneTargetSensor(runtime, "current")
     assert sensor.native_value is None
@@ -750,10 +764,10 @@ def test_zone_target_requires_one_numeric_common_room_value() -> None:
 
     runtime.publish(
         {
-            "target_scenarios": {
-                "one": {"current": {"room": {"temperature": 19.0}}},
-                "two": {"current": {"room": {"temperature": 20.0}}},
-                "invalid": {"current": {"room": {"temperature": True}}},
+            "effective_targets": {
+                "one": {"temperature": 19.0},
+                "two": {"temperature": 20.0},
+                "invalid": {"temperature": True},
             }
         }
     )
@@ -945,17 +959,12 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
         "comfort_range_reference"
     )
     assert root_sensors["upper_comfort_boundary"].extra_state_attributes["sensation_vote"] == 0.5
-    current_description = next(item for item in DESCRIPTIONS if item.key == "comfort_range_current")
     delta_description = next(
         item for item in DESCRIPTIONS if item.key == "comfort_range_neutral_delta"
     )
-    current_sensor = AthbSensor(runtime, current_description)
     delta_sensor = AthbSensor(runtime, delta_description)
-    assert current_sensor.native_value == 22.1
     assert delta_sensor.native_value == -1.2
-    assert current_description.entity_category is None
     assert delta_description.entity_category is None
-    assert current_sensor.extra_state_attributes["source_entity"] == "sensor.room"
     assert delta_sensor.extra_state_attributes["calculation"] == (
         "room_temperature_minus_reference"
     )
