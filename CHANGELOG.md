@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.16
+
+- Recalculate immediately when the configured occupancy source changes state, so occupied and
+  unoccupied targets switch without waiting for another measurement event.
+- Ignore attribute-only updates whose occupancy state is unchanged, avoiding unnecessary
+  recalculations.
+
 ## 0.2.15
 
 - Show the normalized, grid-rounded actuator request on **Target — current** while retaining the

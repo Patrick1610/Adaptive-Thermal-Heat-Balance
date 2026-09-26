@@ -463,6 +463,11 @@ class ZoneRuntime:
         entity_id = str(event.data.get("entity_id", ""))
         old_state = cast(State | None, event.data.get("old_state"))
         new_state = cast(State | None, event.data.get("new_state"))
+        occupancy_event = entity_id == str(self.entry.options.get("occupancy_entity", ""))
+        occupancy_changed = occupancy_event and (
+            (old_state.state if old_state is not None else None)
+            != (new_state.state if new_state is not None else None)
+        )
         target = next(
             (item for item in self.entry.data.get("targets", ()) if item["entity_id"] == entity_id),
             None,
@@ -482,9 +487,9 @@ class ZoneRuntime:
         recovered = self._refresh_freshness_evidence(dt_util.utcnow()) if activity_event else set()
         if material_source_event:
             self._update_critical_delta(entity_id, new_state)
-        if material_source_event or recovered:
+        if material_source_event or recovered or occupancy_changed:
             self.input_generation += 1
-        if target is not None or material_source_event or recovered:
+        if target is not None or material_source_event or recovered or occupancy_changed:
             self.schedule_environmental_snapshot()
         elif activity_event:
             self._reschedule_freshness_only()

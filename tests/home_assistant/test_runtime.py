@@ -2841,6 +2841,61 @@ def test_occupancy_change_is_an_explicit_transition(hass: HomeAssistant) -> None
     assert runtime.pending_transition_reasons == {"occupancy"}
 
 
+@pytest.mark.parametrize(("old_value", "new_value"), [("off", "on"), ("on", "off")])
+def test_occupancy_source_state_change_schedules_immediate_snapshot(
+    old_value: str,
+    new_value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime()
+    runtime.entry.options["occupancy_entity"] = "binary_sensor.room_occupied"
+    scheduler = MagicMock()
+    monkeypatch.setattr(ZoneRuntime, "schedule_environmental_snapshot", scheduler)
+    generation = runtime.input_generation
+
+    runtime._handle_state_event(
+        cast(
+            Any,
+            SimpleNamespace(
+                data={
+                    "entity_id": "binary_sensor.room_occupied",
+                    "old_state": State("binary_sensor.room_occupied", old_value),
+                    "new_state": State("binary_sensor.room_occupied", new_value),
+                }
+            ),
+        )
+    )
+
+    assert runtime.input_generation == generation + 1
+    scheduler.assert_called_once_with()
+
+
+def test_occupancy_source_attribute_only_update_does_not_recalculate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime()
+    runtime.entry.options["occupancy_entity"] = "binary_sensor.room_occupied"
+    scheduler = MagicMock()
+    monkeypatch.setattr(ZoneRuntime, "schedule_environmental_snapshot", scheduler)
+    generation = runtime.input_generation
+
+    runtime._handle_state_event(
+        cast(
+            Any,
+            SimpleNamespace(
+                data={
+                    "entity_id": "binary_sensor.room_occupied",
+                    "old_state": State("binary_sensor.room_occupied", "on", {"source": "old"}),
+                    "new_state": State("binary_sensor.room_occupied", "on", {"source": "new"}),
+                }
+            ),
+        )
+    )
+
+    assert runtime.input_generation == generation
+    scheduler.assert_not_called()
+
+
 async def test_climate_can_be_primary_source_and_target_on_the_same_event(
     hass: HomeAssistant,
 ) -> None:
