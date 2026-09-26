@@ -2627,6 +2627,16 @@ class ZoneRuntime:
         recovery_reassertion: bool = False,
     ) -> NormalizedIntent:
         state = self.ownership[target.registry_identity]
+        rounding_mode = _grid_rounding_mode(self.entry.options.get("target_rounding_mode"))
+        grid = (
+            normalized.heating.grid
+            if isinstance(normalized, NormalizedRangeTarget)
+            else normalized.grid
+        )
+        step_room_c = abs(
+            ha_to_celsius(grid.step_ha, target.capability.temperature_unit)
+            - ha_to_celsius(0.0, target.capability.temperature_unit)
+        )
         common = (
             target.entity_id,
             target.registry_identity,
@@ -2662,6 +2672,8 @@ class ZoneRuntime:
                 normalized.cooling.bounded_c,
                 normalized.heating.grid.step_ha,
                 *common[3:],
+                rounding_mode=None if rounding_mode is None else rounding_mode.value,
+                step_room_c=step_room_c,
             )
         return NormalizedIntent(
             common[0],
@@ -2679,6 +2691,8 @@ class ZoneRuntime:
             None,
             normalized.grid.step_ha,
             *common[3:],
+            rounding_mode=None if rounding_mode is None else rounding_mode.value,
+            step_room_c=step_room_c,
         )
 
     def _broker_preflight(self, identity: str) -> BrokerPreflight:

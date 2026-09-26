@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.17
+
+- Apply quantization release hysteresis at the grid boundary belonging to Ceiling, Floor or
+  Mathematical rounding. A less-demanding Floor heating target can now be dispatched after the
+  established 0.1 °C anti-chatter margin instead of being blocked for an additional grid step.
+
 ## 0.2.16
 
 - Recalculate immediately when the configured occupancy source changes state, so occupied and

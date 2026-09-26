@@ -60,6 +60,8 @@ class NormalizedIntent:
     explicit_transition: bool = False
     safety_deescalation: bool = False
     recovery_reassertion: bool = False
+    rounding_mode: str | None = None
+    step_room_c: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +261,21 @@ def _maximum_change_ha(a: TargetFingerprint, b: TargetFingerprint) -> float:
 
 
 def _release_hysteresis_blocks(intent: NormalizedIntent, acknowledged: AcknowledgedTarget) -> bool:
+    def release_boundary(normalized_room_c: float, *, heating: bool) -> float:
+        """Return the grid boundary crossed by the configured rounding policy."""
+
+        step = intent.step_room_c
+        if step is None or intent.rounding_mode is None:
+            return normalized_room_c
+        if intent.rounding_mode == "floor":
+            return normalized_room_c + step if heating else normalized_room_c
+        if intent.rounding_mode == "ceiling":
+            return normalized_room_c if heating else normalized_room_c - step
+        if intent.rounding_mode == "mathematical":
+            half_step = step / 2.0
+            return normalized_room_c + half_step if heating else normalized_room_c - half_step
+        return normalized_room_c
+
     if intent.explicit_transition:
         return False
     if intent.shape is TargetShape.SCALAR:
@@ -268,19 +285,19 @@ def _release_hysteresis_blocks(intent: NormalizedIntent, acknowledged: Acknowled
             intent.direction is ActuationDirection.HEATING_ONLY
             and intent.normalized_room_c < acknowledged.scalar_room_c
         ):
+            boundary = release_boundary(intent.normalized_room_c, heating=True)
             return (
                 intent.continuous_bounded_room_c is None
-                or intent.continuous_bounded_room_c
-                > intent.normalized_room_c - RELEASE_HYSTERESIS_C
+                or intent.continuous_bounded_room_c > boundary - RELEASE_HYSTERESIS_C
             )
         if (
             intent.direction is ActuationDirection.COOLING_ONLY
             and intent.normalized_room_c > acknowledged.scalar_room_c
         ):
+            boundary = release_boundary(intent.normalized_room_c, heating=False)
             return (
                 intent.continuous_bounded_room_c is None
-                or intent.continuous_bounded_room_c
-                < intent.normalized_room_c + RELEASE_HYSTERESIS_C
+                or intent.continuous_bounded_room_c < boundary + RELEASE_HYSTERESIS_C
             )
         return False
     if None in {
@@ -296,15 +313,15 @@ def _release_hysteresis_blocks(intent: NormalizedIntent, acknowledged: Acknowled
     assert acknowledged.high_room_c is not None
     lower_releases = intent.normalized_low_room_c < acknowledged.low_room_c
     upper_releases = intent.normalized_high_room_c > acknowledged.high_room_c
+    lower_boundary = release_boundary(intent.normalized_low_room_c, heating=True)
+    upper_boundary = release_boundary(intent.normalized_high_room_c, heating=False)
     lower_blocked = lower_releases and (
         intent.continuous_bounded_low_room_c is None
-        or intent.continuous_bounded_low_room_c
-        > intent.normalized_low_room_c - RELEASE_HYSTERESIS_C
+        or intent.continuous_bounded_low_room_c > lower_boundary - RELEASE_HYSTERESIS_C
     )
     upper_blocked = upper_releases and (
         intent.continuous_bounded_high_room_c is None
-        or intent.continuous_bounded_high_room_c
-        < intent.normalized_high_room_c + RELEASE_HYSTERESIS_C
+        or intent.continuous_bounded_high_room_c < upper_boundary + RELEASE_HYSTERESIS_C
     )
     return lower_blocked or upper_blocked
 

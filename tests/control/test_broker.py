@@ -397,6 +397,90 @@ def test_anti_chatter_reason_order_and_directional_release_hysteresis() -> None:
     )
 
 
+def test_floor_rounding_release_hysteresis_uses_crossed_grid_boundary() -> None:
+    acknowledged = _ack(18.5)
+    floor_release = replace(
+        _intent(value=18.0),
+        continuous_bounded_room_c=18.41,
+        rounding_mode="floor",
+        step_room_c=0.5,
+    )
+
+    assert (
+        anti_chatter_reason(
+            floor_release,
+            acknowledged=acknowledged,
+            last_dispatch_at=None,
+            now=NOW,
+        )
+        == "quantization_hysteresis"
+    )
+    assert (
+        anti_chatter_reason(
+            replace(floor_release, continuous_bounded_room_c=18.4),
+            acknowledged=acknowledged,
+            last_dispatch_at=None,
+            now=NOW,
+        )
+        is None
+    )
+
+
+def test_explicit_rounding_release_hysteresis_respects_policy_boundaries() -> None:
+    heating_ack = _ack(18.5)
+    cooling_ack = _ack(18.0)
+
+    mathematical_heating = replace(
+        _intent(value=18.0),
+        continuous_bounded_room_c=18.16,
+        rounding_mode="mathematical",
+        step_room_c=0.5,
+    )
+    assert (
+        anti_chatter_reason(
+            mathematical_heating,
+            acknowledged=heating_ack,
+            last_dispatch_at=None,
+            now=NOW,
+        )
+        == "quantization_hysteresis"
+    )
+    assert (
+        anti_chatter_reason(
+            replace(mathematical_heating, continuous_bounded_room_c=18.15),
+            acknowledged=heating_ack,
+            last_dispatch_at=None,
+            now=NOW,
+        )
+        is None
+    )
+
+    ceiling_cooling = replace(
+        _intent(value=18.5, direction=ActuationDirection.COOLING_ONLY),
+        continuous_bounded_room_c=18.09,
+        rounding_mode="ceiling",
+        step_room_c=0.5,
+    )
+    assert (
+        anti_chatter_reason(
+            ceiling_cooling,
+            acknowledged=cooling_ack,
+            last_dispatch_at=None,
+            now=NOW,
+        )
+        == "quantization_hysteresis"
+    )
+    assert (
+        anti_chatter_reason(
+            replace(ceiling_cooling, continuous_bounded_room_c=18.1),
+            acknowledged=cooling_ack,
+            last_dispatch_at=None,
+            now=NOW,
+        )
+        is None
+    )
+
+
 def test_explicit_transition_bypasses_hysteresis_and_ordinary_but_not_hard_interval() -> None:
     intent = replace(_intent(value=19.5, explicit=True), continuous_bounded_room_c=19.49)
     acknowledged = _ack(20.0)
