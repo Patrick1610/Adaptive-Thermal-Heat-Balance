@@ -242,6 +242,140 @@ async def test_collector_bounded_reader_and_pre_start_paths(hass: Any, monkeypat
     )
 
 
+async def test_automatic_hold_learns_only_from_consecutive_live_reports(hass: Any) -> None:
+    collector = OutdoorHistoryCollector(
+        hass,
+        "sensor.outdoor",
+        "UTC",
+        None,
+        hold_mode="automatic",
+        fixed_hold_minutes=120.0,
+        references=1,
+    )
+    store = MemoryStore()
+    collector._store = cast(Any, store)
+    await collector.async_start(now=NOW, current=OutdoorSample(NOW, 5.0))
+
+    assert collector.effective_hold_seconds == 7200.0
+    for index in range(13):
+        observed = NOW + timedelta(minutes=20 * (index + 1))
+        collector.add_sample(
+            OutdoorSample(observed, 5.0),
+            now=observed,
+            live=True,
+        )
+
+    diagnostics = collector.diagnostics(now=NOW + timedelta(hours=5))
+    assert diagnostics["sample_count"] == 12
+    assert diagnostics["p95_interval_minutes"] == 20.0
+    assert diagnostics["effective_hold_minutes"] == 30.0
+
+    invalid_at = NOW + timedelta(hours=5, minutes=1)
+    collector.add_sample(
+        OutdoorSample(invalid_at, None, False),
+        now=invalid_at,
+        live=True,
+    )
+    resumed_at = invalid_at + timedelta(minutes=20)
+    collector.add_sample(
+        OutdoorSample(resumed_at, 5.0),
+        now=resumed_at,
+        live=True,
+    )
+    assert collector.diagnostics(now=resumed_at)["sample_count"] == 12
+    await collector.async_close()
+
+    assert store.payload is not None
+    samples = cast(list[object], store.payload["automatic_interval_samples"])
+    samples[:0] = [
+        "not-a-record",
+        {"ended_at": "missing-seconds"},
+        {"ended_at": "not-a-date", "seconds": 1200.0},
+        {"ended_at": "2026-09-10T10:00:00", "seconds": 1200.0},
+        {
+            "ended_at": (NOW - timedelta(days=8)).isoformat(),
+            "seconds": 1200.0,
+        },
+    ]
+    resumed = OutdoorHistoryCollector(
+        hass,
+        "sensor.outdoor",
+        "UTC",
+        None,
+        hold_mode="automatic",
+        fixed_hold_minutes=120.0,
+        references=1,
+    )
+    resumed._store = cast(Any, MemoryStore(store.payload))
+    await resumed.async_start(now=resumed_at, current=None)
+
+    assert resumed.diagnostics(now=resumed_at)["sample_count"] == 12
+    assert resumed.effective_hold_seconds == 1800.0
+    await resumed.async_close()
+
+
+async def test_equal_live_report_renews_hold_without_notifying_subscriber(hass: Any) -> None:
+    notifications: list[str] = []
+    collector = OutdoorHistoryCollector(
+        hass,
+        "sensor.outdoor",
+        "UTC",
+        None,
+        hold_mode="fixed",
+        fixed_hold_minutes=60.0,
+        references=1,
+    )
+    collector.subscribe(lambda: notifications.append("recalculated"))
+    collector._store = cast(Any, MemoryStore())
+    await collector.async_start(now=NOW, current=OutdoorSample(NOW, 5.0))
+
+    observed = NOW + timedelta(minutes=30)
+    changed = collector.add_sample(
+        OutdoorSample(observed, 5.0),
+        now=observed,
+        live=True,
+    )
+
+    assert not changed
+    assert notifications == []
+    assert collector.integrator is not None
+    assert collector.integrator.last_valid_observation == OutdoorSample(
+        observed,
+        5.0,
+        hold_seconds=3600.0,
+    )
+    await collector.async_close()
+
+
+async def test_manager_separates_collectors_by_hold_policy(hass: Any) -> None:
+    manager = OutdoorHistoryManager()
+    automatic, automatic_created = manager.acquire(
+        hass=hass,
+        source_identity="registry:outdoor",
+        timezone="UTC",
+        reader=None,
+        hold_mode="automatic",
+        fixed_hold_minutes=120.0,
+    )
+    fixed, fixed_created = manager.acquire(
+        hass=hass,
+        source_identity="registry:outdoor",
+        timezone="UTC",
+        reader=None,
+        hold_mode="fixed",
+        fixed_hold_minutes=120.0,
+    )
+
+    assert automatic_created
+    assert fixed_created
+    assert automatic is not fixed
+    assert manager.source_count == 2
+    assert manager.release(
+        "registry:outdoor", "UTC", hold_mode="automatic", fixed_hold_minutes=120.0
+    )
+    assert manager.release("registry:outdoor", "UTC", hold_mode="fixed", fixed_hold_minutes=120.0)
+
+
 async def test_manager_updates_live_entity_and_unsubscribes_one_zone(hass: Any) -> None:
     manager = OutdoorHistoryManager()
     notifications: list[str] = []
@@ -299,6 +433,7 @@ async def test_recorder_absence_and_exported_query_conversion(monkeypatch: Any) 
         "50",
         {"unit_of_measurement": "°F"},
         last_changed=NOW + timedelta(minutes=20),
+        last_reported=NOW + timedelta(minutes=30),
         last_updated=NOW + timedelta(minutes=20),
     )
     invalid = State(
@@ -338,3 +473,7 @@ async def test_recorder_absence_and_exported_query_conversion(monkeypatch: Any) 
     assert not samples[1].valid
     assert samples[2].value_c == 10.0
     assert samples[2].valid
+    assert samples[2].provenance == "recorder_last_updated"
+    assert samples[3].observed_at == NOW + timedelta(minutes=30)
+    assert samples[3].value_c == 10.0
+    assert samples[3].provenance == "recorder_last_reported"

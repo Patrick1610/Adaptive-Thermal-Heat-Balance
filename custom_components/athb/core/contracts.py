@@ -134,6 +134,7 @@ class ActuationDirection(StrEnum):
     HEATING_ONLY = "heating_only"
     COOLING_ONLY = "cooling_only"
     RANGED = "ranged"
+    BIDIRECTIONAL_SCALAR = "bidirectional_scalar"
 
 
 class CriticalEligibilityMode(StrEnum):

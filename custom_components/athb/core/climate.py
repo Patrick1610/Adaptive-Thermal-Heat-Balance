@@ -37,6 +37,14 @@ class GridRoundingMode(StrEnum):
     MATHEMATICAL = "mathematical"
 
 
+class BidirectionalScalarPolicy(StrEnum):
+    """How one scalar endpoint represents an adaptive heating/cooling band."""
+
+    DEMAND_AWARE = "demand_aware"
+    SEASONAL = "seasonal"
+    CENTERED = "centered"
+
+
 class AutoMapping(StrEnum):
     """Explicit temperature semantics for an adjustable HA auto mode."""
 
@@ -204,11 +212,11 @@ def resolve_capability(
             else ClimateFailure("unsupported_hvac_mode", "cool requires scalar target support")
         )
     if mode == "heat_cool":
-        return (
-            CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE)
-            if ranged
-            else ClimateFailure("unsupported_hvac_mode", "heat_cool requires range support")
-        )
+        if ranged:
+            return CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE)
+        if scalar:
+            return CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR)
+        return ClimateFailure("unsupported_hvac_mode", "heat_cool requires a temperature target")
     if mode == "auto":
         if auto_mapping is AutoMapping.UNMAPPED:
             auto_mapping = infer_auto_mapping(snapshot)
@@ -218,6 +226,8 @@ def resolve_capability(
             return CapabilityMapping(ActuationDirection.COOLING_ONLY, TargetShape.SCALAR)
         if auto_mapping is AutoMapping.RANGE and ranged:
             return CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE)
+        if auto_mapping is AutoMapping.BIDIRECTIONAL_SCALAR and scalar:
+            return CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR)
         return ClimateFailure("unsupported_auto_mapping")
     return ClimateFailure("unsupported_hvac_mode")
 
@@ -240,6 +250,8 @@ def infer_auto_mapping(snapshot: ClimateCapabilitySnapshot) -> AutoMapping:
         return AutoMapping.HEATING
     if has_cool and not has_heat:
         return AutoMapping.COOLING
+    if has_heat and has_cool:
+        return AutoMapping.BIDIRECTIONAL_SCALAR
     return AutoMapping.UNMAPPED
 
 

@@ -50,7 +50,8 @@ class AthbEntity(Entity):
             provenance: str,
             unit: str,
         ) -> dict[str, Any]:
-            observed = source_states.get(entity_id, {}) if entity_id else {}
+            raw_observed = source_states.get(entity_id, {}) if entity_id else {}
+            observed = raw_observed if isinstance(raw_observed, dict) else {}
             return {
                 "entity_id": entity_id,
                 "value": value,

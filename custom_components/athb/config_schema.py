@@ -94,6 +94,7 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         "boost_duration_minutes": (5.0, 180.0),
         "manual_override_minutes": (15.0, 1440.0),
         "running_mean_alpha": (0.6, 0.9),
+        "outdoor_fixed_hold_minutes": (30.0, 1440.0),
         "minimum_range_gap": (1.0, 10.0),
         "minimum_meaningful_change": (0.0, 5.0),
         "feedback_resolution": (0.0, 5.0),
@@ -160,6 +161,8 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         errors["inactive_cooling_temperature"] = "invalid_option"
     if data.get("fallback_mode", "fixed") not in {"fixed", "no_write"}:
         errors["fallback_mode"] = "invalid_option"
+    if data.get("outdoor_hold_mode", "fixed") not in {"automatic", "fixed"}:
+        errors["outdoor_hold_mode"] = "invalid_option"
     if data.get("target_rounding_mode", "mathematical") not in {
         "ceiling",
         "floor",
@@ -187,6 +190,21 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         "bidirectional_scalar",
     }:
         errors["auto_mapping"] = "invalid_option"
+    for name, value in data.items():
+        if name.startswith("auto_mapping_") and value not in {
+            "unmapped",
+            "heating",
+            "cooling",
+            "range",
+            "bidirectional_scalar",
+        }:
+            errors[name] = "invalid_option"
+        if name.startswith("bidirectional_scalar_policy_") and value not in {
+            "demand_aware",
+            "seasonal",
+            "centered",
+        }:
+            errors[name] = "invalid_option"
     critical = data.get("critical_locations", ())
     if not isinstance(critical, list | tuple) or len(critical) > 8:
         errors["critical_locations"] = "invalid_option"

@@ -26,16 +26,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> boo
 async def async_migrate_entry(hass: HomeAssistant, entry: AthbConfigEntry) -> bool:
     """Migrate legacy Profile choices to comfort level, occupancy setback and Boost."""
 
-    if entry.version == 2:
+    if entry.version == 3:
         return True
-    if entry.version != 1:
+    if entry.version not in {1, 2}:
         return False
     options = dict(entry.options)
-    legacy_profile = str(options.pop("profile", "comfort"))
-    if legacy_profile == "eco":
-        options[CONF_COMFORT_STRATEGY] = "eco"
-    options[CONF_BOOST_MODE] = "adaptive" if legacy_profile == "boost" else "off"
-    hass.config_entries.async_update_entry(entry, options=options, version=2)
+    if entry.version == 1:
+        legacy_profile = str(options.pop("profile", "comfort"))
+        if legacy_profile == "eco":
+            options[CONF_COMFORT_STRATEGY] = "eco"
+        options[CONF_BOOST_MODE] = "adaptive" if legacy_profile == "boost" else "off"
+    options.setdefault("outdoor_hold_mode", "fixed")
+    options.setdefault("outdoor_fixed_hold_minutes", 120.0)
+    hass.config_entries.async_update_entry(entry, options=options, version=3)
     return True
 
 

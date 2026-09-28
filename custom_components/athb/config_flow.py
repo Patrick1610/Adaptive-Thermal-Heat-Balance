@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, override
 from uuid import uuid4
 
@@ -49,7 +49,8 @@ from .const import (
     DEFAULT_STRATEGY,
     DOMAIN,
 )
-from .core.climate import CapabilityMapping, ClimateFailure, resolve_capability
+from .core.climate import AutoMapping, CapabilityMapping, ClimateFailure, resolve_capability
+from .core.contracts import ActuationDirection, TargetShape
 from .core.sources import SourceKind
 from .device_activity import compatible_activity_entities, sources_share_device
 
@@ -105,6 +106,8 @@ OPTION_DEFAULTS: dict[str, object] = {
     "lower_comfort_vote": -0.5,
     "upper_comfort_vote": 0.5,
     "running_mean_alpha": 0.8,
+    "outdoor_hold_mode": "automatic",
+    "outdoor_fixed_hold_minutes": 120.0,
     "eco_heating_setback_c": 2.0,
     "eco_cooling_setback_c": 2.0,
     "boost_delta_c": DEFAULT_BOOST_DELTA_C,
@@ -163,6 +166,8 @@ class _OptionsWizardMixin:
 
     async_show_form: Callable[..., ConfigFlowResult]
     add_suggested_values_to_schema: Callable[[vol.Schema, Mapping[str, Any] | None], vol.Schema]
+    _save_data_settings: Callable[..., ConfigFlowResult]
+    async_step_preferences: Callable[..., Awaitable[ConfigFlowResult]]
     hass: HomeAssistant
     _pending_options: dict[str, Any]
     _wizard_targets: list[dict[str, str]]
@@ -172,6 +177,8 @@ class _OptionsWizardMixin:
     _critical_count: int
     _critical_index: int
     _calibration_index: int
+    _target_behavior_index: int
+    _target_behavior_after: str
     _wizard_environment: dict[str, Any]
 
     def _activity_exclusions(self, environment: Mapping[str, Any]) -> set[str]:
@@ -306,6 +313,103 @@ class _OptionsWizardMixin:
         self._critical_count = len(self._critical_existing)
         self._critical_index = 0
         self._calibration_index = 0
+        self._target_behavior_index = 0
+        self._target_behavior_after = "preferences"
+
+    def _target_behavior_fields(self, target: Mapping[str, str]) -> dict[vol.Marker, object]:
+        """Return only capability choices that cannot be safely inferred."""
+
+        target_uuid = str(target["target_uuid"])
+        capability = capability_from_state(self.hass.states.get(str(target["entity_id"])))
+        mapping_key = f"auto_mapping_{target_uuid}"
+        policy_key = f"bidirectional_scalar_policy_{target_uuid}"
+        configured_mapping = str(self._pending_options.get(mapping_key, "unmapped"))
+        try:
+            auto_mapping = AutoMapping(configured_mapping)
+        except ValueError:
+            auto_mapping = AutoMapping.UNMAPPED
+        resolved = resolve_capability(capability, auto_mapping=auto_mapping)
+        fields: dict[vol.Marker, object] = {}
+        if isinstance(resolved, ClimateFailure) and resolved.reason == "unsupported_auto_mapping":
+            fields[vol.Required("auto_mapping", default=configured_mapping)] = _select(
+                ("heating", "cooling", "bidirectional_scalar"), "auto_mapping"
+            )
+            if configured_mapping == "bidirectional_scalar":
+                resolved = CapabilityMapping(
+                    ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR
+                )
+        if (
+            isinstance(resolved, CapabilityMapping)
+            and resolved.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+        ):
+            fields[
+                vol.Required(
+                    "bidirectional_scalar_policy",
+                    default=self._pending_options.get(policy_key, "demand_aware"),
+                )
+            ] = _select(
+                ("demand_aware", "seasonal", "centered"),
+                "bidirectional_scalar_policy",
+            )
+        return fields
+
+    async def _begin_target_behaviors(self, *, after: str) -> ConfigFlowResult:
+        self._target_behavior_index = 0
+        self._target_behavior_after = after
+        return await self.async_step_target_behavior()
+
+    async def async_step_target_behavior(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure only ambiguous or bidirectional scalar target semantics."""
+
+        while self._target_behavior_index < len(self._wizard_targets):
+            target = self._wizard_targets[self._target_behavior_index]
+            fields = self._target_behavior_fields(target)
+            if user_input is not None:
+                target_uuid = str(target["target_uuid"])
+                submitted_mapping = user_input.get("auto_mapping")
+                submitted_policy = user_input.get("bidirectional_scalar_policy")
+                if submitted_mapping is not None:
+                    self._pending_options[f"auto_mapping_{target_uuid}"] = submitted_mapping
+                    if submitted_mapping != "bidirectional_scalar":
+                        self._pending_options.pop(
+                            f"bidirectional_scalar_policy_{target_uuid}", None
+                        )
+                if submitted_policy is not None:
+                    self._pending_options[f"bidirectional_scalar_policy_{target_uuid}"] = (
+                        submitted_policy
+                    )
+                user_input = None
+                fields = self._target_behavior_fields(target)
+                if len(self._wizard_targets) != 1 and any(
+                    str(key.schema) == "bidirectional_scalar_policy" for key in fields
+                ):
+                    return self.async_show_form(
+                        step_id="target_behavior",
+                        data_schema=vol.Schema(fields),
+                        errors={"base": "bidirectional_scalar_requires_single_target"},
+                        description_placeholders={"target": str(target["entity_id"])},
+                    )
+                if submitted_mapping == "bidirectional_scalar" and submitted_policy is None:
+                    return self.async_show_form(
+                        step_id="target_behavior",
+                        data_schema=vol.Schema(fields),
+                        description_placeholders={"target": str(target["entity_id"])},
+                    )
+                self._target_behavior_index += 1
+                continue
+            if not fields:
+                self._target_behavior_index += 1
+                continue
+            return self.async_show_form(
+                step_id="target_behavior",
+                data_schema=vol.Schema(fields),
+                description_placeholders={"target": str(target["entity_id"])},
+            )
+        if self._target_behavior_after == "save":
+            return self._save_data_settings(options=self._pending_options)
+        return await self.async_step_preferences()
 
     async def _async_preferences(
         self, step_id: str, user_input: dict[str, Any] | None
@@ -637,6 +741,9 @@ class _OptionsWizardMixin:
     ) -> ConfigFlowResult:
         if user_input is not None:
             self._pending_options.update(user_input)
+            if self._pending_options["outdoor_hold_mode"] == "fixed":
+                return await self.async_step_outdoor_history_hold()
+            self._pending_options.pop("outdoor_fixed_hold_minutes", None)
             return await self.async_step_fallback_temperatures()
         defaults = self._pending_options
         return self.async_show_form(
@@ -656,6 +763,30 @@ class _OptionsWizardMixin:
                     vol.Required(
                         "fallback_mode", default=defaults.get("fallback_mode", "fixed")
                     ): _select(("fixed", "no_write"), "fallback_mode"),
+                    vol.Required(
+                        "outdoor_hold_mode",
+                        default=defaults.get("outdoor_hold_mode", "automatic"),
+                    ): _select(("automatic", "fixed"), "outdoor_hold_mode"),
+                }
+            ),
+        )
+
+    async def async_step_outdoor_history_hold(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure the bounded report hold used by the outdoor collector."""
+
+        if user_input is not None:
+            self._pending_options.update(user_input)
+            return await self.async_step_fallback_temperatures()
+        return self.async_show_form(
+            step_id="outdoor_history_hold",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "outdoor_fixed_hold_minutes",
+                        default=self._pending_options.get("outdoor_fixed_hold_minutes", 120.0),
+                    ): _number(30.0, 1440.0, 30.0, "min")
                 }
             ),
         )
@@ -925,7 +1056,7 @@ class _OptionsWizardMixin:
 class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMAIN):
     """Create and fully reconfigure one thermal-zone device."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
@@ -1045,7 +1176,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     environment_data=self._data,
                 )
                 self._pending_options["target_rounding_mode"] = target_rounding_mode
-                return await self.async_step_preferences()
+                return await self._begin_target_behaviors(after="preferences")
         defaults = [target["entity_id"] for target in self._data.get(CONF_TARGETS, ())]
         marker = (
             vol.Required(CONF_TARGETS, default=defaults) if defaults else vol.Required(CONF_TARGETS)
@@ -1098,6 +1229,19 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     "registry_identity": registry_entry.id,
                 }
             )
+        direct_bidirectional = sum(
+            1
+            for target in targets
+            if isinstance(
+                mapping := resolve_capability(
+                    capability_from_state(self.hass.states.get(target["entity_id"]))
+                ),
+                CapabilityMapping,
+            )
+            and mapping.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+        )
+        if direct_bidirectional and len(targets) != 1:
+            return {CONF_TARGETS: "bidirectional_scalar_requires_single_target"}, []
         return {}, targets
 
     async def async_step_preferences(
@@ -1235,7 +1379,13 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         for target in self._data.get(CONF_TARGETS, ()):
             entity_id = str(target["entity_id"])
             capability = capability_from_state(self.hass.states.get(entity_id))
-            mapping = resolve_capability(capability)
+            target_uuid = str(target["target_uuid"])
+            raw_mapping = self._pending_options.get(f"auto_mapping_{target_uuid}", "unmapped")
+            try:
+                auto_mapping = AutoMapping(str(raw_mapping))
+            except ValueError:
+                auto_mapping = AutoMapping.UNMAPPED
+            mapping = resolve_capability(capability, auto_mapping=auto_mapping)
             if isinstance(mapping, CapabilityMapping):
                 outcome = f"{mapping.direction.value}/{mapping.shape.value}"
             else:
@@ -1442,7 +1592,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
                 for key in tuple(self._pending_options):
                     if key.startswith("calibration_") and key not in valid_calibrations:
                         self._pending_options.pop(key)
-                return self._save_data_settings(options=self._pending_options)
+                return await self._begin_target_behaviors(after="save")
         defaults = [
             target["entity_id"]
             for target in self._pending_data.get(CONF_TARGETS, ())
@@ -1488,6 +1638,19 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
                     "registry_identity": registry_entry.id,
                 }
             )
+        direct_bidirectional = sum(
+            1
+            for target in targets
+            if isinstance(
+                mapping := resolve_capability(
+                    capability_from_state(self.hass.states.get(target["entity_id"]))
+                ),
+                CapabilityMapping,
+            )
+            and mapping.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+        )
+        if direct_bidirectional and len(targets) != 1:
+            return {CONF_TARGETS: "bidirectional_scalar_requires_single_target"}, []
         return {}, targets
 
     def _target_is_claimed(self, registry_identity: str) -> bool:

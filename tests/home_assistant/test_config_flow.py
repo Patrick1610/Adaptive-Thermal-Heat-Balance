@@ -144,9 +144,11 @@ async def test_version_one_profiles_migrate_to_the_new_single_control_model(
     )
     eco.add_to_hass(hass)
     assert await async_migrate_entry(hass, eco)
-    assert eco.version == 2
+    assert eco.version == 3
     assert eco.options["comfort_strategy"] == "eco"
     assert eco.options["boost_mode"] == "off"
+    assert eco.options["outdoor_hold_mode"] == "fixed"
+    assert eco.options["outdoor_fixed_hold_minutes"] == 120.0
     assert "profile" not in eco.options
 
     boost = MockConfigEntry(
@@ -157,7 +159,7 @@ async def test_version_one_profiles_migrate_to_the_new_single_control_model(
     )
     boost.add_to_hass(hass)
     assert await async_migrate_entry(hass, boost)
-    assert boost.version == 2
+    assert boost.version == 3
     assert boost.options["comfort_strategy"] == "balanced"
     assert boost.options["boost_mode"] == "adaptive"
 
@@ -501,6 +503,187 @@ async def test_configure_menu_edits_targets_and_preserves_existing_target_identi
     await hass.config_entries.async_unload(entry.entry_id)
 
 
+async def test_bidirectional_scalar_target_requires_and_persists_policy(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    target = er.async_get(hass).async_get_or_create(
+        "climate", "test", "car-climate", suggested_object_id="car_climate"
+    )
+    hass.states.async_set(
+        target.entity_id,
+        "heat_cool",
+        {
+            "hvac_modes": ["heat_cool"],
+            "supported_features": 1,
+            "temperature": 20.0,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+            "target_temp_step": 0.5,
+        },
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "car-zone", "targets": []},
+        options={"comfort_strategy": "balanced", "control_enabled": False},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "target_entities")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"targets": [target.entity_id], "target_rounding_mode": "mathematical"},
+    )
+
+    assert result["step_id"] == "target_behavior"
+    assert _schema_keys(result) == {"bidirectional_scalar_policy"}
+    assert _default_value(result, "bidirectional_scalar_policy") == "demand_aware"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"bidirectional_scalar_policy": "demand_aware"}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    target_uuid = entry.data["targets"][0]["target_uuid"]
+    assert entry.options[f"bidirectional_scalar_policy_{target_uuid}"] == "demand_aware"
+    await hass.async_block_till_done()
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_bidirectional_scalar_cannot_be_combined_with_another_target(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    registry = er.async_get(hass)
+    car = registry.async_get_or_create(
+        "climate", "test", "car-combined", suggested_object_id="car_combined"
+    )
+    heater = registry.async_get_or_create(
+        "climate", "test", "heater-combined", suggested_object_id="heater_combined"
+    )
+    hass.states.async_set(
+        car.entity_id,
+        "heat_cool",
+        {
+            "hvac_modes": ["heat_cool"],
+            "supported_features": 1,
+            "temperature": 20.0,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+        },
+    )
+    hass.states.async_set(
+        heater.entity_id,
+        "heat",
+        {
+            "hvac_modes": ["heat"],
+            "supported_features": 1,
+            "temperature": 20.0,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+        },
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "combined-zone", "targets": []},
+        options={"comfort_strategy": "balanced", "control_enabled": False},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "target_entities")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "targets": [car.entity_id, heater.entity_id],
+            "target_rounding_mode": "mathematical",
+        },
+    )
+    assert result["step_id"] == "target_entities"
+    assert result["errors"] == {"targets": "bidirectional_scalar_requires_single_target"}
+
+
+async def test_ambiguous_scalar_auto_requires_mapping_then_policy(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    target = er.async_get(hass).async_get_or_create(
+        "climate", "test", "ambiguous-auto", suggested_object_id="ambiguous_auto"
+    )
+    hass.states.async_set(
+        target.entity_id,
+        "auto",
+        {
+            "hvac_modes": ["auto"],
+            "supported_features": 1,
+            "temperature": 20.0,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+        },
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "auto-zone", "targets": []},
+        options={"comfort_strategy": "balanced", "control_enabled": False},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "target_entities")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"targets": [target.entity_id], "target_rounding_mode": "mathematical"},
+    )
+    assert _schema_keys(result) == {"auto_mapping"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"auto_mapping": "bidirectional_scalar"}
+    )
+    assert _schema_keys(result) == {"bidirectional_scalar_policy"}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"bidirectional_scalar_policy": "centered"}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    target_uuid = entry.data["targets"][0]["target_uuid"]
+    assert entry.options[f"auto_mapping_{target_uuid}"] == "bidirectional_scalar"
+    assert entry.options[f"bidirectional_scalar_policy_{target_uuid}"] == "centered"
+    await hass.async_block_till_done()
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+def test_target_behavior_recovers_invalid_saved_auto_mapping(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set(
+        "climate.ambiguous_saved",
+        "auto",
+        {
+            "hvac_modes": ["auto"],
+            "supported_features": 1,
+            "temperature": 20.0,
+            "min_temp": 5.0,
+            "max_temp": 30.0,
+        },
+    )
+    flow = AthbOptionsFlow(
+        MockConfigEntry(domain=DOMAIN, data={"zone_uuid": "saved-zone", "targets": []})
+    )
+    flow.hass = hass
+    target = {
+        "target_uuid": "saved-target",
+        "entity_id": "climate.ambiguous_saved",
+    }
+    flow._pending_options = {"auto_mapping_saved-target": "invalid"}
+
+    fields = flow._target_behavior_fields(target)
+    assert {str(marker.schema) for marker in fields} == {"auto_mapping"}
+
+    flow._pending_options = {"auto_mapping_saved-target": "bidirectional_scalar"}
+    fields = flow._target_behavior_fields(target)
+    assert {str(marker.schema) for marker in fields} == {"bidirectional_scalar_policy"}
+
+
 async def test_configure_target_validation_rejects_empty_unregistered_and_claimed_targets(
     hass: HomeAssistant,
 ) -> None:
@@ -585,6 +768,7 @@ async def test_no_write_history_mode_still_collects_stale_safety_temperatures(
             "minimum_meaningful_change": 0.1,
             "feedback_resolution": 0.01,
             "fallback_mode": "no_write",
+            "outdoor_hold_mode": "automatic",
         }
     )
 
@@ -758,6 +942,7 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
         "minimum_meaningful_change",
         "feedback_resolution",
         "fallback_mode",
+        "outdoor_hold_mode",
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -766,6 +951,7 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
             "minimum_meaningful_change": 0.1,
             "feedback_resolution": 0.01,
             "fallback_mode": "fixed",
+            "outdoor_hold_mode": "automatic",
         },
     )
     assert result["step_id"] == "fallback_temperatures"

@@ -47,17 +47,21 @@ class HomeAssistantRecorderHistoryReader:
                 item.state,
                 str(item.attributes.get("unit_of_measurement", "")),
             )
-            samples.append(
-                OutdoorSample(
-                    (
-                        start_utc
-                        if item.last_updated <= start_utc
-                        else item.last_updated.astimezone(UTC)
-                    ),
-                    converted[0] if converted is not None else None,
-                    converted is not None,
-                    "measured",
-                    item.last_updated <= start_utc,
+            anchors = {item.last_updated.astimezone(UTC)}
+            if (reported := getattr(item, "last_reported", None)) is not None:
+                anchors.add(reported.astimezone(UTC))
+            for anchor in anchors:
+                if anchor > end_utc:
+                    continue
+                samples.append(
+                    OutdoorSample(
+                        start_utc if anchor <= start_utc else anchor,
+                        converted[0] if converted is not None else None,
+                        converted is not None,
+                        "recorder_last_reported"
+                        if anchor != item.last_updated.astimezone(UTC)
+                        else "recorder_last_updated",
+                        anchor <= start_utc,
+                    )
                 )
-            )
         return tuple(sorted(samples, key=lambda sample: sample.observed_at))

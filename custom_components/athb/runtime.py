@@ -82,6 +82,7 @@ from .const import (
 )
 from .controller import ZoneController
 from .core.climate import (
+    AutoMapping,
     CapabilityMapping,
     ClimateFailure,
     GridOptions,
@@ -197,6 +198,7 @@ class ZoneRuntime:
     freshness_reported_at: dict[str, datetime] = field(default_factory=dict)
     freshness_details: dict[str, dict[str, Any]] = field(default_factory=dict)
     heat_guards: dict[str, HeatGuard] = field(default_factory=dict)
+    bidirectional_season: str | None = None
 
     async def async_start(self) -> None:
         """Acquire recovery state, shared history, listeners and initial calculation."""
@@ -229,6 +231,17 @@ class ZoneRuntime:
                     self.last_valid_values = restored
                     self.last_valid_at = datetime.fromisoformat(stored_at)
                     self.last_valid_persistence_payload = stored_values
+                    details = restored.get("effective_target_details", {})
+                    if isinstance(details, dict):
+                        self.bidirectional_season = next(
+                            (
+                                str(item["selected_outdoor_season"])
+                                for item in details.values()
+                                if isinstance(item, dict)
+                                and item.get("selected_outdoor_season") in {"heating", "cooling"}
+                            ),
+                            None,
+                        )
             stored_guards = getattr(self.persistence.state, "heat_guards_json", None)
             if stored_guards is not None:
                 try:
@@ -396,6 +409,8 @@ class ZoneRuntime:
             reader=HomeAssistantRecorderHistoryReader(self.hass, outdoor_id),
             entity_id=outdoor_id,
             subscriber=self._history_updated,
+            hold_mode=str(self.entry.options.get("outdoor_hold_mode", "fixed")),
+            fixed_hold_minutes=float(self.entry.options.get("outdoor_fixed_hold_minutes", 120.0)),
         )
         self.history_collector = collector
         if created:
@@ -417,6 +432,24 @@ class ZoneRuntime:
         ids.update(str(target["entity_id"]) for target in self.entry.data.get("targets", ()))
         ids.discard("")
         return ids
+
+    def _configured_capability(
+        self, configured: dict[str, Any], capability: Any | None = None
+    ) -> CapabilityMapping | ClimateFailure:
+        """Resolve a target using its stable per-target Auto semantics."""
+
+        target_uuid = str(configured["target_uuid"])
+        raw = self.entry.options.get(f"auto_mapping_{target_uuid}", "unmapped")
+        try:
+            auto_mapping = AutoMapping(str(raw))
+        except ValueError:
+            auto_mapping = AutoMapping.UNMAPPED
+        return resolve_capability(
+            capability
+            if capability is not None
+            else capability_from_state(self.hass.states.get(str(configured["entity_id"]))),
+            auto_mapping=auto_mapping,
+        )
 
     def _reported_source_entity_ids(self) -> set[str]:
         """Return measured inputs whose unchanged reports renew freshness."""
@@ -1214,7 +1247,16 @@ class ZoneRuntime:
             history.quality.value,
             self.strategy,
             (profile_resolution := self._resolve_profile(now)).resolved.value,
-            {**self.entry.options, CONF_ECO_INTENSITY: self.eco_intensity},
+            {
+                **self.entry.options,
+                CONF_ECO_INTENSITY: self.eco_intensity,
+                "bidirectional_previous_season": self.bidirectional_season,
+                "outdoor_effective_hold_minutes": (
+                    self.history_collector.effective_hold_seconds / 60.0
+                    if self.history_collector is not None
+                    else 120.0
+                ),
+            },
             targets,
             critical,
             self.explicit_transition,
@@ -1419,6 +1461,19 @@ class ZoneRuntime:
         # Preserve the established cooling safety while heat uses its own guard.
         self._schedule_stale_safety(result)
         values = {**self.values, **self._observable_values(result)}
+        details = values.get("effective_target_details", {})
+        if isinstance(details, dict):
+            selected = next(
+                (
+                    str(item["selected_outdoor_season"])
+                    for item in details.values()
+                    if isinstance(item, dict)
+                    and item.get("selected_outdoor_season") in {"heating", "cooling"}
+                ),
+                None,
+            )
+            if selected is not None:
+                self.bidirectional_season = selected
         values["calculation_generation"] = generation
         values["control_enabled"] = self.control_enabled
         values["ownership"] = {
@@ -1621,13 +1676,13 @@ class ZoneRuntime:
         pending = {
             str(target["registry_identity"])
             for target in self.entry.data.get("targets", ())
-            if isinstance(
-                mapping := resolve_capability(
-                    capability_from_state(self.hass.states.get(str(target["entity_id"])))
-                ),
-                CapabilityMapping,
-            )
-            and mapping.direction in {ActuationDirection.COOLING_ONLY, ActuationDirection.RANGED}
+            if isinstance(mapping := self._configured_capability(target), CapabilityMapping)
+            and mapping.direction
+            in {
+                ActuationDirection.COOLING_ONLY,
+                ActuationDirection.RANGED,
+                ActuationDirection.BIDIRECTIONAL_SCALAR,
+            }
         } - self.stale_safety_applied
         if not pending:
             return
@@ -1659,7 +1714,7 @@ class ZoneRuntime:
                 continue
             entity_id = str(configured["entity_id"])
             capability = capability_from_state(self.hass.states.get(entity_id))
-            mapping = resolve_capability(capability)
+            mapping = self._configured_capability(configured, capability)
             if not isinstance(mapping, CapabilityMapping):
                 outcomes[str(configured["target_uuid"])] = "stale_safety_target_not_ready"
                 continue
@@ -1820,7 +1875,11 @@ class ZoneRuntime:
         )
         scalar_normalized = normalize_scalar_target(
             requested_room_c=fallback,
-            direction=mapping.direction,
+            direction=(
+                ActuationDirection.COOLING_ONLY
+                if mapping.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+                else mapping.direction
+            ),
             snapshot=capability,
             options=grid,
         )
@@ -2055,6 +2114,7 @@ class ZoneRuntime:
 
     def _reconcile_targets(self, result: RuntimeCalculation) -> frozenset[str]:
         incompatible = False
+        bidirectional_policy_required = False
         recovery_reassertions: set[str] = set()
         for target in result.targets:
             state = self.ownership[target.registry_identity]
@@ -2064,6 +2124,13 @@ class ZoneRuntime:
             readiness = self._target_readiness(target.capability, target.mapping)
             incompatible = incompatible or readiness is TargetReadiness.INCOMPATIBLE
             calculation = target.result
+            bidirectional_policy_required = bidirectional_policy_required or (
+                target.suppression_reason == "missing_bidirectional_policy"
+                or (
+                    calculation is not None
+                    and calculation.suppression_reason == "missing_bidirectional_policy"
+                )
+            )
             if calculation is None or calculation.normalized is None:
                 data = (
                     DataReadiness.HOLD_LAST_GOOD
@@ -2122,6 +2189,9 @@ class ZoneRuntime:
                 recovery_reassertions.add(target.registry_identity)
         if self.repair_manager is not None:
             self.repair_manager.update("incompatible_auto_mapping", incompatible)
+            self.repair_manager.update(
+                "bidirectional_policy_required", bidirectional_policy_required
+            )
         return frozenset(recovery_reassertions)
 
     async def _async_apply_calculation(
@@ -2155,9 +2225,14 @@ class ZoneRuntime:
             ) is not None:
                 outcomes[target.target_uuid] = coordination_reason
                 continue
+            actual_direction = (
+                calculation.normalized.direction
+                if isinstance(calculation.normalized, NormalizedScalarTarget)
+                else mapping.direction
+            )
             if (
                 result.primary_temperature_stale
-                and mapping.direction is ActuationDirection.COOLING_ONLY
+                and actual_direction is ActuationDirection.COOLING_ONLY
             ):
                 outcomes[target.target_uuid] = "stale_cooling_held_for_safety"
                 continue
@@ -2242,7 +2317,19 @@ class ZoneRuntime:
             return None
         last_primary_c, _observed_at = reference
         capability = capability_from_state(self.hass.states.get(target.entity_id))
-        mapping = resolve_capability(capability)
+        configured = next(
+            (
+                item
+                for item in self.entry.data.get("targets", ())
+                if str(item.get("target_uuid")) == target.target_uuid
+            ),
+            None,
+        )
+        mapping = (
+            self._configured_capability(configured, capability)
+            if isinstance(configured, dict)
+            else resolve_capability(capability)
+        )
         if (
             not isinstance(mapping, CapabilityMapping)
             or mapping.direction is ActuationDirection.COOLING_ONLY
@@ -2364,7 +2451,10 @@ class ZoneRuntime:
         result: RuntimeCalculation,
         now: datetime,
     ) -> tuple[NormalizedScalarTarget | NormalizedRangeTarget, bool] | None:
-        if mapping.direction is ActuationDirection.COOLING_ONLY:
+        if mapping.direction is ActuationDirection.COOLING_ONLY or (
+            isinstance(normalized, NormalizedScalarTarget)
+            and normalized.direction is ActuationDirection.COOLING_ONLY
+        ):
             return normalized, False
         primary_c = result.primary_value_c
         if self.primary_feedback_at is None:
@@ -2637,10 +2727,16 @@ class ZoneRuntime:
             ha_to_celsius(grid.step_ha, target.capability.temperature_unit)
             - ha_to_celsius(0.0, target.capability.temperature_unit)
         )
+        intent_direction = (
+            normalized.direction
+            if mapping.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+            and isinstance(normalized, NormalizedScalarTarget)
+            else mapping.direction
+        )
         common = (
             target.entity_id,
             target.registry_identity,
-            mapping.direction,
+            intent_direction,
             float(self.entry.options.get("minimum_meaningful_change", 0.1)),
             float(self.entry.options.get("feedback_resolution", 0.01)),
             self.configuration_generation,
@@ -2674,6 +2770,7 @@ class ZoneRuntime:
                 *common[3:],
                 rounding_mode=None if rounding_mode is None else rounding_mode.value,
                 step_room_c=step_room_c,
+                minimum_change_bypass=False,
             )
         return NormalizedIntent(
             common[0],
@@ -2693,6 +2790,9 @@ class ZoneRuntime:
             *common[3:],
             rounding_mode=None if rounding_mode is None else rounding_mode.value,
             step_room_c=step_room_c,
+            minimum_change_bypass=(
+                target.result is not None and target.result.correction_direction == "neutral_hold"
+            ),
         )
 
     def _broker_preflight(self, identity: str) -> BrokerPreflight:
@@ -3166,6 +3266,10 @@ class ZoneRuntime:
                 self.history_source_identity or str(self.entry.data.get("outdoor_source", "")),
                 str(self.hass.config.time_zone),
                 self._history_updated,
+                hold_mode=str(self.entry.options.get("outdoor_hold_mode", "fixed")),
+                fixed_hold_minutes=float(
+                    self.entry.options.get("outdoor_fixed_hold_minutes", 120.0)
+                ),
             )
             if collector.references <= 0:
                 await collector.async_close()

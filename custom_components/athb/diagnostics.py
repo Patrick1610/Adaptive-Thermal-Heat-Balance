@@ -167,6 +167,11 @@ async def async_get_config_entry_diagnostics(
         "decision_traces": trace_payloads,
         "ownership": {key: asdict(value) for key, value in runtime.ownership.items()},
         "sources": sources,
+        "outdoor_history": (
+            runtime.history_collector.diagnostics(now=now)
+            if runtime.history_collector is not None
+            else None
+        ),
         "active_repairs": sorted(
             runtime.repair_manager.active if runtime.repair_manager is not None else ()
         ),

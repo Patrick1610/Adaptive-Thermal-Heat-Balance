@@ -37,6 +37,21 @@ External target-temperature intervention starts a manual override. An external H
 does not. All production writes pass through the sole `CommandBroker` to
 `climate.set_temperature`.
 
+A scalar `heat_cool` target, or scalar `auto` advertising both heating and cooling, is a
+bidirectional single-setpoint climate. It must be the zone's only controlled climate and requires
+an explicit policy:
+
+- **Demand-aware** (recommended) selects the heating-to-neutral or neutral-to-cooling half-band
+  from fresh outdoor temperature. Outside that half-band it writes the nearest boundary; inside
+  it holds near the fresh room temperature using mathematical nearest-grid rounding.
+- **Seasonal** writes the selected heating or cooling control point and retains direction inside a
+  1.0 °C outdoor changeover hysteresis. Exact equality with neutral selects heating.
+- **Centered** writes the arithmetic midpoint of the heating and cooling control points.
+
+Seasonal direction is persisted. Demand-aware and Seasonal require fresh indoor and outdoor
+observations; Centered requires fresh indoor temperature. None of these policies changes HVAC
+mode. A pre-existing bidirectional target remains write-suppressed until its policy is chosen.
+
 ## Comfort level, occupancy and Boost
 
 The comfort band is defined by `lower_comfort_vote` and `upper_comfort_vote`, default -0.5 and
@@ -82,8 +97,8 @@ The outer comfort limits remain descriptive even when a constant-moisture invers
 saturation: only that display envelope continues at 100% RH. Heating/cooling control points,
 eligibility and climate commands retain the stricter moisture constraint.
 
-For ordinary scalar heating-only or cooling-only zones, three target sensors make the policy and
-actuator result explicit:
+For scalar heating-only, cooling-only and single-setpoint bidirectional zones, three target sensors
+make the policy and actuator result explicit:
 
 - **Target — occupied** is the target for the selected comfort level with no occupancy setback and
   with Boost off.
@@ -193,7 +208,7 @@ data and other mandatory inputs still block new calculations and normal writes. 
 remain visible rather than turning unavailable, with `last_valid_at` and `data_age_minutes`.
 ATHB never fabricates a temperature or humidity. The last-valid display snapshot is stored with
 the zone's verified state and restored after a reload or restart. The outdoor-history collector
-retains its separate two-hour maximum hold and uses completed local calendar days.
+uses completed local calendar days and a separately configured report hold.
 
 Only a calculation with a fresh primary report and valid other mandatory inputs may replace the
 stored last-valid snapshot. Stale projections do not become fresh evidence.
@@ -292,10 +307,13 @@ Home Assistant capabilities:
 - range target support maps to the atomic heating/cooling range;
 - a scalar target with only `heat` advertised maps to heating;
 - a scalar target with only `cool` advertised maps to cooling;
-- scalar Auto with both or neither direction advertised is ambiguous and remains fail-safe
-  suppressed.
+- scalar Auto with both directions advertised maps to a bidirectional single setpoint;
+- scalar Auto with neither direction advertised requires an explicit heating, cooling or
+  bidirectional mapping.
 
-No Auto-mapping choice is shown to the user. Capability inference never causes an HVAC-mode call.
+Only an ambiguous Auto target shows the mapping choice. A bidirectional scalar target always asks
+for Demand-aware, Seasonal or Centered behaviour. Capability inference and policy selection never
+cause an HVAC-mode call.
 
 ## Command normalization and fallback
 
@@ -312,6 +330,15 @@ saved; new and reconfigured entries default to Mathematical.
 `minimum_meaningful_change` suppresses normalized commands smaller than 0–5 °C.
 `feedback_resolution` is the 0–5 °C comparison tolerance between observed target feedback and the
 last owned command; increase it only for a device that reports a coarser or noisy target grid.
+
+`outdoor_hold_mode` is Automatic for new zones. Automatic learns from up to 64 valid consecutive
+live reports over seven days, activates after 12 intervals, and uses `1.5 × p95`, bounded to
+30 minutes–6 hours; its evidence-building fallback is 120 minutes. Intervals shorter than one
+minute, longer than six hours, across a restart or through an invalid state do not train it. Fixed
+mode accepts 30 minutes–24 hours and existing zones migrate to Fixed 120 minutes. Each sample keeps
+the hold active when it arrived, so later cadence changes never rewrite earlier gaps. Equal-value
+reports renew coverage without triggering ordinary recalculation. Recorder `last_updated` and
+distinct `last_reported` anchors improve bootstrap coverage but do not train Automatic.
 
 With insufficient outdoor history, `fixed` uses `fallback_heating_c` and
 `fallback_cooling_c` within the hard bounds. `no_write` sends nothing until history qualifies.

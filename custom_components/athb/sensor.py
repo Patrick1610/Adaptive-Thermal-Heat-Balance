@@ -19,6 +19,7 @@ from .core.climate import (
     AutoMapping,
     infer_auto_mapping,
 )
+from .core.contracts import ActuationDirection
 from .entity import AthbEntity
 from .runtime import AthbConfigEntry, ZoneRuntime
 
@@ -238,7 +239,7 @@ def _target_deviation_context(runtime: ZoneRuntime, direction: str) -> dict[str,
     for target in runtime.values.get("target_scenarios", {}).values():
         room = target.get("current", {}).get("room", {})
         target_direction = target.get("direction")
-        if target_direction == "ranged":
+        if target_direction in {"ranged", "bidirectional_scalar"}:
             endpoint = "target_low" if direction == "heating" else "target_high"
             value = room.get(endpoint)
             if isinstance(value, int | float) and not isinstance(value, bool):
@@ -425,7 +426,7 @@ async def async_setup_entry(
     entities: list[SensorEntity] = [AthbSensor(runtime, item) for item in descriptions]
     desired_unique_ids = {entity.unique_id for entity in entities}
     targets = list(entry.data.get("targets", ()))
-    target_directions = _target_control_directions(hass, targets)
+    target_directions = _target_control_directions(hass, targets, dict(entry.options))
     for direction in target_directions:
         deviation = TargetDeviationSensor(
             runtime,
@@ -434,7 +435,7 @@ async def async_setup_entry(
         )
         entities.append(deviation)
         desired_unique_ids.add(deviation.unique_id)
-    if _supports_zone_target_sensors(hass, targets):
+    if _supports_zone_target_sensors(hass, targets, dict(entry.options)):
         for scenario in TARGET_SCENARIOS:
             zone_entity = ZoneTargetSensor(runtime, scenario)
             entities.append(zone_entity)
@@ -491,59 +492,95 @@ def _target_endpoints(hass: HomeAssistant, entity_id: str) -> tuple[str, ...]:
     return tuple(endpoints) or ("temperature",)
 
 
-def _supports_zone_target_sensors(hass: HomeAssistant, targets: list[dict[str, str]]) -> bool:
+def _configured_target_direction(
+    hass: HomeAssistant,
+    target: dict[str, str],
+    options: dict[str, Any] | None = None,
+) -> ActuationDirection | None:
+    capability = capability_from_state(hass.states.get(target["entity_id"]))
+    if capability.supported_features & TARGET_TEMPERATURE_RANGE:
+        return ActuationDirection.RANGED
+    if not capability.supported_features & TARGET_TEMPERATURE:
+        return None
+    if capability.hvac_mode == "heat":
+        return ActuationDirection.HEATING_ONLY
+    if capability.hvac_mode == "cool":
+        return ActuationDirection.COOLING_ONLY
+    if capability.hvac_mode == "heat_cool":
+        return ActuationDirection.BIDIRECTIONAL_SCALAR
+    raw_mapping = (options or {}).get(f"auto_mapping_{target['target_uuid']}", "unmapped")
+    try:
+        auto_mapping = AutoMapping(str(raw_mapping))
+    except ValueError:
+        auto_mapping = AutoMapping.UNMAPPED
+    if capability.hvac_mode == "auto":
+        if auto_mapping is AutoMapping.HEATING:
+            return ActuationDirection.HEATING_ONLY
+        if auto_mapping is AutoMapping.COOLING:
+            return ActuationDirection.COOLING_ONLY
+        if auto_mapping is AutoMapping.BIDIRECTIONAL_SCALAR:
+            return ActuationDirection.BIDIRECTIONAL_SCALAR
+    inferred = infer_auto_mapping(capability)
+    if inferred is AutoMapping.HEATING:
+        return ActuationDirection.HEATING_ONLY
+    if inferred is AutoMapping.COOLING:
+        return ActuationDirection.COOLING_ONLY
+    if inferred is AutoMapping.BIDIRECTIONAL_SCALAR:
+        return ActuationDirection.BIDIRECTIONAL_SCALAR
+    advertised = set(capability.advertised_hvac_modes)
+    if "heat" in advertised and "cool" not in advertised:
+        return ActuationDirection.HEATING_ONLY
+    if "cool" in advertised and "heat" not in advertised:
+        return ActuationDirection.COOLING_ONLY
+    return None
+
+
+def _supports_zone_target_sensors(
+    hass: HomeAssistant,
+    targets: list[dict[str, str]],
+    options: dict[str, Any] | None = None,
+) -> bool:
     """Use the compact three-sensor view only for one scalar control direction."""
 
-    directions: set[str] = set()
     if not targets:
         return False
+    directions: set[ActuationDirection] = set()
     for target in targets:
         capability = capability_from_state(hass.states.get(target["entity_id"]))
         scalar = bool(capability.supported_features & TARGET_TEMPERATURE)
         ranged = bool(capability.supported_features & TARGET_TEMPERATURE_RANGE)
         if not scalar or ranged:
             return False
-        if capability.hvac_mode in {"heat", "cool"}:
-            directions.add("heating" if capability.hvac_mode == "heat" else "cooling")
-            continue
-        inferred = infer_auto_mapping(capability)
-        if inferred in {AutoMapping.HEATING, AutoMapping.COOLING}:
-            directions.add(inferred.value)
-            continue
-        advertised = set(capability.advertised_hvac_modes)
-        if "heat" in advertised and "cool" not in advertised:
-            directions.add("heating")
-        elif "cool" in advertised and "heat" not in advertised:
-            directions.add("cooling")
-        else:
+        direction = _configured_target_direction(hass, target, options)
+        if direction is None:
             return False
-    return len(directions) == 1
+        directions.add(direction)
+    return directions in (
+        {ActuationDirection.HEATING_ONLY},
+        {ActuationDirection.COOLING_ONLY},
+        {ActuationDirection.BIDIRECTIONAL_SCALAR},
+    ) and (ActuationDirection.BIDIRECTIONAL_SCALAR not in directions or len(targets) == 1)
 
 
 def _target_control_directions(
-    hass: HomeAssistant, targets: list[dict[str, str]]
+    hass: HomeAssistant,
+    targets: list[dict[str, str]],
+    options: dict[str, Any] | None = None,
 ) -> tuple[str, ...]:
     """Return observable heating/cooling target directions from public capabilities."""
 
     directions: set[str] = set()
     for target in targets:
-        capability = capability_from_state(hass.states.get(target["entity_id"]))
-        if capability.supported_features & TARGET_TEMPERATURE_RANGE:
+        direction = _configured_target_direction(hass, target, options)
+        if direction in {
+            ActuationDirection.RANGED,
+            ActuationDirection.BIDIRECTIONAL_SCALAR,
+        }:
             directions.update(("heating", "cooling"))
             continue
-        if not capability.supported_features & TARGET_TEMPERATURE:
-            continue
-        if capability.hvac_mode in {"heat", "cool"}:
-            directions.add("heating" if capability.hvac_mode == "heat" else "cooling")
-            continue
-        inferred = infer_auto_mapping(capability)
-        if inferred in {AutoMapping.HEATING, AutoMapping.COOLING}:
-            directions.add(inferred.value)
-            continue
-        advertised = set(capability.advertised_hvac_modes)
-        if "heat" in advertised and "cool" not in advertised:
+        if direction is ActuationDirection.HEATING_ONLY:
             directions.add("heating")
-        elif "cool" in advertised and "heat" not in advertised:
+        elif direction is ActuationDirection.COOLING_ONLY:
             directions.add("cooling")
     return tuple(direction for direction in ("heating", "cooling") if direction in directions)
 
@@ -606,6 +643,15 @@ def _target_decision_context(runtime: ZoneRuntime) -> dict[str, Any]:
         (item.result for item in targets if getattr(item, "result", None) is not None), None
     )
     policy = getattr(numerical, "policy", None)
+    details = runtime.values.get("effective_target_details", {})
+    decision = (
+        next(
+            (item for item in details.values() if isinstance(item, dict)),
+            {},
+        )
+        if isinstance(details, dict)
+        else {}
+    )
     return {
         "scenario": runtime.values.get("occupancy_status"),
         "comfort_level": runtime.strategy,
@@ -621,6 +667,16 @@ def _target_decision_context(runtime: ZoneRuntime) -> dict[str, Any]:
         "pre_slew_cooling_c": getattr(policy, "pre_slew_cooling_c", None),
         "requested_heating_c": getattr(policy, "heating_c", None),
         "requested_cooling_c": getattr(policy, "cooling_c", None),
+        "bidirectional_policy": decision.get("bidirectional_policy"),
+        "heating_control_point_c": decision.get("heating_control_point_c"),
+        "neutral_reference_c": decision.get("neutral_reference_c"),
+        "cooling_control_point_c": decision.get("cooling_control_point_c"),
+        "selected_outdoor_season": decision.get("selected_outdoor_season"),
+        "active_half_band": decision.get("active_half_band"),
+        "correction_direction": decision.get("correction_direction"),
+        "changeover_reference_c": decision.get("changeover_reference_c"),
+        "changeover_hysteresis_c": decision.get("changeover_hysteresis_c"),
+        "actuator_target_c": decision.get("actuator_target_c"),
         "explicit_transition": getattr(calculation, "explicit_transition", False),
         "transition_reasons": runtime.values.get("transition_reasons", ()),
         "data_quality": runtime.values.get("data_quality"),

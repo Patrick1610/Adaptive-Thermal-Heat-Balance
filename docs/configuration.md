@@ -42,7 +42,8 @@ target entities are deliberately replaced by the three target entities below; da
 automations that referenced an old scalar target must select the new Current target once after
 updating.
 
-For a normal scalar heat-only or cool-only zone, **Target — current**, **Target — occupied** and
+For a scalar heat-only, cool-only or single-setpoint bidirectional zone, **Target — current**,
+**Target — occupied** and
 **Target — unoccupied** avoid repeating climate names. Current shows the common normalized
 setpoint ATHB offers to the climate after calibration, limits and configured grid rounding;
 Occupied and Unoccupied retain the unrounded room-policy values. Open **Target — current** to
@@ -62,8 +63,10 @@ ordered and separated by at least the configured gap. An infeasible range is sup
 - `heat` with scalar target support: heating root.
 - `cool` with scalar target support: cooling root.
 - `heat_cool` with range support: heating/cooling control band.
-- `auto`: mapped automatically only when public climate capabilities make the target semantics
-  unambiguous; otherwise fail-safe suppressed.
+- `heat_cool` with one scalar target: explicit Demand-aware, Seasonal or Centered policy.
+- `auto`: range and single-direction scalar targets are inferred from public capabilities. A
+  scalar target advertising both heating and cooling is bidirectional; truly ambiguous scalar
+  Auto requires an explicit heating, cooling or bidirectional mapping.
 - `off`, unavailable, restored or unobservable setpoint state: no write.
 
 Changing HVAC mode does not create a manual temperature override, and ATHB never changes the mode.
@@ -107,6 +110,13 @@ up to 35 daily summaries and derives adaptation from the previous seven local ca
 eligible days are complete; a qualifying three-or-more-day window is partial; insufficient history
 uses the explicitly labelled fixed fallback (or no-write policy). Current outdoor temperature is
 never substituted for the adaptation running mean.
+
+New zones default to an Automatic report hold. It learns from at most 64 genuinely consecutive
+valid live reports, becomes active after 12 intervals, and uses 1.5 times the 95th percentile,
+bounded to 30 minutes through 6 hours. Until then the hold is 120 minutes. Fixed mode accepts
+30 minutes through 24 hours and existing zones migrate to Fixed 120 minutes. Equal-value
+`state_reported` events extend coverage without forcing an equivalent number of ATHB calculations.
+Recorder anchors improve historical coverage but never train Automatic cadence.
 
 The running-mean sensor therefore normally changes at local-day rollover, after a completed day is
 admitted to the previous-seven-day window; it is not intended to drift with every current outdoor

@@ -17,7 +17,7 @@ MAX_ALPHA = 0.9
 DEFAULT_MAX_HOLD = timedelta(hours=2)
 DAILY_COVERAGE_THRESHOLD = 0.9
 MAX_SUMMARIES = 35
-HISTORY_SCHEMA_VERSION = 1
+HISTORY_SCHEMA_VERSION = 2
 HISTORY_ALGORITHM_VERSION = 1
 MAX_BOOTSTRAP_RECORDS = 100_000
 BOOTSTRAP_DEADLINE_SECONDS = 30.0
@@ -37,6 +37,7 @@ class OutdoorSample:
     valid: bool = True
     provenance: str = "measured"
     synthetic_start: bool = False
+    hold_seconds: float | None = None
 
 
 class RecorderHistoryReader(Protocol):
@@ -188,6 +189,8 @@ class DailyHistoryIntegrator:
         )
         self._last_value: float | None = None
         self._hold_until: datetime | None = None
+        self._last_observed_at: datetime | None = None
+        self._last_hold_seconds: float | None = None
         self._summaries: list[DailySummary] = []
 
     @classmethod
@@ -226,10 +229,17 @@ class DailyHistoryIntegrator:
             accumulator.provenance,
         )
         if last_valid_observation is not None and last_valid_observation.value_c is not None:
-            hold_until = last_valid_observation.observed_at.astimezone(UTC) + maximum_hold
+            hold = timedelta(
+                seconds=last_valid_observation.hold_seconds
+                if last_valid_observation.hold_seconds is not None
+                else maximum_hold.total_seconds()
+            )
+            hold_until = last_valid_observation.observed_at.astimezone(UTC) + hold
             if hold_until >= cursor:
                 restored._last_value = last_valid_observation.value_c
                 restored._hold_until = hold_until
+                restored._last_observed_at = last_valid_observation.observed_at.astimezone(UTC)
+                restored._last_hold_seconds = hold.total_seconds()
             else:
                 restored._accumulator.current_gap = max(
                     restored._accumulator.largest_gap,
@@ -247,12 +257,13 @@ class DailyHistoryIntegrator:
 
     @property
     def last_valid_observation(self) -> OutdoorSample | None:
-        if self._last_value is None or self._hold_until is None:
+        if self._last_value is None or self._hold_until is None or self._last_observed_at is None:
             return None
         return OutdoorSample(
-            self._hold_until - self.maximum_hold,
+            self._last_observed_at,
             self._last_value,
             provenance=self._accumulator.provenance,
+            hold_seconds=self._last_hold_seconds,
         )
 
     def _advance_segment(self, end: datetime) -> None:
@@ -289,13 +300,24 @@ class DailyHistoryIntegrator:
             if isinstance(sample.value_c, bool) or not math.isfinite(float(sample.value_c)):
                 raise ValueError("valid outdoor samples must be finite and non-Boolean")
             self._last_value = float(sample.value_c)
-            self._hold_until = timestamp + self.maximum_hold
+            hold_seconds = (
+                self.maximum_hold.total_seconds()
+                if sample.hold_seconds is None
+                else float(sample.hold_seconds)
+            )
+            if not math.isfinite(hold_seconds) or hold_seconds <= 0:
+                raise ValueError("sample hold must be finite and positive")
+            self._hold_until = timestamp + timedelta(seconds=hold_seconds)
+            self._last_observed_at = timestamp
+            self._last_hold_seconds = hold_seconds
             if not sample.synthetic_start:
                 self._accumulator.observations += 1
             self._accumulator.provenance = sample.provenance
         else:
             self._last_value = None
             self._hold_until = None
+            self._last_observed_at = None
+            self._last_hold_seconds = None
 
     def advance_to(self, end_utc: datetime) -> None:
         end = _aware_utc(end_utc, "end_utc")
@@ -497,6 +519,7 @@ def serialize_history_state(
                 "value_c": last_valid_observation.value_c,
                 "valid": last_valid_observation.valid,
                 "provenance": last_valid_observation.provenance,
+                "hold_seconds": last_valid_observation.hold_seconds,
             }
             if last_valid_observation is not None
             else None
@@ -556,7 +579,8 @@ def load_history_state(payload: object) -> HistoryLoadResult:
             (), None, None, None, None, None, ("corrupt_history_storage",), payload
         )
     try:
-        if payload["schema_version"] != HISTORY_SCHEMA_VERSION:
+        schema_version = int(payload["schema_version"])
+        if schema_version not in {1, HISTORY_SCHEMA_VERSION}:
             raise ValueError("incompatible schema")
         if payload["algorithm_version"] != HISTORY_ALGORITHM_VERSION:
             raise ValueError("incompatible algorithm")
@@ -580,6 +604,13 @@ def load_history_state(payload: object) -> HistoryLoadResult:
                 float(last_raw["value_c"]),
                 last_raw["valid"],
                 str(last_raw["provenance"]),
+                hold_seconds=(
+                    float(last_raw["hold_seconds"])
+                    if last_raw.get("hold_seconds") is not None
+                    else DEFAULT_MAX_HOLD.total_seconds()
+                    if schema_version == 1
+                    else None
+                ),
             )
             if (
                 last_sample.valid is not True

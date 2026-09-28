@@ -11,7 +11,12 @@ from typing import Any, Protocol, cast
 from zoneinfo import ZoneInfo
 
 from homeassistant.core import Event, HomeAssistant, State, callback
-from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_point_in_utc_time,
+    async_track_state_change_event,
+    async_track_state_report_event,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -48,6 +53,8 @@ class OutdoorHistoryCollector:
     timezone: str
     reader: HistoryReader | None
     entity_id: str = ""
+    hold_mode: str = "fixed"
+    fixed_hold_minutes: float = 120.0
     references: int = 0
     bootstrap_count: int = 0
     storage_generation: int = 0
@@ -56,6 +63,7 @@ class OutdoorHistoryCollector:
     corrupt_payload: object | None = None
     storage_fault: bool = False
     _store: Store[dict[str, object]] = field(init=False, repr=False)
+    _legacy_store: Store[dict[str, object]] = field(init=False, repr=False)
     _emitted_summaries: int = field(default=0, init=False, repr=False)
     _dirty_generation: int = field(default=0, init=False, repr=False)
     _saved_generation: int = field(default=0, init=False, repr=False)
@@ -67,13 +75,31 @@ class OutdoorHistoryCollector:
     )
     _subscribers: set[Callable[[], None]] = field(default_factory=set, init=False, repr=False)
     _listener_cancel: Callable[[], None] | None = field(default=None, init=False, repr=False)
+    _report_listener_cancel: Callable[[], None] | None = field(default=None, init=False, repr=False)
+    _boundary_cancel: Callable[[], None] | None = field(default=None, init=False, repr=False)
+    _live_report_times: list[datetime] = field(default_factory=list, init=False, repr=False)
+    _learned_intervals: list[tuple[datetime, float]] = field(
+        default_factory=list, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
-        digest = sha256(f"{self.source_identity}|{self.timezone}".encode()).hexdigest()[:24]
+        digest = sha256(
+            (
+                f"{self.source_identity}|{self.timezone}|{self.hold_mode}|"
+                f"{float(self.fixed_hold_minutes):g}"
+            ).encode()
+        ).hexdigest()[:24]
         self._store = Store(
             self.hass,
             HISTORY_SCHEMA_VERSION,
             f"athb.outdoor.{digest}",
+            atomic_writes=True,
+        )
+        legacy_digest = sha256(f"{self.source_identity}|{self.timezone}".encode()).hexdigest()[:24]
+        self._legacy_store = Store(
+            self.hass,
+            1,
+            f"athb.outdoor.{legacy_digest}",
             atomic_writes=True,
         )
 
@@ -83,16 +109,49 @@ class OutdoorHistoryCollector:
         except Exception:
             payload = None
             self.storage_fault = True
-        loaded = load_history_state(payload) if payload is not None else None
+        legacy_payload: object | None = None
+        if payload is None:
+            try:
+                legacy_payload = await self._legacy_store.async_load()
+            except Exception:
+                legacy_payload = None
+        loaded = (
+            load_history_state(payload if payload is not None else legacy_payload)
+            if payload is not None or legacy_payload is not None
+            else None
+        )
         self.corrupt_payload = loaded.corrupt_payload if loaded is not None else None
         if loaded is not None and not loaded.reasons:
             self.summaries = loaded.summaries
             self.storage_generation = loaded.storage_generation or 0
+        if isinstance(payload, dict) and self.hold_mode == "automatic":
+            samples = payload.get("automatic_interval_samples", ())
+            if isinstance(samples, list | tuple):
+                for sample in samples[-64:]:
+                    if not isinstance(sample, dict):
+                        continue
+                    ended_at = sample.get("ended_at")
+                    seconds = sample.get("seconds")
+                    if (
+                        not isinstance(ended_at, str)
+                        or not isinstance(seconds, int | float)
+                        or isinstance(seconds, bool)
+                        or not 60.0 <= float(seconds) <= 21600.0
+                    ):
+                        continue
+                    try:
+                        parsed = datetime.fromisoformat(ended_at)
+                    except ValueError:
+                        continue
+                    if parsed.tzinfo is None:
+                        continue
+                    self._learned_intervals.append((parsed.astimezone(UTC), float(seconds)))
+                self._prune_learned_intervals(now)
         local_now = now.astimezone(ZoneInfo(self.timezone))
         today_start = datetime.combine(
             local_now.date(), time.min, ZoneInfo(self.timezone)
         ).astimezone(UTC)
-        restorable_accumulator = loaded
+        restorable_accumulator = loaded if payload is not None else None
         if not (
             restorable_accumulator is not None
             and not restorable_accumulator.reasons
@@ -145,13 +204,46 @@ class OutdoorHistoryCollector:
         replay_start = self.integrator.cursor
         for record in recorder_records:
             if replay_start <= record.observed_at <= now:
-                self.integrator.add_sample(record)
+                self.integrator.add_sample(
+                    replace(record, hold_seconds=self.effective_hold_seconds)
+                )
         if current is not None and current.observed_at > self.integrator.cursor:
-            self.integrator.add_sample(current)
+            self.integrator.add_sample(replace(current, hold_seconds=self.effective_hold_seconds))
         self.integrator.advance_to(now)
         self._collect_completed_summaries()
         await self.async_save()
         self._ensure_listener()
+        self._schedule_boundary(now)
+
+    @property
+    def effective_hold_seconds(self) -> float:
+        if self.hold_mode != "automatic" or len(self._learned_intervals) < 12:
+            return max(1800.0, min(86400.0, self.fixed_hold_minutes * 60.0))
+        ordered = sorted(seconds for _, seconds in self._learned_intervals)
+        index = min(len(ordered) - 1, max(0, int((len(ordered) - 1) * 0.95 + 0.999999)))
+        return max(1800.0, min(21600.0, ordered[index] * 1.5))
+
+    def _prune_learned_intervals(self, now: datetime) -> None:
+        cutoff = now.astimezone(UTC) - timedelta(days=7)
+        self._learned_intervals = [
+            (ended_at, seconds)
+            for ended_at, seconds in self._learned_intervals
+            if cutoff <= ended_at <= now.astimezone(UTC)
+        ][-64:]
+
+    def _record_live_interval(self, sample: OutdoorSample) -> None:
+        if not sample.valid:
+            self._live_report_times.clear()
+            return
+        timestamp = sample.observed_at.astimezone(UTC)
+        if self._live_report_times:
+            seconds = (timestamp - self._live_report_times[-1]).total_seconds()
+            if 60.0 <= seconds <= 21600.0:
+                self._learned_intervals.append((timestamp, seconds))
+                self._prune_learned_intervals(timestamp)
+        if not self._live_report_times or timestamp > self._live_report_times[-1]:
+            self._live_report_times.append(timestamp)
+            self._live_report_times = self._live_report_times[-65:]
 
     def _ensure_listener(self) -> None:
         if self._listener_cancel is not None or not self.entity_id or self.references <= 0:
@@ -169,17 +261,21 @@ class OutdoorHistoryCollector:
                     state.state,
                     str(state.attributes.get("unit_of_measurement", "")),
                 )
-                observed = getattr(state, "last_reported", None) or state.last_updated
+                reported = event.data.get("last_reported")
+                observed = reported if isinstance(reported, datetime) else state.last_updated
                 sample = OutdoorSample(
                     observed.astimezone(UTC),
                     converted[0] if converted is not None else None,
                     converted is not None,
                 )
-            self.add_sample(sample, now=now)
-            for subscriber in tuple(self._subscribers):
-                subscriber()
+            if self.add_sample(sample, now=now, live=True):
+                for subscriber in tuple(self._subscribers):
+                    subscriber()
 
         self._listener_cancel = async_track_state_change_event(
+            self.hass, {self.entity_id}, state_event
+        )
+        self._report_listener_cancel = async_track_state_report_event(
             self.hass, {self.entity_id}, state_event
         )
 
@@ -189,6 +285,9 @@ class OutdoorHistoryCollector:
         if self._listener_cancel is not None:
             self._listener_cancel()
             self._listener_cancel = None
+        if self._report_listener_cancel is not None:
+            self._report_listener_cancel()
+            self._report_listener_cancel = None
         self.entity_id = entity_id
         self._ensure_listener()
 
@@ -223,17 +322,25 @@ class OutdoorHistoryCollector:
         }
         return tuple(sorted(unique.values(), key=lambda sample: sample.observed_at))
 
-    def add_sample(self, sample: OutdoorSample, *, now: datetime) -> None:
+    def add_sample(self, sample: OutdoorSample, *, now: datetime, live: bool = False) -> bool:
         if self.integrator is None:
-            return
+            return False
+        previous = self.integrator.last_valid_observation
+        expired = previous is None or (
+            previous.hold_seconds is not None
+            and previous.observed_at + timedelta(seconds=previous.hold_seconds) < now
+        )
         signature = (sample.observed_at, sample.value_c, sample.valid)
         if signature == self._last_live_sample:
-            return
+            return False
+        if live:
+            self._record_live_interval(sample)
+        sample = replace(sample, hold_seconds=self.effective_hold_seconds)
         try:
             self.integrator.add_sample(sample)
             self.integrator.advance_to(now)
         except ValueError:
-            return
+            return False
         self._last_live_sample = signature
         rolled_over = self._collect_completed_summaries()
         self._dirty_generation += 1
@@ -241,6 +348,51 @@ class OutdoorHistoryCollector:
             self._start_save_task()
         else:
             self._schedule_save()
+        self._schedule_boundary(now)
+        return (
+            rolled_over
+            or expired
+            or previous is None
+            or previous.value_c != sample.value_c
+            or previous.valid != sample.valid
+        )
+
+    def _schedule_boundary(self, now: datetime) -> None:
+        if self._boundary_cancel is not None:
+            self._boundary_cancel()
+            self._boundary_cancel = None
+        if self.integrator is None or self.references <= 0:
+            return
+        local = now.astimezone(ZoneInfo(self.timezone))
+        midnight = datetime.combine(
+            local.date() + timedelta(days=1), time.min, ZoneInfo(self.timezone)
+        ).astimezone(UTC)
+        last = self.integrator.last_valid_observation
+        expiry = (
+            last.observed_at + timedelta(seconds=last.hold_seconds)
+            if last is not None and last.hold_seconds is not None
+            else midnight
+        )
+        boundary = min(midnight, expiry) if expiry > now else midnight
+
+        @callback
+        def fire(at: datetime) -> None:
+            self._boundary_cancel = None
+            if self.integrator is None:
+                return
+            self._prune_learned_intervals(at)
+            try:
+                self.integrator.advance_to(at)
+            except ValueError:
+                return
+            rolled = self._collect_completed_summaries()
+            self._dirty_generation += 1
+            self._start_save_task() if rolled else self._schedule_save()
+            for subscriber in tuple(self._subscribers):
+                subscriber()
+            self._schedule_boundary(at + timedelta(microseconds=1))
+
+        self._boundary_cancel = async_track_point_in_utc_time(self.hass, fire, boundary)
 
     def _collect_completed_summaries(self) -> bool:
         if self.integrator is None:
@@ -305,7 +457,7 @@ class OutdoorHistoryCollector:
                 source_generation=1,
                 timezone=self.timezone,
                 policy_fingerprint=collection_policy_fingerprint(
-                    maximum_hold_seconds=7200,
+                    maximum_hold_seconds=self.effective_hold_seconds,
                     coverage_threshold=0.9,
                 ),
                 summaries=self.summaries,
@@ -314,6 +466,12 @@ class OutdoorHistoryCollector:
                 last_integrated_utc=integrated,
                 storage_generation=self.storage_generation,
             )
+            payload["hold_mode"] = self.hold_mode
+            payload["fixed_hold_minutes"] = self.fixed_hold_minutes
+            payload["automatic_interval_samples"] = [
+                {"ended_at": ended_at.isoformat(), "seconds": seconds}
+                for ended_at, seconds in self._learned_intervals
+            ]
             try:
                 await self._store.async_save(payload)
             except Exception:
@@ -338,14 +496,66 @@ class OutdoorHistoryCollector:
         if self._listener_cancel is not None:
             self._listener_cancel()
             self._listener_cancel = None
+        if self._report_listener_cancel is not None:
+            self._report_listener_cancel()
+            self._report_listener_cancel = None
+        if self._boundary_cancel is not None:
+            self._boundary_cancel()
+            self._boundary_cancel = None
         self._subscribers.clear()
+
+    def diagnostics(self, *, now: datetime) -> dict[str, object]:
+        """Return bounded report and coverage evidence for config diagnostics."""
+
+        intervals = sorted(seconds for _, seconds in self._learned_intervals)
+
+        def percentile(fraction: float) -> float | None:
+            if not intervals:
+                return None
+            index = min(
+                len(intervals) - 1,
+                max(0, int((len(intervals) - 1) * fraction + 0.999999)),
+            )
+            return intervals[index]
+
+        current = self.integrator.current_summary if self.integrator is not None else None
+        last = self.integrator.last_valid_observation if self.integrator is not None else None
+        expiry = (
+            last.observed_at + timedelta(seconds=last.hold_seconds)
+            if last is not None and last.hold_seconds is not None
+            else None
+        )
+        return {
+            "hold_mode": self.hold_mode,
+            "fixed_hold_minutes": self.fixed_hold_minutes,
+            "effective_hold_minutes": self.effective_hold_seconds / 60.0,
+            "report_at": last.observed_at.isoformat() if last is not None else None,
+            "report_age_minutes": (
+                max(0.0, (now - last.observed_at).total_seconds() / 60.0)
+                if last is not None
+                else None
+            ),
+            "expiry_at": expiry.isoformat() if expiry is not None else None,
+            "p50_interval_minutes": (
+                value / 60.0 if (value := percentile(0.50)) is not None else None
+            ),
+            "p95_interval_minutes": (
+                value / 60.0 if (value := percentile(0.95)) is not None else None
+            ),
+            "sample_count": len(intervals),
+            "day_coverage": current.coverage_fraction if current is not None else 0.0,
+            "largest_gap_minutes": (
+                current.largest_uncovered_gap_seconds / 60.0 if current is not None else None
+            ),
+            "anchor_provenance": last.provenance if last is not None else None,
+        }
 
 
 class OutdoorHistoryManager:
     """Reference-counted domain registry with one collector per source/timezone."""
 
     def __init__(self) -> None:
-        self._collectors: dict[tuple[str, str], OutdoorHistoryCollector] = {}
+        self._collectors: dict[tuple[str, str, str, float], OutdoorHistoryCollector] = {}
 
     def acquire(
         self,
@@ -356,13 +566,21 @@ class OutdoorHistoryManager:
         reader: HistoryReader | None,
         entity_id: str | None = None,
         subscriber: Callable[[], None] | None = None,
+        hold_mode: str = "fixed",
+        fixed_hold_minutes: float = 120.0,
     ) -> tuple[OutdoorHistoryCollector, bool]:
-        key = (source_identity, timezone)
+        key = (source_identity, timezone, hold_mode, float(fixed_hold_minutes))
         collector = self._collectors.get(key)
         created = collector is None
         if collector is None:
             collector = OutdoorHistoryCollector(
-                hass, source_identity, timezone, reader, entity_id or source_identity
+                hass,
+                source_identity,
+                timezone,
+                reader,
+                entity_id or source_identity,
+                hold_mode,
+                fixed_hold_minutes,
             )
             self._collectors[key] = collector
         elif entity_id is not None:
@@ -377,8 +595,10 @@ class OutdoorHistoryManager:
         source_identity: str,
         timezone: str,
         subscriber: Callable[[], None] | None = None,
+        hold_mode: str = "fixed",
+        fixed_hold_minutes: float = 120.0,
     ) -> bool:
-        key = (source_identity, timezone)
+        key = (source_identity, timezone, hold_mode, float(fixed_hold_minutes))
         collector = self._collectors.get(key)
         if collector is None:
             return False

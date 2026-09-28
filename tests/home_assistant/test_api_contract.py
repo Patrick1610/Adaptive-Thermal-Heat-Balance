@@ -71,10 +71,10 @@ def test_feature_bits_match_pinned_home_assistant_baseline() -> None:
     assert int(ClimateEntityFeature.TARGET_TEMPERATURE_RANGE) == TARGET_TEMPERATURE_RANGE == 2
 
 
-def test_config_entry_schema_accepts_v2_and_rejects_unknown_future_version() -> None:
-    assert asyncio.run(async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=2))))
+def test_config_entry_schema_accepts_v3_and_rejects_unknown_future_version() -> None:
+    assert asyncio.run(async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=3))))
     assert not asyncio.run(
-        async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=3)))
+        async_migrate_entry(cast(Any, None), cast(Any, SimpleNamespace(version=4)))
     )
 
 
@@ -337,6 +337,13 @@ async def test_pre_028_target_deviation_restore_cache_is_migrated(hass: Any) -> 
             "climate.ranged",
             "heat_cool",
             ClimateEntityFeature.TARGET_TEMPERATURE_RANGE,
+            ["heat_cool", "off"],
+            ("heating", "cooling"),
+        ),
+        (
+            "climate.bidirectional",
+            "heat_cool",
+            ClimateEntityFeature.TARGET_TEMPERATURE,
             ["heat_cool", "off"],
             ("heating", "cooling"),
         ),
@@ -737,6 +744,16 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
         "pre_slew_cooling_c": None,
         "requested_heating_c": None,
         "requested_cooling_c": None,
+        "bidirectional_policy": None,
+        "heating_control_point_c": None,
+        "neutral_reference_c": None,
+        "cooling_control_point_c": None,
+        "selected_outdoor_season": None,
+        "active_half_band": None,
+        "correction_direction": None,
+        "changeover_reference_c": None,
+        "changeover_hysteresis_c": None,
+        "actuator_target_c": None,
         "explicit_transition": False,
         "transition_reasons": (),
         "data_quality": None,
@@ -836,7 +853,17 @@ def test_compact_target_capability_gate_and_endpoint_projection(hass: Any) -> No
             "hvac_modes": ["off", "heat", "cool"],
         },
     )
-    assert not _supports_zone_target_sensors(hass, [target])
+    assert _supports_zone_target_sensors(hass, [target])
+
+    hass.states.async_set(
+        "climate.test",
+        "heat_cool",
+        {
+            "supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE),
+            "hvac_modes": ["off", "heat_cool"],
+        },
+    )
+    assert _supports_zone_target_sensors(hass, [target])
 
     hass.states.async_set(
         "climate.test",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from .adapters.sources import (
@@ -14,6 +14,8 @@ from .adapters.sources import (
 )
 from .core.athb_engine import relative_air_speed
 from .core.climate import (
+    AutoMapping,
+    BidirectionalScalarPolicy,
     CapabilityMapping,
     ClimateCapabilitySnapshot,
     ClimateFailure,
@@ -22,6 +24,7 @@ from .core.climate import (
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     ha_to_celsius,
+    normalize_scalar_target,
     resolve_capability,
 )
 from .core.contracts import (
@@ -73,6 +76,171 @@ def _grid_rounding_mode(value: object) -> GridRoundingMode | None:
     """Return a configured mode while preserving legacy directional rounding."""
 
     return None if value is None else GridRoundingMode(str(value))
+
+
+def _auto_mapping(options: dict[str, Any], target_uuid: str) -> AutoMapping:
+    value = options.get(f"auto_mapping_{target_uuid}", options.get("auto_mapping", "unmapped"))
+    try:
+        return AutoMapping(str(value))
+    except ValueError:
+        return AutoMapping.UNMAPPED
+
+
+def _root_room_c(result: ZoneCalculationResult, name: str) -> float | None:
+    root = getattr(result.roots, name, None) if result.roots is not None else None
+    return root.mapped_room_temperature_c if isinstance(root, RootSuccess) else None
+
+
+def _season_direction(*, outdoor_c: float, neutral_c: float, previous: str | None) -> str:
+    """Select a stable outdoor season; equality belongs to heating."""
+
+    if previous == "heating" and outdoor_c <= neutral_c + 0.5:
+        return "heating"
+    if previous == "cooling" and outdoor_c > neutral_c - 0.5:
+        return "cooling"
+    return "heating" if outdoor_c <= neutral_c else "cooling"
+
+
+def _normalize_bidirectional_reference(
+    *,
+    requested_c: float,
+    air_c: float,
+    neutral_hold: bool,
+    capability: ClimateCapabilitySnapshot,
+    grid: GridOptions,
+) -> NormalizedScalarTarget | ClimateFailure:
+    direction = (
+        ActuationDirection.HEATING_ONLY if requested_c >= air_c else ActuationDirection.COOLING_ONLY
+    )
+    options = replace(grid, rounding_mode=GridRoundingMode.MATHEMATICAL) if neutral_hold else grid
+    return normalize_scalar_target(
+        requested_room_c=requested_c,
+        direction=direction,
+        snapshot=capability,
+        options=options,
+    )
+
+
+def _project_bidirectional_result(
+    result: ZoneCalculationResult,
+    *,
+    policy_name: str,
+    air_c: float,
+    outdoor_c: float | None,
+    previous_season: str | None,
+    capability: ClimateCapabilitySnapshot,
+    grid: GridOptions,
+    primary_stale: bool,
+) -> ZoneCalculationResult:
+    """Project a fully solved adaptive range onto one bidirectional scalar endpoint."""
+
+    policy = result.policy
+    if policy is None:
+        return result
+    heating = policy.heating_c
+    cooling = policy.cooling_c
+    neutral = _root_room_c(result, "thermal_neutral")
+    if heating is None or cooling is None:
+        return replace(result, normalized=None, suppression_reason="missing_range_target")
+    if neutral is None:
+        neutral = (heating + cooling) / 2.0
+    try:
+        selected_policy = BidirectionalScalarPolicy(policy_name)
+    except ValueError:
+        return replace(result, normalized=None, suppression_reason="missing_bidirectional_policy")
+    if primary_stale:
+        return replace(
+            result,
+            normalized=None,
+            suppression_reason="primary_temperature_stale",
+            bidirectional_policy=selected_policy.value,
+        )
+
+    def select(
+        h: float, c: float, *, apply_rapid: bool = False
+    ) -> tuple[float, bool, str, str | None, str | None]:
+        n = neutral if result.roots is not None else (h + c) / 2.0
+        if selected_policy is BidirectionalScalarPolicy.CENTERED:
+            return (h + c) / 2.0, False, "centered", None, None
+        if outdoor_c is None:
+            raise ValueError("outdoor_stale")
+        season = _season_direction(outdoor_c=outdoor_c, neutral_c=n, previous=previous_season)
+        if selected_policy is BidirectionalScalarPolicy.SEASONAL:
+            return (h if season == "heating" else c), False, season, season, None
+        if season == "heating":
+            half_band = "heating_to_neutral"
+            if air_c < h:
+                requested = h
+                correction = "heating"
+                if apply_rapid and policy.boost_mode is BoostMode.RAPID:
+                    requested = grid.user_max_c
+                return requested, False, correction, season, half_band
+            if air_c > n:
+                requested = n
+                correction = "cooling_to_neutral"
+                if apply_rapid and policy.boost_mode is BoostMode.RAPID:
+                    requested = grid.user_min_c
+                return requested, False, correction, season, half_band
+        else:
+            half_band = "neutral_to_cooling"
+            if air_c < n:
+                requested = n
+                correction = "heating_to_neutral"
+                if apply_rapid and policy.boost_mode is BoostMode.RAPID:
+                    requested = grid.user_max_c
+                return requested, False, correction, season, half_band
+            if air_c > c:
+                requested = c
+                correction = "cooling"
+                if apply_rapid and policy.boost_mode is BoostMode.RAPID:
+                    requested = grid.user_min_c
+                return requested, False, correction, season, half_band
+        return air_c, True, "neutral_hold", season, half_band
+
+    try:
+        requested, neutral_hold, correction, season, half_band = select(
+            heating, cooling, apply_rapid=True
+        )
+    except ValueError:
+        return replace(result, normalized=None, suppression_reason="outdoor_stale")
+    normalized = _normalize_bidirectional_reference(
+        requested_c=requested,
+        air_c=air_c,
+        neutral_hold=neutral_hold,
+        capability=capability,
+        grid=grid,
+    )
+    if isinstance(normalized, ClimateFailure):
+        return replace(result, normalized=None, suppression_reason=normalized.reason)
+
+    def reference(h: float | None, c: float | None) -> NormalizedScalarTarget | None:
+        if h is None or c is None:
+            return None
+        try:
+            value, hold, _kind, _season, _half_band = select(h, c)
+        except ValueError:
+            return None
+        item = _normalize_bidirectional_reference(
+            requested_c=value,
+            air_c=air_c,
+            neutral_hold=hold,
+            capability=capability,
+            grid=grid,
+        )
+        return None if isinstance(item, ClimateFailure) else item
+
+    return replace(
+        result,
+        normalized=normalized,
+        occupied_normalized=reference(policy.occupied_heating_c, policy.occupied_cooling_c),
+        unoccupied_normalized=reference(policy.unoccupied_heating_c, policy.unoccupied_cooling_c),
+        bidirectional_policy=selected_policy.value,
+        selected_outdoor_season=season,
+        active_half_band=half_band,
+        correction_direction=correction,
+        changeover_reference_c=neutral,
+        changeover_hysteresis_c=1.0,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +473,9 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         kind=SourceKind.OUTDOOR,
         now=snapshot.now,
         prior=prior_states.get("outdoor"),
+        freshness=timedelta(
+            minutes=_finite_option(snapshot.options, "outdoor_effective_hold_minutes", 120.0)
+        ),
     )
     primary_stale = (
         primary.validity is ObservationValidity.STALE
@@ -519,7 +690,10 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 critical.append(prepared)
     resolved_mappings: dict[str, CapabilityMapping] = {}
     for target in snapshot.targets:
-        resolved = resolve_capability(target.capability)
+        resolved = resolve_capability(
+            target.capability,
+            auto_mapping=_auto_mapping(snapshot.options, target.target_uuid),
+        )
         if isinstance(resolved, CapabilityMapping):
             resolved_mappings[target.target_uuid] = resolved
     mapped_directions = {resolved.direction for resolved in resolved_mappings.values()}
@@ -533,7 +707,10 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         control_mapping = resolved_mappings.get(target.target_uuid)
         capability_result: CapabilityMapping | ClimateFailure
         if control_mapping is None:
-            capability_result = resolve_capability(target.capability)
+            capability_result = resolve_capability(
+                target.capability,
+                auto_mapping=_auto_mapping(snapshot.options, target.target_uuid),
+            )
         else:
             capability_result = control_mapping
         capability_reason = (
@@ -552,7 +729,11 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 else TargetShape.SCALAR,
             )
         else:
-            calculation_mapping = capability_result
+            calculation_mapping = (
+                CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE)
+                if capability_result.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+                else capability_result
+            )
         grid = GridOptions(
             _finite_option(snapshot.options, "minimum_control_temperature", 18.0),
             _finite_option(snapshot.options, "maximum_control_temperature", 26.0),
@@ -601,6 +782,26 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 fixed_fallback_reason="air_speed_invalid" if fallback_for_speed else None,
             )
         )
+        if (
+            isinstance(capability_result, CapabilityMapping)
+            and capability_result.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+        ):
+            result = _project_bidirectional_result(
+                result,
+                policy_name=str(
+                    snapshot.options.get(f"bidirectional_scalar_policy_{target.target_uuid}", "")
+                ),
+                air_c=air_c,
+                outdoor_c=outdoor_c,
+                previous_season=(
+                    str(snapshot.options["bidirectional_previous_season"])
+                    if snapshot.options.get("bidirectional_previous_season")
+                    else None
+                ),
+                capability=target.capability,
+                grid=grid,
+                primary_stale=primary_stale,
+            )
         target_results.append(
             TargetCalculation(
                 target.target_uuid,
@@ -617,7 +818,11 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         calculated = target_result.result
         active_mapping = target_result.mapping
         normalized = calculated.normalized if calculated is not None else None
-        if active_mapping is None or not isinstance(normalized, NormalizedScalarTarget):
+        if (
+            active_mapping is None
+            or active_mapping.direction is ActuationDirection.BIDIRECTIONAL_SCALAR
+            or not isinstance(normalized, NormalizedScalarTarget)
+        ):
             coordinated.append(target_result)
             continue
         opposing: list[OpposingTarget] = []
@@ -769,8 +974,20 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         if calculation.normalized is not None and isinstance(
             calculation.normalized, NormalizedScalarTarget
         ):
-            value = heating if heating is not None else cooling
-            return {"temperature": value} if value is not None else {}
+            reference = {
+                "current": calculation.normalized,
+                "occupied": calculation.occupied_normalized,
+                "unoccupied": calculation.unoccupied_normalized,
+            }[scenario]
+            if not isinstance(reference, NormalizedScalarTarget):
+                return {}
+            scalar_values = {"temperature": reference.requested_room_c}
+            if calculation.bidirectional_policy is not None:
+                if heating is not None:
+                    scalar_values["target_low"] = heating
+                if cooling is not None:
+                    scalar_values["target_high"] = cooling
+            return scalar_values
         values: dict[str, float] = {}
         if heating is not None:
             values["target_low"] = heating
@@ -796,6 +1013,20 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             "boost_target_cooling": (
                 calculation.policy.boost_target_cooling_c if calculation.policy else None
             ),
+            "bidirectional_policy": calculation.bidirectional_policy,
+            "selected_outdoor_season": calculation.selected_outdoor_season,
+            "active_half_band": calculation.active_half_band,
+            "correction_direction": calculation.correction_direction,
+            "changeover_reference_c": calculation.changeover_reference_c,
+            "changeover_hysteresis_c": calculation.changeover_hysteresis_c,
+            "heating_control_point_c": root_value("heating_control"),
+            "neutral_reference_c": root_value("thermal_neutral"),
+            "cooling_control_point_c": root_value("cooling_control"),
+            "actuator_target_c": (
+                normalized.normalized_actuator_c
+                if isinstance(normalized, NormalizedScalarTarget)
+                else None
+            ),
         }
         if isinstance(normalized, NormalizedScalarTarget):
             effective[target.target_uuid] = {"temperature": normalized.normalized_actuator_c}
@@ -809,6 +1040,8 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             "direction": (
                 "ranged"
                 if isinstance(normalized, NormalizedRangeTarget)
+                else "bidirectional_scalar"
+                if calculation.bidirectional_policy is not None
                 else normalized.direction.value
             ),
             "current": {

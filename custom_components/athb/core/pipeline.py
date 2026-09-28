@@ -110,6 +110,12 @@ class ZoneCalculationResult:
     hold_condition: str | None = None
     occupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
     unoccupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
+    bidirectional_policy: str | None = None
+    selected_outdoor_season: str | None = None
+    active_half_band: str | None = None
+    correction_direction: str | None = None
+    changeover_reference_c: float | None = None
+    changeover_hysteresis_c: float | None = None
 
 
 def _fixed_fallback(
