@@ -377,19 +377,6 @@ def test_anti_chatter_reason_order_and_directional_release_hysteresis() -> None:
         )
         == "below_minimum_change"
     )
-    assert (
-        anti_chatter_reason(
-            replace(
-                _intent(value=20.5),
-                meaningful_delta_ha=1.0,
-                minimum_change_bypass=True,
-            ),
-            acknowledged=acknowledged,
-            last_dispatch_at=None,
-            now=NOW,
-        )
-        is None
-    )
     heating_release = replace(
         _intent(value=19.5), continuous_bounded_room_c=19.45, meaningful_delta_ha=0.5
     )

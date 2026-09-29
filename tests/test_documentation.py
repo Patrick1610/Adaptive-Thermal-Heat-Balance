@@ -63,7 +63,6 @@ def test_english_dutch_and_canonical_strings_have_matching_complete_keys() -> No
         "corrupt_control_storage",
         "persistent_target_rejection",
         "incompatible_auto_mapping",
-        "bidirectional_policy_required",
         "missing_history_24h",
         "mandatory_input_unavailable_1h",
         "resume_required",

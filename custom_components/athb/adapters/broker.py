@@ -62,7 +62,6 @@ class NormalizedIntent:
     recovery_reassertion: bool = False
     rounding_mode: str | None = None
     step_room_c: float | None = None
-    minimum_change_bypass: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,15 +342,11 @@ def anti_chatter_reason(
         and _same_target(requested, acknowledged.fingerprint)
     ):
         return "target_unchanged"
-    change_ha = (
-        _maximum_change_ha(requested, acknowledged.fingerprint) if acknowledged is not None else 0.0
-    )
-    bypasses_minimum = intent.minimum_change_bypass and change_ha + 1e-12 >= intent.step_ha
     if (
         not intent.recovery_reassertion
         and acknowledged is not None
-        and not bypasses_minimum
-        and change_ha + 1e-12 < intent.meaningful_delta_ha
+        and _maximum_change_ha(requested, acknowledged.fingerprint) + 1e-12
+        < intent.meaningful_delta_ha
     ):
         return "below_minimum_change"
     if (

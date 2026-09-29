@@ -37,21 +37,6 @@ External target-temperature intervention starts a manual override. An external H
 does not. All production writes pass through the sole `CommandBroker` to
 `climate.set_temperature`.
 
-A scalar `heat_cool` target, or scalar `auto` advertising both heating and cooling, is a
-bidirectional single-setpoint climate. It must be the zone's only controlled climate and requires
-an explicit policy:
-
-- **Demand-aware** (recommended) selects the heating-to-neutral or neutral-to-cooling half-band
-  from fresh outdoor temperature. Outside that half-band it writes the nearest boundary; inside
-  it holds near the fresh room temperature using mathematical nearest-grid rounding.
-- **Seasonal** writes the selected heating or cooling control point and retains direction inside a
-  1.0 °C outdoor changeover hysteresis. Exact equality with neutral selects heating.
-- **Centered** writes the arithmetic midpoint of the heating and cooling control points.
-
-Seasonal direction is persisted. Demand-aware and Seasonal require fresh indoor and outdoor
-observations; Centered requires fresh indoor temperature. None of these policies changes HVAC
-mode. A pre-existing bidirectional target remains write-suppressed until its policy is chosen.
-
 ## Comfort level, occupancy and Boost
 
 The comfort band is defined by `lower_comfort_vote` and `upper_comfort_vote`, default -0.5 and
@@ -97,8 +82,8 @@ The outer comfort limits remain descriptive even when a constant-moisture invers
 saturation: only that display envelope continues at 100% RH. Heating/cooling control points,
 eligibility and climate commands retain the stricter moisture constraint.
 
-For scalar heating-only, cooling-only and single-setpoint bidirectional zones, three target sensors
-make the policy and actuator result explicit:
+For ordinary scalar heating-only or cooling-only zones, three target sensors make the policy and
+actuator result explicit:
 
 - **Target — occupied** is the target for the selected comfort level with no occupancy setback and
   with Boost off.
@@ -307,13 +292,10 @@ Home Assistant capabilities:
 - range target support maps to the atomic heating/cooling range;
 - a scalar target with only `heat` advertised maps to heating;
 - a scalar target with only `cool` advertised maps to cooling;
-- scalar Auto with both directions advertised maps to a bidirectional single setpoint;
-- scalar Auto with neither direction advertised requires an explicit heating, cooling or
-  bidirectional mapping.
+- scalar Auto with both or neither direction advertised is ambiguous and remains fail-safe
+  suppressed.
 
-Only an ambiguous Auto target shows the mapping choice. A bidirectional scalar target always asks
-for Demand-aware, Seasonal or Centered behaviour. Capability inference and policy selection never
-cause an HVAC-mode call.
+No Auto-mapping choice is shown to the user. Capability inference never causes an HVAC-mode call.
 
 ## Command normalization and fallback
 

@@ -16,34 +16,14 @@ from custom_components.athb.adapters.sources import (
 from custom_components.athb.calculation import (
     CapturedTarget,
     CapturedZoneSnapshot,
-    _auto_mapping,
-    _project_bidirectional_result,
     calculate_runtime_snapshot,
     result_values,
 )
-from custom_components.athb.core.climate import (
-    ClimateCapabilitySnapshot,
-    GridOptions,
-    GridRoundingMode,
-    TemperatureUnit,
-)
-from custom_components.athb.core.contracts import (
-    BoostMode,
-    ControlProfile,
-    RootFailure,
-    RootName,
-    RootSet,
-    RootSuccess,
-)
-from custom_components.athb.core.pipeline import ZoneCalculationResult
-from custom_components.athb.core.policy import PolicyTargets
+from custom_components.athb.core.climate import ClimateCapabilitySnapshot, TemperatureUnit
+from custom_components.athb.core.contracts import RootFailure, RootSuccess
 from custom_components.athb.core.sources import SourceKind, SourceState
 
 NOW = datetime(2026, 9, 10, 10, tzinfo=UTC)
-
-
-def test_invalid_auto_mapping_is_safely_treated_as_unmapped() -> None:
-    assert _auto_mapping({"auto_mapping_target-1": "invalid"}, "target-1").value == "unmapped"
 
 
 def _state(entity_id: str, value: str, unit: str) -> StateValue:
@@ -86,236 +66,6 @@ def _named_target(target_id: str, *, mode: str) -> CapturedTarget:
             scalar_target_ha=20.0,
         ),
     )
-
-
-def _bidirectional_base(
-    *,
-    heating: float = 21.0,
-    neutral: float = 24.0,
-    cooling: float = 27.0,
-    boost_mode: BoostMode = BoostMode.OFF,
-) -> ZoneCalculationResult:
-    def root(name: RootName, value: float, vote: float) -> RootSuccess:
-        return RootSuccess(name, vote, value, value, 0.0, 0.0, 1)
-
-    roots = RootSet(
-        root(RootName.LOWER_COMFORT, heating - 1.0, -0.5),
-        root(RootName.HEATING_CONTROL, heating, -0.25),
-        root(RootName.THERMAL_NEUTRAL, neutral, 0.0),
-        root(RootName.COOLING_CONTROL, cooling, 0.25),
-        root(RootName.UPPER_COMFORT, cooling + 1.0, 0.5),
-    )
-    policy = PolicyTargets(
-        heating,
-        cooling,
-        heating,
-        cooling,
-        heating,
-        cooling,
-        ControlProfile.COMFORT,
-        False,
-        "primary",
-        "primary",
-        None,
-        None,
-        (),
-        boost_mode=boost_mode,
-        occupied_heating_c=heating,
-        occupied_cooling_c=cooling,
-        unoccupied_heating_c=heating - 2.0,
-        unoccupied_cooling_c=cooling + 2.0,
-    )
-    return ZoneCalculationResult(None, roots, policy, None, None, 1)
-
-
-def _project_scalar(
-    *,
-    air_c: float,
-    outdoor_c: float | None,
-    policy: str = "demand_aware",
-    previous: str | None = None,
-    rounding: GridRoundingMode = GridRoundingMode.MATHEMATICAL,
-    heating: float = 21.0,
-    neutral: float = 24.0,
-    cooling: float = 27.0,
-    boost_mode: BoostMode = BoostMode.OFF,
-    primary_stale: bool = False,
-) -> ZoneCalculationResult:
-    return _project_bidirectional_result(
-        _bidirectional_base(
-            heating=heating, neutral=neutral, cooling=cooling, boost_mode=boost_mode
-        ),
-        policy_name=policy,
-        air_c=air_c,
-        outdoor_c=outdoor_c,
-        previous_season=previous,
-        capability=_target(mode="heat_cool").capability,
-        grid=GridOptions(16.0, 30.0, rounding_mode=rounding),
-        primary_stale=primary_stale,
-    )
-
-
-@pytest.mark.parametrize(
-    ("outdoor_c", "air_c", "expected", "correction"),
-    [
-        (12.0, 20.0, 21.0, "heating"),
-        (12.0, 21.0, 21.0, "neutral_hold"),
-        (12.0, 23.0, 23.0, "neutral_hold"),
-        (12.0, 24.0, 24.0, "neutral_hold"),
-        (12.0, 28.0, 24.0, "cooling_to_neutral"),
-        (30.0, 22.0, 24.0, "heating_to_neutral"),
-        (30.0, 24.0, 24.0, "neutral_hold"),
-        (30.0, 26.0, 26.0, "neutral_hold"),
-        (30.0, 27.0, 27.0, "neutral_hold"),
-        (30.0, 28.0, 27.0, "cooling"),
-    ],
-)
-def test_demand_aware_half_band_matrix(
-    outdoor_c: float, air_c: float, expected: float, correction: str
-) -> None:
-    result = _project_scalar(outdoor_c=outdoor_c, air_c=air_c)
-
-    assert result.normalized is not None
-    assert result.normalized.normalized_room_c == expected
-    assert result.correction_direction == correction
-
-
-def test_bidirectional_seasonal_equality_hysteresis_centered_and_rounding() -> None:
-    equality = _project_scalar(air_c=23.0, outdoor_c=24.0, policy="seasonal")
-    assert equality.normalized is not None
-    assert equality.normalized.normalized_room_c == 21.0
-    assert equality.selected_outdoor_season == "heating"
-
-    retained_heat = _project_scalar(
-        air_c=23.0, outdoor_c=24.4, policy="seasonal", previous="heating"
-    )
-    retained_cool = _project_scalar(
-        air_c=23.0, outdoor_c=23.6, policy="seasonal", previous="cooling"
-    )
-    assert retained_heat.selected_outdoor_season == "heating"
-    assert retained_cool.selected_outdoor_season == "cooling"
-
-    centered = _project_scalar(air_c=20.0, outdoor_c=None, policy="centered")
-    assert centered.normalized is not None
-    assert centered.normalized.normalized_room_c == 24.0
-
-    neutral_hold = _project_scalar(
-        air_c=23.3,
-        outdoor_c=12.0,
-        rounding=GridRoundingMode.FLOOR,
-        heating=21.3,
-    )
-    outside = _project_scalar(
-        air_c=20.0,
-        outdoor_c=12.0,
-        rounding=GridRoundingMode.FLOOR,
-        heating=21.3,
-    )
-    assert neutral_hold.normalized is not None
-    assert neutral_hold.normalized.normalized_room_c == 23.5
-    assert outside.normalized is not None
-    assert outside.normalized.normalized_room_c == 21.0
-
-
-def test_bidirectional_scalar_suppresses_stale_inputs_and_rapid_uses_real_direction() -> None:
-    stale_inside = _project_scalar(air_c=20.0, outdoor_c=12.0, primary_stale=True)
-    stale_outside = _project_scalar(air_c=20.0, outdoor_c=None)
-    assert stale_inside.normalized is None
-    assert stale_inside.suppression_reason == "primary_temperature_stale"
-    assert stale_outside.normalized is None
-    assert stale_outside.suppression_reason == "outdoor_stale"
-
-    rapid_heat = _project_scalar(air_c=20.0, outdoor_c=12.0, boost_mode=BoostMode.RAPID)
-    rapid_cool = _project_scalar(air_c=28.0, outdoor_c=12.0, boost_mode=BoostMode.RAPID)
-    rapid_hold = _project_scalar(air_c=23.0, outdoor_c=12.0, boost_mode=BoostMode.RAPID)
-    assert rapid_heat.normalized is not None
-    assert rapid_heat.normalized.normalized_room_c == 30.0
-    assert rapid_cool.normalized is not None
-    assert rapid_cool.normalized.normalized_room_c == 16.0
-    assert rapid_hold.normalized is not None
-    assert rapid_hold.normalized.normalized_room_c == 23.0
-
-    rapid_summer_heat = _project_scalar(air_c=22.0, outdoor_c=30.0, boost_mode=BoostMode.RAPID)
-    rapid_summer_cool = _project_scalar(air_c=28.0, outdoor_c=30.0, boost_mode=BoostMode.RAPID)
-    assert rapid_summer_heat.normalized is not None
-    assert rapid_summer_heat.normalized.normalized_room_c == 30.0
-    assert rapid_summer_cool.normalized is not None
-    assert rapid_summer_cool.normalized.normalized_room_c == 16.0
-
-
-def test_bidirectional_projection_handles_incomplete_and_invalid_inputs() -> None:
-    base = _bidirectional_base()
-    no_policy = _project_bidirectional_result(
-        replace(base, policy=None),
-        policy_name="demand_aware",
-        air_c=23.0,
-        outdoor_c=12.0,
-        previous_season=None,
-        capability=_target(mode="heat_cool").capability,
-        grid=GridOptions(16.0, 30.0),
-        primary_stale=False,
-    )
-    assert no_policy is not None
-    assert no_policy.policy is None
-
-    assert base.policy is not None
-    missing_range = _project_bidirectional_result(
-        replace(base, policy=replace(base.policy, heating_c=None)),
-        policy_name="demand_aware",
-        air_c=23.0,
-        outdoor_c=12.0,
-        previous_season=None,
-        capability=_target(mode="heat_cool").capability,
-        grid=GridOptions(16.0, 30.0),
-        primary_stale=False,
-    )
-    invalid_policy = _project_bidirectional_result(
-        base,
-        policy_name="invalid",
-        air_c=23.0,
-        outdoor_c=12.0,
-        previous_season=None,
-        capability=_target(mode="heat_cool").capability,
-        grid=GridOptions(16.0, 30.0),
-        primary_stale=False,
-    )
-    invalid_grid = _project_bidirectional_result(
-        base,
-        policy_name="centered",
-        air_c=23.0,
-        outdoor_c=None,
-        previous_season=None,
-        capability=replace(_target(mode="heat_cool").capability, min_temp_ha=30.0),
-        grid=GridOptions(16.0, 30.0),
-        primary_stale=False,
-    )
-    missing_previews = _project_bidirectional_result(
-        replace(
-            base,
-            roots=None,
-            policy=replace(
-                base.policy,
-                occupied_heating_c=None,
-                occupied_cooling_c=None,
-                unoccupied_heating_c=None,
-                unoccupied_cooling_c=None,
-            ),
-        ),
-        policy_name="centered",
-        air_c=23.0,
-        outdoor_c=None,
-        previous_season=None,
-        capability=_target(mode="heat_cool").capability,
-        grid=GridOptions(16.0, 30.0),
-        primary_stale=False,
-    )
-
-    assert missing_range.suppression_reason == "missing_range_target"
-    assert invalid_policy.suppression_reason == "missing_bidirectional_policy"
-    assert invalid_grid.suppression_reason == "invalid_grid_configuration"
-    assert missing_previews.normalized is not None
-    assert missing_previews.occupied_normalized is None
-    assert missing_previews.unoccupied_normalized is None
 
 
 def test_registry_identity_change_starts_a_new_source_lineage() -> None:
@@ -772,19 +522,15 @@ def test_snapshot_applies_max_setback_from_command_bounds_and_reports_fallback_t
     values = result_values(fallback)
     assert values["input_status"] == "running_mean_unavailable"
     assert values["effective_targets"]["target-1"]["temperature"] == 18.5
-    assert (
-        values["effective_target_details"]["target-1"]
-        | {
-            "mode": "fallback",
-            "reason": "running_mean_unavailable",
-            "fallback": True,
-            "boost_mode": "off",
-            "boost_phase": "fallback",
-            "boost_target_heating": None,
-            "boost_target_cooling": None,
-        }
-        == values["effective_target_details"]["target-1"]
-    )
+    assert values["effective_target_details"]["target-1"] == {
+        "mode": "fallback",
+        "reason": "running_mean_unavailable",
+        "fallback": True,
+        "boost_mode": "off",
+        "boost_phase": "fallback",
+        "boost_target_heating": None,
+        "boost_target_cooling": None,
+    }
 
 
 def test_rapid_boost_with_separate_heating_and_cooling_targets_falls_back_to_adaptive() -> None:
@@ -1126,49 +872,6 @@ def test_result_projection_includes_ranged_target_and_cold_warm_statuses() -> No
     )
     assert result_values(cold)["comfort_status"] == "cold"
     assert result_values(warm)["comfort_status"] == "warm"
-
-
-def test_result_projection_includes_bidirectional_scalar_policy_metadata() -> None:
-    result = calculate_runtime_snapshot(
-        CapturedZoneSnapshot(
-            NOW,
-            _state("sensor.room", "20", "°C"),
-            None,
-            50.0,
-            _state("sensor.outdoor", "5", "°C"),
-            None,
-            5.0,
-            "complete_history",
-            "balanced",
-            "comfort",
-            {"bidirectional_scalar_policy_target-1": "demand_aware"},
-            (_target(mode="heat_cool"),),
-            explicit_transition=True,
-        )
-    )
-
-    values = result_values(result)
-    details = values["effective_target_details"]["target-1"]
-    scenarios = values["target_scenarios"]["target-1"]
-    assert details["bidirectional_policy"] == "demand_aware"
-    assert details["selected_outdoor_season"] == "heating"
-    assert details["actuator_target_c"] == 20.0
-    assert scenarios["direction"] == "bidirectional_scalar"
-    assert scenarios["current"]["room"] == {
-        "temperature": 20.0,
-        "target_low": pytest.approx(details["heating_control_point_c"]),
-        "target_high": pytest.approx(details["cooling_control_point_c"]),
-    }
-    assert set(scenarios["occupied"]["room"]) == {
-        "temperature",
-        "target_low",
-        "target_high",
-    }
-    assert set(scenarios["unoccupied"]["room"]) == {
-        "temperature",
-        "target_low",
-        "target_high",
-    }
 
 
 def test_fahrenheit_effective_target_is_projected_in_native_celsius() -> None:

@@ -82,24 +82,9 @@ def _snapshot(
             AutoMapping.UNMAPPED,
             CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE),
         ),
-        (
-            "heat_cool",
-            1,
-            AutoMapping.UNMAPPED,
-            CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR),
-        ),
-        (
-            "auto",
-            1,
-            AutoMapping.UNMAPPED,
-            CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR),
-        ),
-        (
-            "auto",
-            1,
-            AutoMapping.BIDIRECTIONAL_SCALAR,
-            CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR),
-        ),
+        ("heat_cool", 1, AutoMapping.UNMAPPED, "unsupported_hvac_mode"),
+        ("auto", 1, AutoMapping.UNMAPPED, "unsupported_auto_mapping"),
+        ("auto", 1, AutoMapping.BIDIRECTIONAL_SCALAR, "unsupported_auto_mapping"),
         (
             "auto",
             1,
@@ -143,11 +128,7 @@ def test_complete_capability_mode_matrix(
         (TARGET_TEMPERATURE_RANGE, ("off", "auto"), AutoMapping.RANGE),
         (TARGET_TEMPERATURE, ("off", "heat", "auto"), AutoMapping.HEATING),
         (TARGET_TEMPERATURE, ("off", "cool", "auto"), AutoMapping.COOLING),
-        (
-            TARGET_TEMPERATURE,
-            ("off", "heat", "cool", "auto"),
-            AutoMapping.BIDIRECTIONAL_SCALAR,
-        ),
+        (TARGET_TEMPERATURE, ("off", "heat", "cool", "auto"), AutoMapping.UNMAPPED),
         (TARGET_TEMPERATURE, ("off", "auto"), AutoMapping.UNMAPPED),
     ],
 )
@@ -209,50 +190,6 @@ def test_absolute_and_delta_unit_conversions_are_distinct() -> None:
     assert unit_delta_to_ha(
         1.8, declared_unit=StepUnit.FAHRENHEIT, ha_unit=TemperatureUnit.CELSIUS
     ) == pytest.approx(1.0)
-    assert (
-        unit_delta_to_ha(0.5, declared_unit=StepUnit.HA, ha_unit=TemperatureUnit.FAHRENHEIT) == 0.5
-    )
-
-
-def test_capability_and_grid_reject_incomplete_or_invalid_edge_cases() -> None:
-    assert resolve_capability(_snapshot(mode="heat_cool", features=0)) == ClimateFailure(
-        "unsupported_hvac_mode", "heat_cool requires a temperature target"
-    )
-    assert infer_auto_mapping(_snapshot(mode="heat")) is AutoMapping.UNMAPPED
-    assert infer_auto_mapping(_snapshot(mode="auto", features=0)) is AutoMapping.UNMAPPED
-
-    invalid_step = build_grid(_snapshot(step=0.0), GridOptions(5.0, 30.0))
-    invalid_origin = build_grid(
-        _snapshot(), GridOptions(5.0, 30.0, grid_origin_override_ha=float("nan"))
-    )
-    no_grid_point = build_grid(
-        _snapshot(minimum=5.0, maximum=35.0, step=10.0), GridOptions(6.0, 7.0)
-    )
-    invalid_request = normalize_scalar_target(
-        requested_room_c=20.0,
-        direction=ActuationDirection.RANGED,
-        snapshot=_snapshot(),
-        options=GridOptions(5.0, 30.0),
-    )
-    invalid_range = normalize_range_target(
-        requested_heating_room_c=20.0,
-        requested_cooling_room_c=24.0,
-        snapshot=_snapshot(step=0.0),
-        options=GridOptions(5.0, 30.0),
-    )
-    nan_range = normalize_range_target(
-        requested_heating_room_c=float("nan"),
-        requested_cooling_room_c=24.0,
-        snapshot=_snapshot(),
-        options=GridOptions(5.0, 30.0),
-    )
-
-    assert invalid_step == ClimateFailure("invalid_grid_configuration")
-    assert invalid_origin == ClimateFailure("invalid_grid_configuration")
-    assert no_grid_point == ClimateFailure("no_legal_target_grid")
-    assert invalid_request == ClimateFailure("invalid_target_request")
-    assert invalid_range == ClimateFailure("invalid_grid_configuration")
-    assert nan_range == ClimateFailure("no_legal_range")
 
 
 def test_coarse_grid_examples_round_strictly_inward() -> None:

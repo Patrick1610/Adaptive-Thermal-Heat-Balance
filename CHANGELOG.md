@@ -1,18 +1,13 @@
 # Changelog
 
-## 0.3.0
+## 0.2.18
 
-- Support scalar `heat_cool` and bidirectional scalar `auto` climates with an explicit
-  Demand-aware, Seasonal or Centered policy. Demand-aware uses the outdoor-selected half of the
-  comfort band and holds the current temperature inside that half, without changing HVAC mode.
-- Keep single-setpoint bidirectional zones compact: **Target — current/occupied/unoccupied** show
-  the policy result and both heating/cooling deviation sensors retain the two control references.
-- Add report-aware outdoor collection. New zones learn a bounded hold from live `state_reported`
-  cadence; existing zones migrate to a fixed 120-minute hold, configurable from 30 minutes to
-  24 hours. Recorder `last_updated` and distinct `last_reported` anchors improve bootstrap
-  coverage without training the automatic cadence.
-- Persist seasonal direction, expose policy and outdoor-history diagnostics, and suppress writes
-  when a required bidirectional policy or fresh indoor/outdoor observation is unavailable.
+- Collect unchanged outdoor-temperature reports through Home Assistant `state_reported`, so a
+  reporting sensor can extend daily running-mean coverage without requiring a value change.
+- Add Automatic and Fixed outdoor report holds. Automatic learns a bounded cadence from live
+  reports; existing zones migrate conservatively to Fixed 120 minutes.
+- Use Recorder `last_updated` and distinct `last_reported` anchors during bootstrap, persist the
+  active hold policy, and expose cadence, expiry and coverage evidence in diagnostics.
 
 ## 0.2.17
 

@@ -100,7 +100,6 @@ def test_contract_enums_have_stable_wire_values() -> None:
         "heating_only",
         "cooling_only",
         "ranged",
-        "bidirectional_scalar",
     ]
     assert [mode.value for mode in CriticalEligibilityMode] == [
         "monitoring",

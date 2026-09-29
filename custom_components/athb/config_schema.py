@@ -190,21 +190,6 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         "bidirectional_scalar",
     }:
         errors["auto_mapping"] = "invalid_option"
-    for name, value in data.items():
-        if name.startswith("auto_mapping_") and value not in {
-            "unmapped",
-            "heating",
-            "cooling",
-            "range",
-            "bidirectional_scalar",
-        }:
-            errors[name] = "invalid_option"
-        if name.startswith("bidirectional_scalar_policy_") and value not in {
-            "demand_aware",
-            "seasonal",
-            "centered",
-        }:
-            errors[name] = "invalid_option"
     critical = data.get("critical_locations", ())
     if not isinstance(critical, list | tuple) or len(critical) > 8:
         errors["critical_locations"] = "invalid_option"

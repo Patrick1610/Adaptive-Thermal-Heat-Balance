@@ -16,7 +16,6 @@ REPAIR_TYPES = {
     "corrupt_control_storage",
     "persistent_target_rejection",
     "incompatible_auto_mapping",
-    "bidirectional_policy_required",
     "missing_history_24h",
     "mandatory_input_unavailable_1h",
     "resume_required",
