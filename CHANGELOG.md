@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.19
+
+- Let Automatic outdoor hold learn from continuously reporting high-frequency sensors by
+  coalescing consecutive valid reports into cadence intervals of at least one minute.
+- Keep every report available for coverage and liveness while preserving invalid-report and
+  six-hour-gap boundaries in the cadence learner.
+
 ## 0.2.18
 
 - Collect unchanged outdoor-temperature reports through Home Assistant `state_reported`, so a

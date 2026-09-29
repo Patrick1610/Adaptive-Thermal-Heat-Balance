@@ -77,7 +77,7 @@ class OutdoorHistoryCollector:
     _listener_cancel: Callable[[], None] | None = field(default=None, init=False, repr=False)
     _report_listener_cancel: Callable[[], None] | None = field(default=None, init=False, repr=False)
     _boundary_cancel: Callable[[], None] | None = field(default=None, init=False, repr=False)
-    _live_report_times: list[datetime] = field(default_factory=list, init=False, repr=False)
+    _cadence_anchor_at: datetime | None = field(default=None, init=False, repr=False)
     _learned_intervals: list[tuple[datetime, float]] = field(
         default_factory=list, init=False, repr=False
     )
@@ -233,17 +233,23 @@ class OutdoorHistoryCollector:
 
     def _record_live_interval(self, sample: OutdoorSample) -> None:
         if not sample.valid:
-            self._live_report_times.clear()
+            self._cadence_anchor_at = None
             return
         timestamp = sample.observed_at.astimezone(UTC)
-        if self._live_report_times:
-            seconds = (timestamp - self._live_report_times[-1]).total_seconds()
-            if 60.0 <= seconds <= 21600.0:
-                self._learned_intervals.append((timestamp, seconds))
-                self._prune_learned_intervals(timestamp)
-        if not self._live_report_times or timestamp > self._live_report_times[-1]:
-            self._live_report_times.append(timestamp)
-            self._live_report_times = self._live_report_times[-65:]
+        anchor = self._cadence_anchor_at
+        if anchor is None:
+            self._cadence_anchor_at = timestamp
+            return
+        seconds = (timestamp - anchor).total_seconds()
+        if seconds <= 0.0:
+            return
+        if seconds < 60.0:
+            return
+        self._cadence_anchor_at = timestamp
+        if seconds > 21600.0:
+            return
+        self._learned_intervals.append((timestamp, seconds))
+        self._prune_learned_intervals(timestamp)
 
     def _ensure_listener(self) -> None:
         if self._listener_cancel is not None or not self.entity_id or self.references <= 0:

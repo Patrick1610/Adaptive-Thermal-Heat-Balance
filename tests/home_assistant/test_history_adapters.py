@@ -131,6 +131,7 @@ async def test_history_storage_failure_keeps_memory_active_and_can_recover(hass:
     collector = OutdoorHistoryCollector(hass, "sensor.outdoor", "UTC", None, references=1)
     store = FailingStore()
     collector._store = cast(Any, store)
+    collector._legacy_store = cast(Any, store)
 
     await collector.async_start(now=NOW, current=OutdoorSample(NOW, 5.0))
 
@@ -312,6 +313,72 @@ async def test_automatic_hold_learns_only_from_consecutive_live_reports(hass: An
     assert resumed.diagnostics(now=resumed_at)["sample_count"] == 12
     assert resumed.effective_hold_seconds == 1800.0
     await resumed.async_close()
+
+
+async def test_automatic_hold_coalesces_high_frequency_live_reports(hass: Any) -> None:
+    collector = OutdoorHistoryCollector(
+        hass,
+        "sensor.outdoor",
+        "UTC",
+        None,
+        hold_mode="automatic",
+        fixed_hold_minutes=120.0,
+        references=1,
+    )
+    collector._store = cast(Any, MemoryStore())
+    await collector.async_start(now=NOW, current=OutdoorSample(NOW, 5.0))
+
+    for index in range(73):
+        observed = NOW + timedelta(seconds=10 * (index + 1))
+        collector.add_sample(
+            OutdoorSample(observed, 5.0),
+            now=observed,
+            live=True,
+        )
+
+    diagnostics = collector.diagnostics(now=NOW + timedelta(minutes=13))
+    assert diagnostics["sample_count"] == 12
+    assert diagnostics["p50_interval_minutes"] == 1.0
+    assert diagnostics["p95_interval_minutes"] == 1.0
+    assert diagnostics["effective_hold_minutes"] == 30.0
+
+    invalid_at = NOW + timedelta(minutes=13)
+    collector.add_sample(
+        OutdoorSample(invalid_at, None, False),
+        now=invalid_at,
+        live=True,
+    )
+    resumed_at = invalid_at + timedelta(seconds=50)
+    collector.add_sample(
+        OutdoorSample(resumed_at, 5.0),
+        now=resumed_at,
+        live=True,
+    )
+    collector.add_sample(
+        OutdoorSample(resumed_at + timedelta(seconds=20), 5.0),
+        now=resumed_at + timedelta(seconds=20),
+        live=True,
+    )
+    assert collector.diagnostics(now=resumed_at + timedelta(seconds=20))["sample_count"] == 12
+
+    collector.add_sample(
+        OutdoorSample(resumed_at - timedelta(seconds=10), 5.0),
+        now=resumed_at + timedelta(seconds=20),
+        live=True,
+    )
+    after_gap = resumed_at + timedelta(hours=7)
+    collector.add_sample(
+        OutdoorSample(after_gap, 5.0),
+        now=after_gap,
+        live=True,
+    )
+    collector.add_sample(
+        OutdoorSample(after_gap + timedelta(minutes=1), 5.0),
+        now=after_gap + timedelta(minutes=1),
+        live=True,
+    )
+    assert collector.diagnostics(now=after_gap + timedelta(minutes=1))["sample_count"] == 13
+    await collector.async_close()
 
 
 async def test_equal_live_report_renews_hold_without_notifying_subscriber(hass: Any) -> None:
