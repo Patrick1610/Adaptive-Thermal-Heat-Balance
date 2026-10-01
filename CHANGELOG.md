@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.20
+
+- Let high-frequency temperature sources leave jump quarantine after one minute of mutually
+  consistent reports by retaining the first stable report as the time anchor.
+- Let those sources complete strict recovery after 30 seconds without weakening the existing
+  jump, consistency or availability checks.
+
 ## 0.2.19
 
 - Let Automatic outdoor hold learn from continuously reporting high-frequency sensors by

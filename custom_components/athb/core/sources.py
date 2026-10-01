@@ -263,10 +263,12 @@ def validate_measured_source(
             and max(item[1] for item in values) - min(item[1] for item in values) <= consistency
         )
         spans_minute = (values[-1][0] - values[0][0]).total_seconds() >= 60.0
-        if len(values) >= 3 and spans_minute and mutually_consistent:
+        if not mutually_consistent:
+            quarantine = QuarantineState(((observed, value),))
+        elif len(values) >= 3 and spans_minute:
             quarantine = None
         else:
-            quarantine = QuarantineState(values[-3:])
+            quarantine = QuarantineState(values if len(values) <= 3 else (values[0], *values[-2:]))
 
     if quarantine is not None:
         observation = Observation(
@@ -294,7 +296,13 @@ def validate_measured_source(
     # the first valid baseline wait for a second physical sensor report. The
     # strict recovery gate remains active after any previously accepted value.
     recovering = state.recovering and last is not None
-    recovery = (*state.recovery_reports, observed)[-2:] if recovering else ()
+    recovery = (
+        (observed,)
+        if recovering and not state.recovery_reports
+        else (state.recovery_reports[0], observed)
+        if recovering
+        else ()
+    )
     ready = len(recovery) >= 2 and (recovery[-1] - recovery[-2]).total_seconds() >= 30.0
     return SourceUpdate(
         observation, SourceState(observation, None, recovery, recovering and not ready)

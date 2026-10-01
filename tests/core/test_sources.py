@@ -231,6 +231,76 @@ def test_jump_quarantine_requires_three_consistent_reports_spanning_a_minute() -
     assert not recovered.state.recovering
 
 
+def test_high_frequency_reports_release_jump_quarantine_and_recovery() -> None:
+    state = _update().state
+    for seconds in (1, 11, 21, 31, 41, 51):
+        result = _update(
+            state,
+            value=25.0,
+            observed_at=NOW + timedelta(seconds=seconds),
+            received_at=NOW + timedelta(seconds=seconds),
+        )
+        assert result.observation.validity is ObservationValidity.INVALID
+        state = result.state
+
+    released = _update(
+        state,
+        value=25.0,
+        observed_at=NOW + timedelta(seconds=61),
+        received_at=NOW + timedelta(seconds=61),
+    )
+    assert released.observation.validity is ObservationValidity.VALID
+    assert released.state.quarantine is None
+    assert released.state.recovering
+
+    state = released.state
+    for seconds in (71, 81):
+        recovering = _update(
+            state,
+            value=25.0,
+            observed_at=NOW + timedelta(seconds=seconds),
+            received_at=NOW + timedelta(seconds=seconds),
+        )
+        assert recovering.state.recovering
+        state = recovering.state
+
+    recovered = _update(
+        state,
+        value=25.0,
+        observed_at=NOW + timedelta(seconds=91),
+        received_at=NOW + timedelta(seconds=91),
+    )
+    assert primary_recovery_ready(recovered.state)
+    assert not recovered.state.recovering
+
+
+def test_high_frequency_reports_complete_strict_unavailable_recovery() -> None:
+    accepted = _update()
+    unavailable = _update(
+        accepted.state,
+        available=False,
+        received_at=NOW + timedelta(seconds=1),
+    )
+
+    state = unavailable.state
+    for seconds in (2, 12, 22):
+        recovering = _update(
+            state,
+            observed_at=NOW + timedelta(seconds=seconds),
+            received_at=NOW + timedelta(seconds=seconds),
+        )
+        assert recovering.state.recovering
+        state = recovering.state
+
+    recovered = _update(
+        state,
+        observed_at=NOW + timedelta(seconds=32),
+        received_at=NOW + timedelta(seconds=32),
+    )
+    assert primary_recovery_ready(recovered.state)
+    assert not recovered.state.recovering
+
+
 def test_inconsistent_quarantine_reports_do_not_release() -> None:
     accepted = _update()
     state = _update(
