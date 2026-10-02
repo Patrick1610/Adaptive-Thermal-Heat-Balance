@@ -135,6 +135,18 @@ from .device_activity import (
 from .repairs import RepairManager, TransitionLogger
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _ownership_trace_payload(state: OwnershipState) -> dict[str, Any]:
+    """Return a JSON-safe ownership snapshot for decision traces."""
+
+    payload = asdict(state)
+    expiry = payload.get("override_expiry")
+    if isinstance(expiry, datetime):
+        payload["override_expiry"] = expiry.isoformat()
+    return payload
+
+
 STALE_SAFETY_DELAY = timedelta(hours=1)  # Cooling safety remains on the established path.
 REMOVED_ENTITY_REPAIR_SETTLE = timedelta(seconds=30)
 REMOVED_ENTITY_REPAIR = "removed_source_or_target"
@@ -1413,7 +1425,8 @@ class ZoneRuntime:
                 "quality_reasons": result.quality_reasons,
                 "calculation": calculation_payload,
                 "ownership": {
-                    identity: asdict(state) for identity, state in self.ownership.items()
+                    identity: _ownership_trace_payload(state)
+                    for identity, state in self.ownership.items()
                 },
             },
         )
@@ -2227,7 +2240,8 @@ class ZoneRuntime:
                 "command_outcomes": outcomes,
                 "suppression_reason": result.suppression_reason,
                 "ownership": {
-                    identity: asdict(state) for identity, state in self.ownership.items()
+                    identity: _ownership_trace_payload(state)
+                    for identity, state in self.ownership.items()
                 },
             },
         )
