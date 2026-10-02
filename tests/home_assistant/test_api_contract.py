@@ -876,6 +876,18 @@ def test_per_climate_context_handles_ranges_and_missing_states(hass: Any) -> Non
     assert context["climate.missing"]["hvac_action"] is None
 
 
+def test_entity_attributes_tolerate_missing_source_observation_payload() -> None:
+    """Startup entity creation tolerates a source without observation metadata."""
+    runtime = _runtime()
+    runtime.entry.data["primary_temperature"] = "sensor.room"
+    runtime.publish({"source_states": {"sensor.room": None}})
+
+    attributes = AthbSensor(runtime, DESCRIPTIONS[0]).extra_state_attributes
+
+    assert attributes["sources"]["primary_temperature"]["entity_id"] == "sensor.room"
+    assert attributes["sources"]["primary_temperature"]["last_reported"] is None
+
+
 def test_entity_attributes_explain_sources_controls_settings_and_related_values() -> None:
     runtime = _runtime()
     runtime.entry.data.update(

@@ -75,6 +75,26 @@ def _runtime(*, entry_id: str = "entry-1", target_identity: str = "registry-1") 
     return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "off", False)
 
 
+def test_ownership_trace_payload_serializes_override_expiry() -> None:
+    """Decision traces keep strict JSON values when a manual override is timed."""
+    expiry = datetime(2026, 10, 2, 12, 30, tzinfo=UTC)
+    state = OwnershipState(
+        target_identity="registry-1",
+        ownership=Ownership.MANUAL_OVERRIDE,
+        override_expiry=expiry,
+    )
+
+    payload = runtime_module._ownership_trace_payload(state)
+
+    assert payload["override_expiry"] == expiry.isoformat()
+    runtime = _runtime()
+    trace = runtime.trace_ring.add(
+        generation=1,
+        payload={"ownership": {"registry-1": payload}},
+    )
+    assert trace is not None
+
+
 def test_runtime_callbacks_boost_resume_and_lightweight_strategy() -> None:
     runtime = _runtime()
     updates: list[dict[str, Any]] = []

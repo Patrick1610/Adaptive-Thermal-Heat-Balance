@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.21
+
+- Tolerate a temporarily absent source-observation payload while Home Assistant is adding ATHB
+  entities during startup, instead of failing the entity platform.
+- Serialize manual-override expiry timestamps in decision traces without weakening strict JSON
+  validation for other trace values.
+
 ## 0.2.20
 
 - Let high-frequency temperature sources leave jump quarantine after one minute of mutually
