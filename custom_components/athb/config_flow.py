@@ -176,6 +176,27 @@ class _OptionsWizardMixin:
     _calibration_index: int
     _wizard_environment: dict[str, Any]
 
+    def _is_last_wizard_step(self, step_id: str) -> bool:
+        """Return whether this shared wizard step is the final visible form."""
+
+        return False
+
+    def _show_wizard_form(
+        self,
+        *,
+        step_id: str,
+        data_schema: vol.Schema,
+        **kwargs: Any,
+    ) -> ConfigFlowResult:
+        """Show a shared wizard form with the correct Next or Submit button."""
+
+        return self.async_show_form(
+            step_id=step_id,
+            data_schema=data_schema,
+            last_step=self._is_last_wizard_step(step_id),
+            **kwargs,
+        )
+
     def _activity_exclusions(self, environment: Mapping[str, Any]) -> set[str]:
         """Return entities that can never be selected as device activity evidence."""
 
@@ -351,7 +372,7 @@ class _OptionsWizardMixin:
             if occupancy
             else vol.Optional("occupancy_entity")
         ] = ENTITY
-        return self.async_show_form(step_id=step_id, data_schema=vol.Schema(fields))
+        return self._show_wizard_form(step_id=step_id, data_schema=vol.Schema(fields))
 
     async def async_step_setback(
         self, user_input: dict[str, Any] | None = None
@@ -365,7 +386,7 @@ class _OptionsWizardMixin:
             self._pending_options.pop("eco_heating_setback_c", None)
             self._pending_options.pop("eco_cooling_setback_c", None)
             return await self._after_setback()
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="setback",
             data_schema=vol.Schema(
                 {
@@ -387,7 +408,7 @@ class _OptionsWizardMixin:
         if user_input is not None:
             self._pending_options.update(user_input)
             return await self._after_setback()
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="setback_parameters",
             data_schema=vol.Schema(
                 {
@@ -440,7 +461,7 @@ class _OptionsWizardMixin:
                 ): MOLD_INDICATORS
             }
         )
-        return self.async_show_form(step_id="radiant", data_schema=schema)
+        return self._show_wizard_form(step_id="radiant", data_schema=schema)
 
     async def _after_radiant(self) -> ConfigFlowResult:
         return await self.async_step_control_limits()
@@ -460,7 +481,7 @@ class _OptionsWizardMixin:
                 return await self.async_step_clothing()
             return await self.async_step_air_speed()
         defaults = self._pending_options
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="advanced_model",
             data_schema=vol.Schema(
                 {
@@ -483,7 +504,7 @@ class _OptionsWizardMixin:
         if user_input is not None:
             self._pending_options.update(user_input)
             return await self.async_step_air_speed()
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="clothing",
             data_schema=vol.Schema(
                 {
@@ -517,7 +538,7 @@ class _OptionsWizardMixin:
                     ): _number(0.0, 2.0, 0.05, "m/s")
                 }
             )
-        return self.async_show_form(step_id="air_speed", data_schema=schema)
+        return self._show_wizard_form(step_id="air_speed", data_schema=schema)
 
     async def async_step_comfort_parameters(
         self, user_input: dict[str, Any] | None = None
@@ -533,12 +554,12 @@ class _OptionsWizardMixin:
             if not relevant:
                 self._pending_options = pending
                 return await self.async_step_command_behavior()
-            return self.async_show_form(
+            return self._show_wizard_form(
                 step_id="comfort_parameters",
                 data_schema=self._comfort_parameters_schema(),
                 errors=relevant,
             )
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="comfort_parameters", data_schema=self._comfort_parameters_schema()
         )
 
@@ -589,7 +610,7 @@ class _OptionsWizardMixin:
                     if self._advanced
                     else await self._async_complete_wizard()
                 )
-            return self.async_show_form(
+            return self._show_wizard_form(
                 step_id="control_limits",
                 data_schema=self._control_limits_schema(),
                 errors={
@@ -600,7 +621,7 @@ class _OptionsWizardMixin:
                     )
                 },
             )
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="control_limits", data_schema=self._control_limits_schema()
         )
 
@@ -644,7 +665,7 @@ class _OptionsWizardMixin:
             self._pending_options.pop("outdoor_fixed_hold_minutes", None)
             return await self.async_step_fallback_temperatures()
         defaults = self._pending_options
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="command_behavior",
             data_schema=vol.Schema(
                 {
@@ -677,7 +698,7 @@ class _OptionsWizardMixin:
         if user_input is not None:
             self._pending_options.update(user_input)
             return await self.async_step_fallback_temperatures()
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="outdoor_history_hold",
             data_schema=vol.Schema(
                 {
@@ -703,12 +724,12 @@ class _OptionsWizardMixin:
             if not relevant:
                 self._pending_options = pending
                 return await self.async_step_critical_locations()
-            return self.async_show_form(
+            return self._show_wizard_form(
                 step_id="fallback_temperatures",
                 data_schema=self._fallback_schema(),
                 errors=relevant,
             )
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="fallback_temperatures", data_schema=self._fallback_schema()
         )
 
@@ -738,7 +759,7 @@ class _OptionsWizardMixin:
                 return await self.async_step_critical_location()
             self._pending_options["critical_locations"] = []
             return await self.async_step_source_freshness()
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="critical_locations",
             data_schema=vol.Schema(
                 {
@@ -761,7 +782,7 @@ class _OptionsWizardMixin:
             candidate = (*self._critical_locations, item)
             duplicate = len({entry["location_id"] for entry in candidate}) != len(candidate)
             if not item["location_id"] or duplicate:
-                return self.async_show_form(
+                return self._show_wizard_form(
                     step_id="critical_location",
                     data_schema=self._critical_location_schema(),
                     errors={"location_id": "duplicate_location"},
@@ -773,7 +794,7 @@ class _OptionsWizardMixin:
                 return await self.async_step_critical_location()
             self._pending_options["critical_locations"] = self._critical_locations
             return await self.async_step_source_freshness()
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="critical_location",
             data_schema=self._critical_location_schema(),
             description_placeholders=self._critical_placeholders(),
@@ -813,12 +834,12 @@ class _OptionsWizardMixin:
                     if self._advanced
                     else await self._begin_target_calibrations()
                 )
-            return self.async_show_form(
+            return self._show_wizard_form(
                 step_id="source_freshness",
                 data_schema=self._source_freshness_schema(),
                 errors=relevant,
             )
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="source_freshness", data_schema=self._source_freshness_schema()
         )
 
@@ -883,12 +904,12 @@ class _OptionsWizardMixin:
             if not relevant:
                 self._pending_options = pending
                 return await self._begin_target_calibrations()
-            return self.async_show_form(
+            return self._show_wizard_form(
                 step_id="stale_heat_safety",
                 data_schema=self._stale_heat_safety_schema(),
                 errors=relevant,
             )
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="stale_heat_safety", data_schema=self._stale_heat_safety_schema()
         )
 
@@ -931,7 +952,7 @@ class _OptionsWizardMixin:
             if self._calibration_index >= len(self._wizard_targets):
                 return await self._async_complete_wizard()
             return await self.async_step_target_calibration()
-        return self.async_show_form(
+        return self._show_wizard_form(
             step_id="target_calibration",
             data_schema=vol.Schema(
                 {
@@ -975,7 +996,9 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             self._data = {CONF_NAME: user_input[CONF_NAME], CONF_ZONE_UUID: str(uuid4())}
             return await self.async_step_environment()
         return self.async_show_form(
-            step_id="user", data_schema=vol.Schema({vol.Required(CONF_NAME): str})
+            step_id="user",
+            data_schema=vol.Schema({vol.Required(CONF_NAME): str}),
+            last_step=False,
         )
 
     async def async_step_environment(
@@ -989,6 +1012,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     step_id="environment",
                     data_schema=self._environment_schema(),
                     errors={CONF_PRIMARY_TEMPERATURE: error},
+                    last_step=False,
                 )
             self._data.update(user_input)
             stale_key = (
@@ -999,7 +1023,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         schema = self._environment_schema()
         if self._is_reconfigure:
             schema = self.add_suggested_values_to_schema(schema, self._data)
-        return self.async_show_form(step_id="environment", data_schema=schema)
+        return self.async_show_form(step_id="environment", data_schema=schema, last_step=False)
 
     def _environment_schema(self) -> vol.Schema:
         defaults = self._data
@@ -1042,7 +1066,9 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             )
         if self._is_reconfigure:
             schema = self.add_suggested_values_to_schema(schema, self._data)
-        return self.async_show_form(step_id="humidity", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id="humidity", data_schema=schema, errors=errors, last_step=False
+        )
 
     async def async_step_device_activity(
         self, user_input: dict[str, Any] | None = None
@@ -1056,7 +1082,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         if not schema.schema:
             self._apply_device_activity(self._data, {})
             return await self.async_step_targets()
-        return self.async_show_form(step_id="device_activity", data_schema=schema)
+        return self.async_show_form(step_id="device_activity", data_schema=schema, last_step=False)
 
     async def async_step_targets(
         self, user_input: dict[str, Any] | None = None
@@ -1099,7 +1125,9 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                     ),
                 },
             )
-        return self.async_show_form(step_id="targets", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id="targets", data_schema=schema, errors=errors, last_step=False
+        )
 
     def _resolve_targets(self, raw_targets: object) -> tuple[dict[str, str], list[dict[str, str]]]:
         try:
@@ -1140,6 +1168,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
                 step_id="preferences",
                 data_schema=vol.Schema({}),
                 errors={"base": "invalid_option"},
+                last_step=False,
             )
         return await self.async_step_review()
 
@@ -1165,6 +1194,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             return self.async_show_form(
                 step_id="review",
                 data_schema=vol.Schema({}),
+                last_step=True,
                 description_placeholders={
                     "zone": str(self._data[CONF_NAME]),
                     "primary": str(self._data[CONF_PRIMARY_TEMPERATURE]),
@@ -1313,6 +1343,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(schema, self._data),
+            last_step=False,
         )
 
     def _target_is_claimed(self, registry_identity: str, *, excluding: str | None = None) -> bool:
@@ -1350,6 +1381,18 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             environment_data=config_entry.data,
         )
 
+    def _is_last_wizard_step(self, step_id: str) -> bool:
+        """Mark only the actual final form in the selected options route."""
+
+        return (
+            (step_id == "control_limits" and not self._advanced)
+            or (step_id == "stale_heat_safety" and not self._wizard_targets)
+            or (
+                step_id == "target_calibration"
+                and self._calibration_index == len(self._wizard_targets) - 1
+            )
+        )
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Show a short settings menu instead of one long technical form."""
 
@@ -1371,6 +1414,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
                     step_id="sources",
                     data_schema=self._sources_schema(),
                     errors={CONF_PRIMARY_TEMPERATURE: error},
+                    last_step=False,
                 )
             self._pending_data.update(user_input)
             stale_key = (
@@ -1380,7 +1424,9 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             )
             self._pending_data.pop(stale_key, None)
             return await self.async_step_source_humidity()
-        return self.async_show_form(step_id="sources", data_schema=self._sources_schema())
+        return self.async_show_form(
+            step_id="sources", data_schema=self._sources_schema(), last_step=False
+        )
 
     def _sources_schema(self) -> vol.Schema:
         defaults = self._pending_data
@@ -1439,6 +1485,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             step_id="source_humidity",
             data_schema=schema,
             errors=errors,
+            last_step=False,
         )
 
     async def async_step_source_device_activity(
@@ -1450,10 +1497,9 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         if user_input is not None:
             self._apply_device_activity(self._pending_data, user_input)
             return self._save_data_settings()
-        if not schema.schema:
-            self._apply_device_activity(self._pending_data, {})
-            return self._save_data_settings()
-        return self.async_show_form(step_id="source_device_activity", data_schema=schema)
+        return self.async_show_form(
+            step_id="source_device_activity", data_schema=schema, last_step=True
+        )
 
     async def async_step_target_entities(
         self, user_input: dict[str, Any] | None = None
@@ -1490,6 +1536,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
                 }
             ),
             errors=errors,
+            last_step=True,
         )
 
     def _resolve_targets(self, raw_targets: object) -> tuple[dict[str, str], list[dict[str, str]]]:
@@ -1558,6 +1605,9 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
     async def _async_complete_wizard(self) -> ConfigFlowResult:
         if validate_options(self._pending_options):
             return self.async_show_form(
-                step_id="comfort", data_schema=vol.Schema({}), errors={"base": "invalid_option"}
+                step_id="comfort",
+                data_schema=vol.Schema({}),
+                errors={"base": "invalid_option"},
+                last_step=True,
             )
         return self.async_create_entry(data=self._pending_options)

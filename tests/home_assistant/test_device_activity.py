@@ -247,6 +247,7 @@ async def test_setup_activity_step_persists_shared_selection(hass: HomeAssistant
 
     form = await flow.async_step_device_activity()
     assert form["step_id"] == "device_activity"
+    assert form["last_step"] is False
     assert _schema_keys(form["data_schema"]) == {"device_activity_entity"}
     next_step = await flow.async_step_device_activity({"device_activity_entity": lqi})
 
@@ -274,7 +275,7 @@ async def test_activity_step_skips_cleanly_without_registered_device(hass: HomeA
     assert CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY not in flow._data
 
 
-async def test_options_activity_step_displays_saves_and_skips_when_no_candidates(
+async def test_options_activity_step_displays_and_confirms_even_without_candidates(
     hass: HomeAssistant,
 ) -> None:
     _zha, temperature, humidity, lqi, _rssi = _environment(hass, same_device=True)
@@ -297,6 +298,7 @@ async def test_options_activity_step_displays_saves_and_skips_when_no_candidates
 
     form = await flow.async_step_source_device_activity()
     assert form["step_id"] == "source_device_activity"
+    assert form["last_step"] is True
     result = await flow.async_step_source_device_activity({"device_activity_entity": lqi})
     assert result == {"type": "create_entry"}
     assert flow._pending_data[CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY] == lqi
@@ -309,8 +311,12 @@ async def test_options_activity_step_displays_saves_and_skips_when_no_candidates
         "rh_declared": 50.0,
         "targets": (),
     }
-    skipped = await flow.async_step_source_device_activity()
-    assert skipped == {"type": "create_entry"}
+    final_form = await flow.async_step_source_device_activity()
+    assert final_form["step_id"] == "source_device_activity"
+    assert final_form["last_step"] is True
+    assert not final_form["data_schema"].schema
+    saved = await flow.async_step_source_device_activity({})
+    assert saved == {"type": "create_entry"}
     assert save.call_count == 2
 
 
