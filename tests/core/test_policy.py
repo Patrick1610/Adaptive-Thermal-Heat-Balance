@@ -33,10 +33,63 @@ from custom_components.athb.core.policy import (
     build_fixed_fallback,
     check_cross_actuator_coordination,
     cooling_dewpoint_eligible,
+    resolve_heating_demand,
     resolve_profile,
 )
 
 NOW = datetime(2026, 9, 11, 10, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("previous", "current", "force", "active", "reason"),
+    [
+        (False, 21.2, False, False, "below_activation_threshold"),
+        (False, 21.0, False, True, "activation_threshold_reached"),
+        (True, 21.3, False, True, "active_hysteresis_hold"),
+        (True, 21.4, False, False, "deactivation_threshold_reached"),
+        (False, 21.49, True, True, "boost_override"),
+    ],
+)
+def test_heating_demand_hysteresis_has_exact_thresholds_and_boost_override(
+    previous: bool,
+    current: float,
+    force: bool,
+    active: bool,
+    reason: str,
+) -> None:
+    decision = resolve_heating_demand(
+        previous_active=previous,
+        desired_target_c=21.5,
+        current_temperature_c=current,
+        activation_delta_c=0.5,
+        deactivation_delta_c=0.1,
+        force_active=force,
+    )
+
+    assert decision.active is active
+    assert decision.reason == reason
+    assert decision.demand_delta_c == pytest.approx(21.5 - current)
+
+
+@pytest.mark.parametrize(("activation", "deactivation"), [(0.5, 0.5), (0.1, 0.2)])
+def test_heating_demand_hysteresis_requires_distinct_ordered_thresholds(
+    activation: float, deactivation: float
+) -> None:
+    with pytest.raises(ValueError, match="deactivation"):
+        resolve_heating_demand(
+            previous_active=False,
+            desired_target_c=21.5,
+            current_temperature_c=21.2,
+            activation_delta_c=activation,
+            deactivation_delta_c=deactivation,
+        )
+
+    with pytest.raises(ValueError, match="finite"):
+        resolve_heating_demand(
+            previous_active=False,
+            desired_target_c=float("nan"),
+            current_temperature_c=21.2,
+        )
 
 
 def _root(name: RootName, vote: float, temperature: float) -> RootSuccess:

@@ -17,6 +17,9 @@ environment is used only to generate and audit independent development goldens.
   comfort level. Setback is **Boundary limit**, **Eco — 4 °C**, **Comfort — 2 °C**, or **Custom**.
 - **Boost** is separate: Adaptive moves to a bounded calculated Boost target; Rapid uses the
   command limit until that target is reached and then holds it. Expiry returns Boost to Off.
+- A configurable heating-demand buffer keeps downstream controllers at a grid-safe idle target
+  until the normalized heating shortfall is meaningful. Its default 0.5 °C start and 0.1 °C stop
+  thresholds provide hysteresis; Boost bypasses the buffer.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's
   heating/cooling control roots.
 - ATHB calls only `climate.set_temperature`. It never turns equipment on or off and never changes

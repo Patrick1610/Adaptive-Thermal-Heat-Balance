@@ -146,6 +146,14 @@ def test_target_container_and_all_self_references_fail(targets: object) -> None:
         ({"fallback_heating_c": 17.0}, "fallback_heating_c"),
         ({"fallback_cooling_c": 27.0}, "fallback_cooling_c"),
         ({"fallback_heating_c": 25.0, "fallback_cooling_c": 24.0}, "fallback_cooling_c"),
+        (
+            {
+                "heating_demand_activation_delta_c": 0.5,
+                "heating_demand_deactivation_delta_c": 0.5,
+            },
+            "heating_demand_deactivation_delta_c",
+        ),
+        ({"heating_demand_activation_delta_c": 0.0}, "heating_demand_activation_delta_c"),
         ({"auto_mapping": "guess"}, "auto_mapping"),
         ({"critical_locations": "bad"}, "critical_locations"),
         ({"critical_locations": [{}]}, "critical_locations"),

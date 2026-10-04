@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.22
+
+- Add a restart-safe heating-demand buffer before downstream climate controllers. By default ATHB
+  exposes the calculated heating target at a 0.5 °C room shortfall and withdraws it at 0.1 °C,
+  using a downward-rounded idle target while heating demand is inactive.
+- Make both demand thresholds configurable, preserve an atomic range target's cooling endpoint,
+  bypass the buffer during Boost, and expose the complete decision in entity attributes and
+  diagnostics.
+- Label every intermediate setup and options page **Next**, retaining **Submit** only for the final
+  step.
+
 ## 0.2.21
 
 - Tolerate a temporarily absent source-observation payload while Home Assistant is adding ATHB

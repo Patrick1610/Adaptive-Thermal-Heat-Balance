@@ -51,6 +51,12 @@ normalized ATHB request for every controlled climate. Other ATHB entities also e
 source, provenance, setting and related-value attributes so a displayed result can be traced
 without adding more entities to the device page.
 
+The normal comfort flow also configures the heating-demand buffer. Its default 0.5 °C start and
+0.1 °C stop thresholds keep **Target — current** at a downward-rounded idle target until a real
+heating shortfall exists. This buffer acts before downstream controllers; it is distinct from the
+advanced minimum-meaningful-change setting, which only suppresses redundant writes. Boost
+temporarily bypasses the buffer.
+
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
 normalization. Advanced settings offer Ceiling, Floor and Mathematical nearest-value rounding;
 new and reconfigured entries default to Mathematical. Existing entries retain the earlier

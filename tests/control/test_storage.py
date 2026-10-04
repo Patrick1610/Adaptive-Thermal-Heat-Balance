@@ -110,6 +110,24 @@ def test_heat_guard_deadlines_round_trip_without_breaking_older_store() -> None:
     assert load_control_state(serialize_control_state(state)).state == state
 
 
+def test_heating_demand_latch_round_trips_and_older_store_defaults_safely() -> None:
+    original = serialize_control_state(_state())
+    legacy = json.loads(original)
+    legacy.pop("heating_demand_states_json")
+    loaded_legacy = load_control_state(json.dumps(legacy))
+    assert loaded_legacy.state is not None
+    assert loaded_legacy.state.heating_demand_states_json is None
+
+    states = json.dumps({"registry-1": True}, sort_keys=True, separators=(",", ":"))
+    state = replace(_state(), heating_demand_states_json=states)
+    assert load_control_state(serialize_control_state(state)).state == state
+
+    with pytest.raises(ValueError, match="heating demand states"):
+        serialize_control_state(
+            replace(_state(), heating_demand_states_json='{"registry-1":"yes"}')
+        )
+
+
 def test_last_valid_display_output_round_trips_and_old_store_remains_compatible() -> None:
     values_json = json.dumps(
         {
@@ -256,6 +274,8 @@ def test_clean_restart_restores_intent_only_and_starts_new_run_unclean() -> None
         _state(clean=True),
         last_valid_values_json='{"thermal_sensation":-0.2}',
         last_valid_at="2026-09-11T12:00:00+00:00",
+        heat_guards_json="{}",
+        heating_demand_states_json='{"registry-1":true}',
     )
     loaded = load_control_state(serialize_control_state(prior))
     recovery = prepare_startup_recovery(
@@ -269,6 +289,8 @@ def test_clean_restart_restores_intent_only_and_starts_new_run_unclean() -> None
     assert recovery.state.actuators[0].ownership == "reconciling"
     assert recovery.state.last_valid_values_json == '{"thermal_sensation":-0.2}'
     assert recovery.state.last_valid_at == "2026-09-11T12:00:00+00:00"
+    assert recovery.state.heat_guards_json == "{}"
+    assert recovery.state.heating_demand_states_json == '{"registry-1":true}'
 
 
 def test_unclean_restart_without_unresolved_command_reconciles_automatically() -> None:
@@ -337,6 +359,7 @@ def test_strategy_or_configuration_drift_cannot_restore_stale_state() -> None:
         assert recovery.reasons == (reason, "clean_restart")
         assert recovery.state.last_valid_values_json is None
         assert recovery.state.last_valid_at is None
+        assert recovery.state.heating_demand_states_json is None
 
 
 def test_persisted_resume_flag_remains_an_explicit_startup_gate() -> None:
@@ -468,6 +491,7 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
         values_json='{"thermal_sensation":-0.2}',
         observed_at="2026-09-11T12:30:00+00:00",
     )
+    assert await persistence.async_update_heating_demand_states('{"registry-1":true}')
     assert await persistence.async_update_actuator(
         "registry-1",
         ownership="manual_override",
@@ -487,6 +511,7 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
     assert loaded.state.strategy == "comfort"
     assert loaded.state.last_valid_values_json == '{"thermal_sensation":-0.2}'
     assert loaded.state.last_valid_at == "2026-09-11T12:30:00+00:00"
+    assert loaded.state.heating_demand_states_json == '{"registry-1":true}'
     assert loaded.state.actuators[0].ownership == "manual_override"
     assert loaded.state.actuators[0].external_revision == 2
 
@@ -496,6 +521,24 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
     )
     assert persistence.state is not None
     assert persistence.state.last_valid_values_json == '{"thermal_sensation":-0.2}'
+
+
+async def test_failed_demand_latch_verification_keeps_last_verified_state() -> None:
+    backend = MemoryBackend()
+    persistence = ZoneCommandPersistence(
+        backend,
+        run_id="run-current",
+        configuration_fingerprint="config-current",
+        strategy="balanced",
+        target_identities=("registry-1",),
+    )
+    assert await persistence.async_start()
+    assert persistence.state is not None
+    previous = persistence.state
+    backend.rewrite = serialize_control_state(previous)
+
+    assert not await persistence.async_update_heating_demand_states('{"registry-1":true}')
+    assert persistence.state == previous
 
 
 async def test_unstarted_or_unknown_persistence_operations_fail_closed() -> None:
@@ -511,6 +554,11 @@ async def test_unstarted_or_unknown_persistence_operations_fail_closed() -> None
     assert not await persistence.async_persist_pending(cast(Any, None))
     assert not await persistence.async_mark_dispatched(cast(Any, None))
     assert not await persistence.async_resolve(cast(Any, None), "resolved")
+    assert not await persistence.async_update_heating_demand_states("{}")
+    with pytest.raises(ValueError, match="heating demand states"):
+        await persistence.async_update_heating_demand_states('{"registry-1":"yes"}')
+    with pytest.raises(ValueError, match="heating demand states"):
+        await persistence.async_update_heating_demand_states("[]")
     assert not await persistence.async_update_runtime(
         control_enabled=False,
         boost_mode="off",

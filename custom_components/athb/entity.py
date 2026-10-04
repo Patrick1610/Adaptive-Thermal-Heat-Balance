@@ -104,6 +104,7 @@ class AthbEntity(Entity):
                 "occupancy_status": values.get("occupancy_status"),
                 "setback": self.runtime.eco_intensity if options.get("occupancy_entity") else None,
                 "setback_active": values.get("setback_active", False),
+                "heating_demand": values.get("heating_demand_hysteresis", {}),
             },
             "related_values": {
                 "thermal_sensation": values.get("thermal_sensation"),
@@ -176,6 +177,12 @@ def _settings_for_entity(key: str, options: Any) -> dict[str, Any]:
             ),
             "lower_comfort_vote": options.get("lower_comfort_vote", -0.5),
             "upper_comfort_vote": options.get("upper_comfort_vote", 0.5),
+            "heating_demand_activation_delta_c": options.get(
+                "heating_demand_activation_delta_c", 0.5
+            ),
+            "heating_demand_deactivation_delta_c": options.get(
+                "heating_demand_deactivation_delta_c", 0.1
+            ),
         }
     if key in {
         "surface_temperature",

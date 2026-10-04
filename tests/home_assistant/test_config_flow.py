@@ -220,7 +220,7 @@ async def _submit_everyday_controls(
     last_step: bool = False,
 ) -> config_entries.ConfigFlowResult:
     assert result["step_id"] == "control_limits"
-    assert result["last_step"] is last_step
+    assert result["last_step"] is False
     assert _schema_keys(result) == {
         "minimum_control_temperature",
         "maximum_control_temperature",
@@ -229,7 +229,7 @@ async def _submit_everyday_controls(
         "boost_duration_minutes",
     }
     manager = hass.config_entries.options if options else hass.config_entries.flow
-    return await manager.async_configure(
+    result = await manager.async_configure(
         result["flow_id"],
         {
             "minimum_control_temperature": minimum,
@@ -237,6 +237,19 @@ async def _submit_everyday_controls(
             "manual_override_minutes": 120.0,
             "boost_delta_c": 1.0,
             "boost_duration_minutes": 60.0,
+        },
+    )
+    assert result["step_id"] == "demand_hysteresis"
+    assert result["last_step"] is last_step
+    assert _schema_keys(result) == {
+        "heating_demand_activation_delta_c",
+        "heating_demand_deactivation_delta_c",
+    }
+    return await manager.async_configure(
+        result["flow_id"],
+        {
+            "heating_demand_activation_delta_c": 0.5,
+            "heating_demand_deactivation_delta_c": 0.1,
         },
     )
 
@@ -359,6 +372,51 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
     )
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "invalid_control_bounds"}
+
+
+async def test_options_reject_demand_stop_threshold_at_or_above_start(
+    hass: HomeAssistant, enable_custom_integrations: Any
+) -> None:
+    del enable_custom_integrations
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"zone_uuid": "zone-demand", "targets": []},
+        options={"comfort_strategy": "balanced"},
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_section(hass, result, "comfort")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "comfort_strategy": "balanced",
+            "radiant_model": "uniform",
+            "advanced_settings": False,
+        },
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "minimum_control_temperature": 18.0,
+            "maximum_control_temperature": 26.0,
+            "manual_override_minutes": 120.0,
+            "boost_delta_c": 1.0,
+            "boost_duration_minutes": 60.0,
+        },
+    )
+    assert result["step_id"] == "demand_hysteresis"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "heating_demand_activation_delta_c": 0.5,
+            "heating_demand_deactivation_delta_c": 0.5,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "demand_hysteresis"
+    assert result["errors"] == {"base": "invalid_demand_hysteresis"}
 
 
 async def test_setup_forwards_five_native_platforms_and_unloads_cleanly(

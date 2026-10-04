@@ -50,6 +50,10 @@ from .const import (
     DOMAIN,
 )
 from .core.climate import CapabilityMapping, ClimateFailure, resolve_capability
+from .core.policy import (
+    DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
+    DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
+)
 from .core.sources import SourceKind
 from .device_activity import compatible_activity_entities, sources_share_device
 
@@ -117,6 +121,8 @@ OPTION_DEFAULTS: dict[str, object] = {
     "minimum_range_gap": 1.0,
     "target_rounding_mode": "mathematical",
     "minimum_meaningful_change": 0.1,
+    "heating_demand_activation_delta_c": DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
+    "heating_demand_deactivation_delta_c": DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
     "feedback_resolution": 0.01,
     "primary_temperature_freshness_minutes": 30.0,
     "stale_heat_demand_margin_c": 0.5,
@@ -605,11 +611,7 @@ class _OptionsWizardMixin:
                     if not minimum < fallback_cooling <= maximum:
                         pending["fallback_cooling_c"] = maximum
                 self._pending_options = pending
-                return (
-                    await self.async_step_advanced_model()
-                    if self._advanced
-                    else await self._async_complete_wizard()
-                )
+                return await self.async_step_demand_hysteresis()
             return self._show_wizard_form(
                 step_id="control_limits",
                 data_schema=self._control_limits_schema(),
@@ -652,6 +654,60 @@ class _OptionsWizardMixin:
                     "boost_duration_minutes",
                     default=defaults.get("boost_duration_minutes", 60.0),
                 ): _number(5.0, 180.0, 5.0, "min"),
+            }
+        )
+
+    async def async_step_demand_hysteresis(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure the room-temperature latch applied before heating actuation."""
+
+        if user_input is not None:
+            pending = {**self._pending_options, **user_input}
+            errors = validate_options(pending)
+            relevant = {
+                key: value
+                for key, value in errors.items()
+                if key
+                in {
+                    "heating_demand_activation_delta_c",
+                    "heating_demand_deactivation_delta_c",
+                }
+            }
+            if not relevant:
+                self._pending_options = pending
+                return (
+                    await self.async_step_advanced_model()
+                    if self._advanced
+                    else await self._async_complete_wizard()
+                )
+            return self._show_wizard_form(
+                step_id="demand_hysteresis",
+                data_schema=self._demand_hysteresis_schema(),
+                errors={"base": "invalid_demand_hysteresis"},
+            )
+        return self._show_wizard_form(
+            step_id="demand_hysteresis", data_schema=self._demand_hysteresis_schema()
+        )
+
+    def _demand_hysteresis_schema(self) -> vol.Schema:
+        defaults = self._pending_options
+        return vol.Schema(
+            {
+                vol.Required(
+                    "heating_demand_activation_delta_c",
+                    default=defaults.get(
+                        "heating_demand_activation_delta_c",
+                        DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
+                    ),
+                ): _number(0.1, 2.0, 0.1, "°C"),
+                vol.Required(
+                    "heating_demand_deactivation_delta_c",
+                    default=defaults.get(
+                        "heating_demand_deactivation_delta_c",
+                        DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
+                    ),
+                ): _number(0.0, 1.9, 0.1, "°C"),
             }
         )
 
@@ -1385,7 +1441,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         """Mark only the actual final form in the selected options route."""
 
         return (
-            (step_id == "control_limits" and not self._advanced)
+            (step_id == "demand_hysteresis" and not self._advanced)
             or (step_id == "stale_heat_safety" and not self._wizard_targets)
             or (
                 step_id == "target_calibration"

@@ -37,6 +37,7 @@ from custom_components.athb.core.climate import (
 )
 from custom_components.athb.core.contracts import (
     AcknowledgementStatus,
+    BoostMode,
     DispatchStatus,
     Observation,
     ObservationValidity,
@@ -73,6 +74,226 @@ def _runtime(*, entry_id: str = "entry-1", target_identity: str = "registry-1") 
     )
     hass = SimpleNamespace(data={}, config_entries=SimpleNamespace(async_update_entry=MagicMock()))
     return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "off", False)
+
+
+def test_heating_demand_buffer_uses_actuator_grid_and_stateful_thresholds() -> None:
+    calculation = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    target = calculation.targets[0]
+    assert target.result is not None
+    assert isinstance(target.result.normalized, NormalizedScalarTarget)
+    desired = target.result.normalized
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": 30.0,
+            "target_rounding_mode": "mathematical",
+            "heating_demand_activation_delta_c": 0.5,
+            "heating_demand_deactivation_delta_c": 0.1,
+        }
+    )
+
+    below_activation = replace(calculation, primary_value_c=desired.normalized_room_c - 0.3)
+    idle, transitions = runtime._apply_heating_demand_hysteresis(below_activation)
+    idle_normalized = idle.targets[0].result
+    assert idle_normalized is not None
+    assert isinstance(idle_normalized.normalized, NormalizedScalarTarget)
+    assert idle_normalized.normalized.normalized_room_c <= below_activation.primary_value_c
+    assert idle_normalized.normalized.normalized_room_c == pytest.approx(
+        desired.normalized_room_c - 0.5
+    )
+    assert transitions == {}
+    assert runtime.heating_demand_details[target.target_uuid]["state"] == "idle"
+    assert idle_normalized.occupied_normalized == target.result.occupied_normalized
+
+    at_activation = replace(calculation, primary_value_c=desired.normalized_room_c - 0.5)
+    active, transitions = runtime._apply_heating_demand_hysteresis(at_activation)
+    assert active.targets[0].result is not None
+    assert active.targets[0].result.normalized == desired
+    assert transitions == {target.registry_identity: False}
+
+    held, transitions = runtime._apply_heating_demand_hysteresis(
+        replace(calculation, primary_value_c=desired.normalized_room_c - 0.2)
+    )
+    assert held.targets[0].result is not None
+    assert held.targets[0].result.normalized == desired
+    assert transitions == {}
+
+    released, transitions = runtime._apply_heating_demand_hysteresis(
+        replace(calculation, primary_value_c=desired.normalized_room_c - 0.1)
+    )
+    assert released.targets[0].result is not None
+    assert isinstance(released.targets[0].result.normalized, NormalizedScalarTarget)
+    assert released.targets[0].result.normalized.normalized_room_c <= released.primary_value_c
+    assert transitions == {target.registry_identity: True}
+
+
+def test_heating_demand_buffer_preserves_range_high_and_boost_bypasses_idle() -> None:
+    ranged_scenario = next(
+        scenario for scenario in load_scenarios() if scenario["scenario_id"] == "VI-018"
+    )
+    ranged = calculate_runtime_snapshot(_captured(ranged_scenario))
+    target = ranged.targets[0]
+    assert target.result is not None
+    assert isinstance(target.result.normalized, NormalizedRangeTarget)
+    desired = target.result.normalized
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options.update(
+        {"minimum_control_temperature": 16.0, "maximum_control_temperature": 30.0}
+    )
+
+    idle, _ = runtime._apply_heating_demand_hysteresis(
+        replace(ranged, primary_value_c=desired.heating.normalized_room_c - 0.3)
+    )
+    assert idle.targets[0].result is not None
+    assert isinstance(idle.targets[0].result.normalized, NormalizedRangeTarget)
+    assert idle.targets[0].result.normalized.cooling == desired.cooling
+
+    scalar = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    scalar_target = scalar.targets[0]
+    assert scalar_target.result is not None
+    assert isinstance(scalar_target.result.normalized, NormalizedScalarTarget)
+    assert scalar_target.result.policy is not None
+    boosted_result = replace(
+        scalar_target.result,
+        policy=replace(scalar_target.result.policy, boost_mode=BoostMode.ADAPTIVE),
+    )
+    boosted = replace(
+        scalar,
+        primary_value_c=scalar_target.result.normalized.normalized_room_c - 0.1,
+        targets=(replace(scalar_target, result=boosted_result),),
+    )
+    runtime = _runtime(target_identity=scalar_target.registry_identity)
+    transformed, _ = runtime._apply_heating_demand_hysteresis(boosted)
+    assert transformed.targets[0].result is not None
+    assert transformed.targets[0].result.normalized == scalar_target.result.normalized
+    assert runtime.heating_demand_details[scalar_target.target_uuid]["reason"] == "boost_override"
+
+
+def test_heating_demand_buffer_does_not_change_target_for_stale_primary() -> None:
+    calculation = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    target = calculation.targets[0]
+    assert target.result is not None
+    runtime = _runtime(target_identity=target.registry_identity)
+
+    transformed, transitions = runtime._apply_heating_demand_hysteresis(
+        replace(calculation, primary_temperature_stale=True)
+    )
+
+    assert transformed.targets[0].result is not None
+    assert transformed.targets[0].result.normalized == target.result.normalized
+    assert transitions == {}
+    assert (
+        runtime.heating_demand_details[target.target_uuid]["reason"]
+        == "primary_temperature_not_fresh"
+    )
+
+
+def test_heating_demand_buffer_explains_suppression_and_fails_closed_without_idle() -> None:
+    calculation = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    target = calculation.targets[0]
+    assert target.result is not None
+    assert isinstance(target.result.normalized, NormalizedScalarTarget)
+    runtime = _runtime(target_identity=target.registry_identity)
+
+    suppressed, transitions = runtime._apply_heating_demand_hysteresis(
+        replace(calculation, targets=(replace(target, suppression_reason="manual_override"),))
+    )
+    assert suppressed.targets[0].suppression_reason == "manual_override"
+    assert transitions == {}
+    assert runtime.heating_demand_details[target.target_uuid]["reason"] == "manual_override"
+
+    runtime.entry.options.update(
+        {"minimum_control_temperature": 30.0, "maximum_control_temperature": 30.0}
+    )
+    no_idle, transitions = runtime._apply_heating_demand_hysteresis(
+        replace(
+            calculation,
+            primary_value_c=target.result.normalized.normalized_room_c - 0.2,
+        )
+    )
+    assert no_idle.targets[0].suppression_reason == "heating_demand_idle_target_unavailable"
+    assert transitions == {}
+    assert runtime.heating_demand_details[target.target_uuid]["reason"] == "idle_target_unavailable"
+
+
+async def test_heating_demand_transition_is_persisted_before_dispatch_or_rolled_back(
+    hass: HomeAssistant,
+) -> None:
+    calculation = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    target = calculation.targets[0]
+    assert target.result is not None
+    assert isinstance(target.result.normalized, NormalizedScalarTarget)
+    active_result = replace(
+        calculation,
+        primary_value_c=target.result.normalized.normalized_room_c - 0.5,
+    )
+
+    class Persistence:
+        def __init__(self, saved: bool) -> None:
+            self.saved = saved
+            self.payloads: list[str] = []
+
+        async def async_update_heating_demand_states(self, payload: str) -> bool:
+            self.payloads.append(payload)
+            return self.saved
+
+    class Broker:
+        async def async_submit(self, _intent: Any, *, now: datetime) -> CommandOutcome:
+            raise AssertionError("suppressed test target must not dispatch")
+
+    for saved in (True, False):
+        runtime = _runtime(target_identity=target.registry_identity)
+        runtime.hass = hass
+        runtime.control_enabled = True
+        runtime.broker = cast(Any, Broker())
+        runtime.persistence = cast(Any, Persistence(saved))
+        runtime.heating_demand_active[target.registry_identity] = True
+        suppressed = replace(
+            active_result,
+            targets=(replace(target, suppression_reason="manual_override"),),
+        )
+        await runtime._async_apply_calculation(
+            suppressed,
+            demand_transitions={target.registry_identity: None},
+            demand_states_json=f'{{"{target.registry_identity}":true}}',
+        )
+        assert runtime.persistence.payloads == [f'{{"{target.registry_identity}":true}}']
+        if saved:
+            assert runtime.heating_demand_active[target.registry_identity] is True
+            assert runtime.values["command_outcomes"][target.target_uuid] == "manual_override"
+        else:
+            assert target.registry_identity not in runtime.heating_demand_active
+            assert (
+                runtime.values["command_outcomes"][target.target_uuid]
+                == "heating_demand_storage_fault"
+            )
+
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.broker = cast(Any, Broker())
+    runtime.persistence = cast(Any, Persistence(False))
+    runtime.heating_demand_active[target.registry_identity] = True
+    await runtime._async_apply_calculation(
+        suppressed,
+        demand_transitions={target.registry_identity: False},
+        demand_states_json=f'{{"{target.registry_identity}":true}}',
+    )
+    assert runtime.heating_demand_active[target.registry_identity] is False
+
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.hass = hass
+    runtime.control_enabled = True
+    runtime.broker = cast(Any, Broker())
+    runtime.persistence = cast(Any, Persistence(False))
+    runtime.heating_demand_active[target.registry_identity] = False
+    await runtime._async_apply_calculation(
+        suppressed,
+        demand_transitions={target.registry_identity: None},
+        demand_states_json=f'{{"{target.registry_identity}":true}}',
+    )
+    assert runtime.heating_demand_active[target.registry_identity] is False
 
 
 def test_ownership_trace_payload_serializes_override_expiry() -> None:

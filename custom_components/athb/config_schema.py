@@ -97,6 +97,8 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         "outdoor_fixed_hold_minutes": (30.0, 1440.0),
         "minimum_range_gap": (1.0, 10.0),
         "minimum_meaningful_change": (0.0, 5.0),
+        "heating_demand_activation_delta_c": (0.1, 2.0),
+        "heating_demand_deactivation_delta_c": (0.0, 1.9),
         "feedback_resolution": (0.0, 5.0),
         "primary_temperature_freshness_minutes": (5.0, 360.0),
         "stale_heat_demand_margin_c": (0.1, 2.0),
@@ -169,6 +171,14 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         "mathematical",
     }:
         errors["target_rounding_mode"] = "invalid_option"
+    activation_delta = data.get("heating_demand_activation_delta_c", 0.5)
+    deactivation_delta = data.get("heating_demand_deactivation_delta_c", 0.1)
+    if (
+        "heating_demand_activation_delta_c" not in errors
+        and "heating_demand_deactivation_delta_c" not in errors
+        and float(deactivation_delta) >= float(activation_delta)
+    ):
+        errors["heating_demand_deactivation_delta_c"] = "invalid_option"
     if "control_bounds" not in errors:
         heating = data.get("fallback_heating_c", minimum)
         cooling = data.get("fallback_cooling_c", maximum)

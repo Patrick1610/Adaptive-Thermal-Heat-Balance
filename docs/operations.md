@@ -16,6 +16,11 @@ the command or exact suppression reason. Household identifiers are consistently 
 user/context identity, coordinates, URLs, arbitrary attributes and raw occupancy history are
 removed.
 
+The `heating_demand` decision on **Target — current** explains whether the calculated heating
+request is active or replaced by an idle target, the room shortfall, configured start/stop
+thresholds, Boost override and both desired and final actuator targets. The demand latch is
+persisted before a transition command and restored on restart.
+
 ## Common suppression reasons
 
 - `hvac_off`: ATHB does not turn the target on.

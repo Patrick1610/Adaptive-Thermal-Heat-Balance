@@ -297,6 +297,29 @@ Home Assistant capabilities:
 
 No Auto-mapping choice is shown to the user. Capability inference never causes an HVAC-mode call.
 
+## Heating demand buffer
+
+ATHB applies a stateful heating-demand buffer after final target normalization and before any
+command is offered to the climate entity. `heating_demand_activation_delta_c` defaults to 0.5 °C:
+an inactive target becomes active only when the normalized heating target minus the fresh primary
+room temperature reaches that shortfall. Once active, it remains active until the difference is at
+or below `heating_demand_deactivation_delta_c`, which defaults to 0.1 °C. The stop threshold must
+always be lower than the start threshold.
+
+While inactive, ATHB writes a **rustdoel / idle target** at or below the current room temperature,
+rounded downward on the target's actual grid. This removes the logical heating request before a
+downstream controller such as RoomMind or a TRV sees it. The calculated comfort result is retained
+on **Target — occupied** and **Target — unoccupied**; **Target — current** shows the actual idle or
+active actuator target. For an atomic heat/cool range only the heating endpoint changes, while the
+cooling endpoint is preserved exactly.
+
+Adaptive and Rapid Boost bypass the buffer and expose their calculated heating request directly.
+Stale, recovering or invalid primary temperature input cannot change the demand latch or create a
+new idle target; the existing stale-measurement safety remains authoritative. The latch is stored
+before a changed command is dispatched and restored across restart or reload. Attributes and
+diagnostics report the state, reason, normalized demand delta, both thresholds, desired target,
+idle target and final actuator target.
+
 ## Command normalization and fallback
 
 `target_rounding_mode` selects how every calculated target is represented on the climate grid:

@@ -85,6 +85,7 @@ from .core.climate import (
     CapabilityMapping,
     ClimateFailure,
     GridOptions,
+    GridRoundingMode,
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     ha_to_celsius,
@@ -113,10 +114,13 @@ from .core.ownership import (
     reduce_ownership,
 )
 from .core.policy import (
+    DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
+    DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
     OccupancyState,
     OpposingTarget,
     ProfileResolution,
     check_cross_actuator_coordination,
+    resolve_heating_demand,
     resolve_occupancy_profile,
 )
 from .core.sources import SourceKind, SourceState, convert_source_value
@@ -209,6 +213,8 @@ class ZoneRuntime:
     freshness_reported_at: dict[str, datetime] = field(default_factory=dict)
     freshness_details: dict[str, dict[str, Any]] = field(default_factory=dict)
     heat_guards: dict[str, HeatGuard] = field(default_factory=dict)
+    heating_demand_active: dict[str, bool] = field(default_factory=dict)
+    heating_demand_details: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     async def async_start(self) -> None:
         """Acquire recovery state, shared history, listeners and initial calculation."""
@@ -279,6 +285,21 @@ class ZoneRuntime:
                     identity: HeatGuard(HeatGuardPhase.EXHAUSTED, evidence_at=self.last_valid_at)
                     for identity in identities
                 }
+            stored_demand_states = getattr(
+                self.persistence.state, "heating_demand_states_json", None
+            )
+            if stored_demand_states is not None:
+                try:
+                    parsed_demand_states = json.loads(stored_demand_states)
+                    if not isinstance(parsed_demand_states, dict):
+                        raise ValueError("heating demand states must be an object")
+                    self.heating_demand_active = {
+                        identity: active
+                        for identity, active in parsed_demand_states.items()
+                        if identity in identities and isinstance(active, bool)
+                    }
+                except TypeError, ValueError, json.JSONDecodeError:
+                    self.heating_demand_active = {}
         if self.boost_mode != "off" and self.persistence.state is not None:
             stored_expiry = self.persistence.state.boost_expiry_utc
             expiry = datetime.fromisoformat(stored_expiry) if stored_expiry is not None else None
@@ -1406,8 +1427,183 @@ class ZoneRuntime:
         )
         return converted[0] if converted is not None else None
 
+    def _apply_heating_demand_hysteresis(
+        self, result: RuntimeCalculation
+    ) -> tuple[RuntimeCalculation, dict[str, bool | None]]:
+        """Replace small heating requests with a grid-safe idle target."""
+
+        activation_delta = float(
+            self.entry.options.get(
+                "heating_demand_activation_delta_c",
+                DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
+            )
+        )
+        deactivation_delta = float(
+            self.entry.options.get(
+                "heating_demand_deactivation_delta_c",
+                DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
+            )
+        )
+        primary = dict(result.source_states).get("primary")
+        primary_fresh = (
+            result.primary_value_c is not None
+            and not result.primary_temperature_stale
+            and result.hold_condition is None
+            and (primary is None or not primary.recovering)
+        )
+        updated_targets: list[TargetCalculation] = []
+        details: dict[str, dict[str, Any]] = {}
+        transitions: dict[str, bool | None] = {}
+        for target in result.targets:
+            calculation = target.result
+            normalized = calculation.normalized if calculation is not None else None
+            mapping = target.mapping
+            heating = (
+                normalized.heating
+                if isinstance(normalized, NormalizedRangeTarget)
+                else normalized
+                if isinstance(normalized, NormalizedScalarTarget)
+                and mapping is not None
+                and mapping.direction is ActuationDirection.HEATING_ONLY
+                else None
+            )
+            if heating is None or calculation is None or mapping is None:
+                updated_targets.append(target)
+                continue
+            assert isinstance(normalized, NormalizedScalarTarget | NormalizedRangeTarget)
+            identity = target.registry_identity
+            previous_stored = self.heating_demand_active.get(identity)
+            previous_active = bool(previous_stored)
+            base_detail: dict[str, Any] = {
+                "active": previous_active,
+                "state": "active" if previous_active else "idle",
+                "activation_delta_c": activation_delta,
+                "deactivation_delta_c": deactivation_delta,
+                "desired_target_c": heating.normalized_room_c,
+                "desired_actuator_target_c": heating.normalized_actuator_c,
+                "current_temperature_c": result.primary_value_c,
+                "boost_override": False,
+            }
+            if target.suppression_reason is not None:
+                details[target.target_uuid] = {
+                    **base_detail,
+                    "reason": target.suppression_reason,
+                    "demand_delta_c": None,
+                    "actuator_target_c": heating.normalized_actuator_c,
+                }
+                updated_targets.append(target)
+                continue
+            if not primary_fresh:
+                details[target.target_uuid] = {
+                    **base_detail,
+                    "reason": "primary_temperature_not_fresh",
+                    "demand_delta_c": None,
+                    "actuator_target_c": heating.normalized_actuator_c,
+                }
+                updated_targets.append(target)
+                continue
+            assert result.primary_value_c is not None
+            force_active = (
+                calculation.policy is not None
+                and calculation.policy.boost_mode is not BoostMode.OFF
+            )
+            decision = resolve_heating_demand(
+                previous_active=previous_active,
+                desired_target_c=heating.normalized_room_c,
+                current_temperature_c=result.primary_value_c,
+                activation_delta_c=activation_delta,
+                deactivation_delta_c=deactivation_delta,
+                force_active=force_active,
+            )
+            effective_normalized = normalized
+            if not decision.active:
+                idle = self._idle_heating_target(
+                    target,
+                    normalized,
+                    current_temperature_c=result.primary_value_c,
+                )
+                if idle is None:
+                    details[target.target_uuid] = {
+                        **base_detail,
+                        "reason": "idle_target_unavailable",
+                        "demand_delta_c": decision.demand_delta_c,
+                        "actuator_target_c": None,
+                    }
+                    updated_targets.append(
+                        replace(target, suppression_reason="heating_demand_idle_target_unavailable")
+                    )
+                    continue
+                effective_normalized = idle
+            if decision.active != previous_active:
+                transitions[identity] = previous_stored
+            self.heating_demand_active[identity] = decision.active
+            assert isinstance(effective_normalized, NormalizedScalarTarget | NormalizedRangeTarget)
+            effective_heating = (
+                effective_normalized.heating
+                if isinstance(effective_normalized, NormalizedRangeTarget)
+                else effective_normalized
+            )
+            details[target.target_uuid] = {
+                **base_detail,
+                "active": decision.active,
+                "state": "active" if decision.active else "idle",
+                "reason": decision.reason,
+                "demand_delta_c": decision.demand_delta_c,
+                "boost_override": force_active,
+                "idle_target_c": (None if decision.active else effective_heating.normalized_room_c),
+                "actuator_target_c": effective_heating.normalized_actuator_c,
+            }
+            updated_targets.append(
+                replace(target, result=replace(calculation, normalized=effective_normalized))
+            )
+        self.heating_demand_details = details
+        return replace(result, targets=tuple(updated_targets)), transitions
+
+    def _idle_heating_target(
+        self,
+        target: TargetCalculation,
+        normalized: NormalizedScalarTarget | NormalizedRangeTarget,
+        *,
+        current_temperature_c: float,
+    ) -> NormalizedScalarTarget | NormalizedRangeTarget | None:
+        """Return a downward-rounded target that cannot request room heating."""
+
+        desired_heating = (
+            normalized.heating if isinstance(normalized, NormalizedRangeTarget) else normalized
+        )
+        requested_room_c = min(current_temperature_c, desired_heating.normalized_room_c)
+        calibration = float(self.entry.options.get(f"calibration_{target.target_uuid}", 0.0))
+        grid = GridOptions(
+            float(self.entry.options.get("minimum_control_temperature", 18.0)),
+            float(self.entry.options.get("maximum_control_temperature", 26.0)),
+            calibration,
+            minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
+            rounding_mode=GridRoundingMode.FLOOR,
+        )
+        idle_heating = normalize_scalar_target(
+            requested_room_c=requested_room_c,
+            direction=ActuationDirection.HEATING_ONLY,
+            snapshot=target.capability,
+            options=grid,
+        )
+        if isinstance(idle_heating, ClimateFailure):
+            return None
+        if isinstance(normalized, NormalizedScalarTarget):
+            return idle_heating
+        limitations = tuple(
+            dict.fromkeys((*normalized.limitations, *idle_heating.limitations, "demand_idle"))
+        )
+        return NormalizedRangeTarget(
+            requested_room_c,
+            normalized.requested_cooling_room_c,
+            idle_heating,
+            normalized.cooling,
+            limitations,
+        )
+
     @callback
     def _publish_calculation(self, generation: int, result: RuntimeCalculation) -> None:
+        result, demand_transitions = self._apply_heating_demand_hysteresis(result)
         transition_reasons = tuple(sorted(self.pending_transition_reasons))
         self.source_states = dict(result.source_states)
         self._update_failure_hold(result.hold_condition)
@@ -1464,7 +1660,17 @@ class ZoneRuntime:
             )
         )
         self.publish(values)
-        self._create_task(self._async_apply_calculation(result, recovery_reassertions))
+        demand_states_json = (
+            self._serialized_heating_demand_states() if demand_transitions else None
+        )
+        self._create_task(
+            self._async_apply_calculation(
+                result,
+                recovery_reassertions,
+                demand_transitions,
+                demand_states_json,
+            )
+        )
 
         numerical = next((item.result for item in result.targets if item.result is not None), None)
         if numerical is not None and numerical.policy is not None:
@@ -1493,6 +1699,13 @@ class ZoneRuntime:
         """Keep the last valid output visible while clearly labelling held data."""
 
         projected = result_values(result)
+        effective_details = projected.get("effective_target_details", {})
+        if isinstance(effective_details, dict):
+            for target_uuid, demand in self.heating_demand_details.items():
+                detail = effective_details.get(target_uuid)
+                if isinstance(detail, dict):
+                    detail["heating_demand"] = deepcopy(demand)
+        projected["heating_demand_hysteresis"] = deepcopy(self.heating_demand_details)
         primary = dict(result.source_states).get("primary")
         accepted = primary.last_accepted if primary is not None else None
         primary_fresh = (
@@ -2143,12 +2356,34 @@ class ZoneRuntime:
         self,
         result: RuntimeCalculation,
         recovery_reassertions: frozenset[str] = frozenset(),
+        demand_transitions: dict[str, bool | None] | None = None,
+        demand_states_json: str | None = None,
     ) -> None:
         if not self.control_enabled or self.broker is None:
             return
         outcomes: dict[str, str] = {}
+        demand_transitions = demand_transitions or {}
+        demand_storage_faults: set[str] = set()
+        if demand_transitions:
+            demand_states_json = demand_states_json or self._serialized_heating_demand_states()
+            intended_states = json.loads(demand_states_json)
+            saved = (
+                self.persistence is not None
+                and await self.persistence.async_update_heating_demand_states(demand_states_json)
+            )
+            if not saved:
+                demand_storage_faults = set(demand_transitions)
+                for identity, previous in demand_transitions.items():
+                    if self.heating_demand_active.get(identity) == intended_states.get(identity):
+                        if previous is None:
+                            self.heating_demand_active.pop(identity, None)
+                        else:
+                            self.heating_demand_active[identity] = previous
         now = dt_util.utcnow()
         for target in result.targets:
+            if target.registry_identity in demand_storage_faults:
+                outcomes[target.target_uuid] = "heating_demand_storage_fault"
+                continue
             calculation = target.result
             mapping = target.mapping
             if (
@@ -2200,6 +2435,7 @@ class ZoneRuntime:
                 explicit_transition=(
                     result.explicit_transition
                     or target.registry_identity in recovery_reassertions
+                    or target.registry_identity in demand_transitions
                     or self.heat_guards.get(target.registry_identity, HeatGuard()).phase
                     in {HeatGuardPhase.RAMP, HeatGuardPhase.EXHAUSTED}
                 ),
@@ -2368,6 +2604,15 @@ class ZoneRuntime:
                 }
                 for identity, guard in self.heat_guards.items()
             },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    def _serialized_heating_demand_states(self) -> str:
+        """Return the canonical restart-safe demand latch state."""
+
+        return json.dumps(
+            self.heating_demand_active,
             sort_keys=True,
             separators=(",", ":"),
         )

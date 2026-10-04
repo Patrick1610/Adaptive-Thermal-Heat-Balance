@@ -584,6 +584,9 @@ def _per_climate_context(runtime: ZoneRuntime) -> dict[str, dict[str, Any]]:
             "athb_current_target": details.get("current", {}).get("actuator", {}),
             "athb_occupied_target": details.get("occupied", {}).get("actuator", {}),
             "athb_unoccupied_target": details.get("unoccupied", {}).get("actuator", {}),
+            "heating_demand": runtime.values.get("heating_demand_hysteresis", {}).get(
+                str(target["target_uuid"]), {}
+            ),
             "command_outcome": runtime.values.get("command_outcomes", {}).get(
                 str(target["target_uuid"])
             ),
@@ -621,6 +624,7 @@ def _target_decision_context(runtime: ZoneRuntime) -> dict[str, Any]:
         "pre_slew_cooling_c": getattr(policy, "pre_slew_cooling_c", None),
         "requested_heating_c": getattr(policy, "heating_c", None),
         "requested_cooling_c": getattr(policy, "cooling_c", None),
+        "heating_demand": runtime.values.get("heating_demand_hysteresis", {}),
         "explicit_transition": getattr(calculation, "explicit_transition", False),
         "transition_reasons": runtime.values.get("transition_reasons", ()),
         "data_quality": runtime.values.get("data_quality"),

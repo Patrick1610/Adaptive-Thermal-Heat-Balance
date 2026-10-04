@@ -32,6 +32,7 @@ LAST_VALID_OUTPUT_KEYS = (
     "surface_saturation",
     "effective_targets",
     "effective_target_details",
+    "heating_demand_hysteresis",
     "target_scenarios",
 )
 
@@ -85,6 +86,7 @@ class ControlStoreState:
     last_valid_values_json: str | None = None
     last_valid_at: str | None = None
     heat_guards_json: str | None = None
+    heating_demand_states_json: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +230,13 @@ def serialize_control_state(state: ControlStoreState) -> str:
         parsed_guards = json.loads(state.heat_guards_json)
         if not isinstance(parsed_guards, dict):
             raise ValueError("heat guards must be an object")
+    if state.heating_demand_states_json is not None:
+        parsed_demand_states = json.loads(state.heating_demand_states_json)
+        if not isinstance(parsed_demand_states, dict) or any(
+            not isinstance(identity, str) or not isinstance(active, bool)
+            for identity, active in parsed_demand_states.items()
+        ):
+            raise ValueError("heating demand states must be a boolean object")
     if not state.run_id or not state.configuration_fingerprint or not state.strategy:
         raise ValueError("control state identity fields are required")
     identities = [actuator.target_identity for actuator in state.actuators]
@@ -270,6 +279,7 @@ def load_control_state(serialized: str | None) -> ControlLoadResult:
             last_valid_values_json=raw.get("last_valid_values_json"),
             last_valid_at=raw.get("last_valid_at"),
             heat_guards_json=raw.get("heat_guards_json"),
+            heating_demand_states_json=raw.get("heating_demand_states_json"),
         )
         serialize_control_state(state)
     except KeyError, TypeError, ValueError, json.JSONDecodeError:
@@ -505,6 +515,28 @@ class ZoneCommandPersistence:
             )
             return (await self._verified.async_write_critical(self.state)).verified
 
+    async def async_update_heating_demand_states(self, states_json: str) -> bool:
+        """Persist the demand latch before a changed actuator request is dispatched."""
+
+        parsed = json.loads(states_json)
+        if not isinstance(parsed, dict) or any(
+            not isinstance(identity, str) or not isinstance(active, bool)
+            for identity, active in parsed.items()
+        ):
+            raise ValueError("heating demand states must be a boolean object")
+        async with self._lock:
+            if self.state is None:
+                return False
+            candidate = replace(
+                self.state,
+                storage_generation=self.state.storage_generation + 1,
+                heating_demand_states_json=states_json,
+            )
+            result = await self._verified.async_write_critical(candidate)
+            if result.verified:
+                self.state = candidate
+            return result.verified
+
     async def async_update_actuator(
         self,
         identity: str,
@@ -642,6 +674,10 @@ def prepare_startup_recovery(
             None if configuration_changed or strategy_changed else prior.last_valid_values_json
         ),
         last_valid_at=(None if configuration_changed or strategy_changed else prior.last_valid_at),
+        heat_guards_json=prior.heat_guards_json,
+        heating_demand_states_json=(
+            None if configuration_changed or strategy_changed else prior.heating_demand_states_json
+        ),
     )
     return StartupRecovery(state, requires_resume, reason, reasons)
 

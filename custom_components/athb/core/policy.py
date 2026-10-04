@@ -28,6 +28,8 @@ OCCUPANCY_UNKNOWN_HOLD = timedelta(minutes=30)
 SLEW_RATE_C_PER_SECOND = 0.5 / 600.0
 DEFAULT_USER_MIN_C = 18.0
 DEFAULT_USER_MAX_C = 26.0
+DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C = 0.5
+DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C = 0.1
 
 
 class OccupancyState(StrEnum):
@@ -129,6 +131,52 @@ class OpposingTarget:
 class CoordinationResult:
     eligible: bool
     reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class HeatingDemandDecision:
+    """Stateful decision for exposing or withdrawing a heating request."""
+
+    active: bool
+    demand_delta_c: float
+    reason: str
+
+
+def resolve_heating_demand(
+    *,
+    previous_active: bool,
+    desired_target_c: float,
+    current_temperature_c: float,
+    activation_delta_c: float = DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
+    deactivation_delta_c: float = DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
+    force_active: bool = False,
+) -> HeatingDemandDecision:
+    """Apply a two-threshold heating-demand latch in room coordinates."""
+
+    values = (
+        desired_target_c,
+        current_temperature_c,
+        activation_delta_c,
+        deactivation_delta_c,
+    )
+    if any(isinstance(value, bool) or not math.isfinite(value) for value in values):
+        raise ValueError("heating demand values must be finite numbers")
+    if not 0.0 <= deactivation_delta_c < activation_delta_c:
+        raise ValueError("heating demand deactivation must be below activation")
+    demand_delta_c = desired_target_c - current_temperature_c
+    if force_active:
+        return HeatingDemandDecision(True, demand_delta_c, "boost_override")
+    if previous_active:
+        if demand_delta_c < deactivation_delta_c or math.isclose(
+            demand_delta_c, deactivation_delta_c, abs_tol=1e-9
+        ):
+            return HeatingDemandDecision(False, demand_delta_c, "deactivation_threshold_reached")
+        return HeatingDemandDecision(True, demand_delta_c, "active_hysteresis_hold")
+    if demand_delta_c > activation_delta_c or math.isclose(
+        demand_delta_c, activation_delta_c, abs_tol=1e-9
+    ):
+        return HeatingDemandDecision(True, demand_delta_c, "activation_threshold_reached")
+    return HeatingDemandDecision(False, demand_delta_c, "below_activation_threshold")
 
 
 def resolve_profile(
