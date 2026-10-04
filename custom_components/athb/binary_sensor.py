@@ -49,6 +49,8 @@ class OccupancyBinarySensor(AthbEntity, BinarySensorEntity):
             **super().extra_state_attributes,
             "source_entity": self.runtime.entry.options.get("occupancy_entity"),
             "source_state": self.runtime.values.get("occupancy_source_state"),
+            "effective_state": self.runtime.values.get("occupancy_effective_state"),
+            "override_reason": self.runtime.values.get("occupancy_override_reason"),
             "held": bool(self.runtime.values.get("occupancy_held", False)),
         }
 

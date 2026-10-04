@@ -31,6 +31,7 @@ from .const import (
     CONF_ECO_INTENSITY,
     CONF_MOLD_INDICATOR_ENTITY,
     CONF_OUTDOOR_SOURCE,
+    CONF_PREHEAT_DURATION_MINUTES,
     CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY,
     CONF_PRIMARY_TEMPERATURE,
     CONF_RH_DECLARED,
@@ -46,6 +47,7 @@ from .const import (
     DEFAULT_FALLBACK_HEATING_C,
     DEFAULT_MAXIMUM_CONTROL_TEMPERATURE,
     DEFAULT_MINIMUM_CONTROL_TEMPERATURE,
+    DEFAULT_PREHEAT_DURATION_MINUTES,
     DEFAULT_STRATEGY,
     DOMAIN,
 )
@@ -115,6 +117,7 @@ OPTION_DEFAULTS: dict[str, object] = {
     "eco_cooling_setback_c": 2.0,
     "boost_delta_c": DEFAULT_BOOST_DELTA_C,
     "boost_duration_minutes": 60.0,
+    CONF_PREHEAT_DURATION_MINUTES: DEFAULT_PREHEAT_DURATION_MINUTES,
     "manual_override_minutes": 120.0,
     "minimum_control_temperature": DEFAULT_MINIMUM_CONTROL_TEMPERATURE,
     "maximum_control_temperature": DEFAULT_MAXIMUM_CONTROL_TEMPERATURE,
@@ -599,6 +602,7 @@ class _OptionsWizardMixin:
                 "manual_override_minutes",
                 "boost_delta_c",
                 "boost_duration_minutes",
+                CONF_PREHEAT_DURATION_MINUTES,
             } & errors.keys()
             if not control_errors:
                 minimum = float(pending["minimum_control_temperature"])
@@ -653,6 +657,12 @@ class _OptionsWizardMixin:
                 vol.Required(
                     "boost_duration_minutes",
                     default=defaults.get("boost_duration_minutes", 60.0),
+                ): _number(5.0, 180.0, 5.0, "min"),
+                vol.Required(
+                    CONF_PREHEAT_DURATION_MINUTES,
+                    default=defaults.get(
+                        CONF_PREHEAT_DURATION_MINUTES, DEFAULT_PREHEAT_DURATION_MINUTES
+                    ),
                 ): _number(5.0, 180.0, 5.0, "min"),
             }
         )

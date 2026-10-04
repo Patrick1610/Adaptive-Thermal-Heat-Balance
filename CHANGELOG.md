@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.23
+
+- Add a per-zone Preheat switch that temporarily selects occupied comfort without changing or
+  hiding the configured occupancy source.
+- Expire Preheat after a configurable 5–180 minutes (60 minutes by default), renew the interval
+  when it is selected again, and restore only the remaining time after restart.
+- Expose natural and effective occupancy, the Preheat reason and exact expiry in entity attributes
+  and diagnostics while retaining all normal input, ownership and heating-demand safeguards.
+
 ## 0.2.22
 
 - Add a restart-safe heating-demand buffer before downstream climate controllers. By default ATHB

@@ -81,6 +81,7 @@ class ControlStoreState:
     selected_profile: str = "comfort"
     previous_non_boost_profile: str = "comfort"
     boost_expiry_utc: str | None = None
+    preheat_expiry_utc: str | None = None
     boost_mode: str = "off"
     rapid_boost_reached: bool = False
     last_valid_values_json: str | None = None
@@ -225,6 +226,10 @@ def serialize_control_state(state: ControlStoreState) -> str:
         boost_expiry = datetime.fromisoformat(state.boost_expiry_utc)
         if boost_expiry.tzinfo is None or boost_expiry.utcoffset() is None:
             raise ValueError("invalid boost expiry")
+    if state.preheat_expiry_utc is not None:
+        preheat_expiry = datetime.fromisoformat(state.preheat_expiry_utc)
+        if preheat_expiry.tzinfo is None or preheat_expiry.utcoffset() is None:
+            raise ValueError("invalid preheat expiry")
     _validate_last_valid_output(state.last_valid_values_json, state.last_valid_at)
     if state.heat_guards_json is not None:
         parsed_guards = json.loads(state.heat_guards_json)
@@ -271,6 +276,7 @@ def load_control_state(serialized: str | None) -> ControlLoadResult:
             selected_profile=raw.get("selected_profile", "comfort"),
             previous_non_boost_profile=raw.get("previous_non_boost_profile", "comfort"),
             boost_expiry_utc=raw.get("boost_expiry_utc"),
+            preheat_expiry_utc=raw.get("preheat_expiry_utc"),
             boost_mode=raw.get(
                 "boost_mode",
                 "adaptive" if raw.get("selected_profile") == "boost" else "off",
@@ -460,6 +466,7 @@ class ZoneCommandPersistence:
         boost_expiry_utc: str | None,
         configuration_fingerprint: str,
         strategy: str,
+        preheat_expiry_utc: str | None = None,
     ) -> bool:
         """Persist authoritative non-command runtime intent."""
 
@@ -473,6 +480,7 @@ class ZoneCommandPersistence:
                 selected_profile="comfort",
                 previous_non_boost_profile="comfort",
                 boost_expiry_utc=boost_expiry_utc,
+                preheat_expiry_utc=preheat_expiry_utc,
                 boost_mode=boost_mode,
                 rapid_boost_reached=rapid_boost_reached,
                 configuration_fingerprint=configuration_fingerprint,
@@ -668,6 +676,7 @@ def prepare_startup_recovery(
         selected_profile=prior.selected_profile,
         previous_non_boost_profile=prior.previous_non_boost_profile,
         boost_expiry_utc=prior.boost_expiry_utc,
+        preheat_expiry_utc=prior.preheat_expiry_utc,
         boost_mode=prior.boost_mode,
         rapid_boost_reached=prior.rapid_boost_reached,
         last_valid_values_json=(

@@ -100,7 +100,16 @@ class AthbEntity(Entity):
                     if isinstance((expiry := values.get("boost_expiry")), datetime)
                     else expiry
                 ),
+                "preheat_active": self.runtime.preheat_active,
+                "preheat_expiry": (
+                    expiry.isoformat()
+                    if isinstance((expiry := values.get("preheat_expiry")), datetime)
+                    else expiry
+                ),
                 "occupancy_entity": options.get("occupancy_entity"),
+                "occupancy_source_state": values.get("occupancy_source_state"),
+                "occupancy_effective_state": values.get("occupancy_effective_state"),
+                "occupancy_override_reason": values.get("occupancy_override_reason"),
                 "occupancy_status": values.get("occupancy_status"),
                 "setback": self.runtime.eco_intensity if options.get("occupancy_entity") else None,
                 "setback_active": values.get("setback_active", False),
@@ -215,6 +224,10 @@ def _settings_for_entity(key: str, options: Any) -> dict[str, Any]:
         return {
             "boost_delta_c": options.get("boost_delta_c", 1.0),
             "boost_duration_minutes": options.get("boost_duration_minutes", 60.0),
+        }
+    if key == "preheat":
+        return {
+            "preheat_duration_minutes": options.get("preheat_duration_minutes", 60.0),
         }
     if key == "input_status":
         return {

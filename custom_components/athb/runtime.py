@@ -76,6 +76,7 @@ from .const import (
     CONF_RH_DEVICE_ACTIVITY_ENTITY,
     CONF_RH_ENTITY,
     DEFAULT_BOOST_MODE,
+    DEFAULT_PREHEAT_DURATION_MINUTES,
     DEFAULT_STRATEGY,
     DOMAIN,
     MOLD_INDICATOR_CRITICAL_TEMP_ATTRIBUTE,
@@ -314,6 +315,21 @@ class ZoneRuntime:
                     getattr(self.persistence.state, "rapid_boost_reached", False)
                 )
                 self._schedule_boost_expiry(expiry)
+        stored_preheat_expiry = (
+            getattr(self.persistence.state, "preheat_expiry_utc", None)
+            if self.persistence.state is not None
+            else None
+        )
+        preheat_expiry = (
+            datetime.fromisoformat(stored_preheat_expiry)
+            if stored_preheat_expiry is not None
+            else None
+        )
+        if preheat_expiry is not None and preheat_expiry > dt_util.utcnow():
+            self._schedule_preheat_expiry(preheat_expiry)
+        else:
+            self.values["preheat_active"] = False
+            self.values["preheat_expiry"] = None
         self.broker = CommandBroker(
             service=HomeAssistantClimateService(self.hass),
             persistence=self.persistence,
@@ -3109,6 +3125,7 @@ class ZoneRuntime:
         if self.persistence is None or not hasattr(self.hass, "async_create_task"):
             return
         boost_expiry = self._timer_expiry("boost")
+        preheat_expiry = self._timer_expiry("preheat")
         self._create_task(
             self.persistence.async_update_runtime(
                 control_enabled=self.control_enabled,
@@ -3117,6 +3134,9 @@ class ZoneRuntime:
                 boost_expiry_utc=(boost_expiry.isoformat() if boost_expiry is not None else None),
                 configuration_fingerprint=self._configuration_fingerprint(),
                 strategy=self.strategy,
+                preheat_expiry_utc=(
+                    preheat_expiry.isoformat() if preheat_expiry is not None else None
+                ),
             )
         )
 
@@ -3126,7 +3146,7 @@ class ZoneRuntime:
     def _resolve_profile(self, now: datetime) -> ProfileResolution:
         occupancy_id = str(self.entry.options.get("occupancy_entity", ""))
         state = self.hass.states.get(occupancy_id) if occupancy_id else None
-        occupancy = (
+        source_occupancy = (
             OccupancyState.ABSENT
             if not occupancy_id
             else OccupancyState.ON
@@ -3135,6 +3155,8 @@ class ZoneRuntime:
             if state is not None and state.state == "off"
             else OccupancyState.UNKNOWN
         )
+        preheat_active = self.preheat_active
+        occupancy = OccupancyState.ON if preheat_active else source_occupancy
         previous = self.profile_resolution
         resolution = resolve_occupancy_profile(
             occupancy=occupancy,
@@ -3143,14 +3165,20 @@ class ZoneRuntime:
         )
         self.profile_resolution = resolution
         held = (
-            occupancy is OccupancyState.UNKNOWN
+            source_occupancy is OccupancyState.UNKNOWN
+            and not preheat_active
             and previous is not None
             and resolution.resolved_at == previous.resolved_at
             and "occupancy_unknown" not in resolution.reasons
         )
-        self.values["occupancy_source_state"] = occupancy.value
+        self.values["occupancy_source_state"] = source_occupancy.value
+        self.values["occupancy_effective_state"] = occupancy.value
+        self.values["occupancy_override_reason"] = "preheat" if preheat_active else None
+        self.values["preheat_active"] = preheat_active
         self.values["occupancy_held"] = held
-        self.values["occupancy_available"] = occupancy is not OccupancyState.UNKNOWN or held
+        self.values["occupancy_available"] = (
+            preheat_active or source_occupancy is not OccupancyState.UNKNOWN or held
+        )
         if previous is not None and previous.resolved is not resolution.resolved:
             self._mark_explicit_transition("occupancy")
         return resolution
@@ -3303,6 +3331,31 @@ class ZoneRuntime:
         self._schedule_runtime_persistence()
         self.async_request_snapshot()
 
+    @property
+    def preheat_active(self) -> bool:
+        """Return whether the temporary occupancy override is still active."""
+
+        expiry = self._timer_expiry("preheat")
+        return isinstance(expiry, datetime) and expiry > dt_util.utcnow()
+
+    async def async_set_preheat_active(self, active: bool) -> None:
+        """Start, renew or stop the bounded occupancy override."""
+
+        expiry = self._timer_expiry("preheat")
+        if not active and expiry is None:
+            return
+        if active:
+            self._schedule_preheat_expiry()
+        else:
+            if (timer := self.timers.pop("preheat", None)) is not None:
+                timer()
+            self.values["preheat_expiry"] = None
+            self.values["preheat_active"] = False
+        self._mark_explicit_transition("preheat")
+        self.publish({**self.values, "preheat_active": self.preheat_active})
+        self._schedule_runtime_persistence()
+        self.async_request_snapshot()
+
     async def async_set_eco_intensity(self, intensity: str) -> None:
         if intensity == self.eco_intensity:
             return
@@ -3341,6 +3394,30 @@ class ZoneRuntime:
             old()
         if hasattr(self.hass, "loop"):
             self.timers["boost"] = async_track_point_in_utc_time(self.hass, expire, expiry)
+
+    def _schedule_preheat_expiry(self, expiry: datetime | None = None) -> None:
+        expiry = expiry or (
+            dt_util.utcnow()
+            + timedelta(
+                minutes=float(
+                    self.entry.options.get(
+                        "preheat_duration_minutes", DEFAULT_PREHEAT_DURATION_MINUTES
+                    )
+                )
+            )
+        )
+        self.values["preheat_expiry"] = expiry
+        self.values["preheat_active"] = True
+
+        @callback
+        def expire(_now: Any) -> None:
+            self.timers.pop("preheat", None)
+            self._create_task(self.async_set_preheat_active(False))
+
+        if (old := self.timers.pop("preheat", None)) is not None:
+            old()
+        if hasattr(self.hass, "loop"):
+            self.timers["preheat"] = async_track_point_in_utc_time(self.hass, expire, expiry)
 
     async def _async_acquire_target_leases(self) -> None:
         acquired: list[str] = []

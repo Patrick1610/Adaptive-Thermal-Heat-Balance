@@ -49,7 +49,7 @@ from custom_components.athb.sensor import (
     _target_endpoints,
 )
 from custom_components.athb.sensor import async_setup_entry as async_setup_sensor_entry
-from custom_components.athb.switch import AdaptiveControlSwitch
+from custom_components.athb.switch import AdaptiveControlSwitch, PreheatSwitch
 
 
 def _runtime() -> ZoneRuntime:
@@ -145,6 +145,7 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
         AthbSensor(runtime, DESCRIPTIONS[0]),
         ControlEligibleBinarySensor(runtime),
         AdaptiveControlSwitch(runtime),
+        PreheatSwitch(runtime),
         StrategySelect(runtime),
         BoostModeSelect(runtime),
         EcoIntensitySelect(runtime),
@@ -154,6 +155,7 @@ def test_native_entities_have_stable_zone_keys_and_no_proxy_climate() -> None:
         "zone-1_thermal_sensation",
         "zone-1_control_eligible",
         "zone-1_adaptive_control",
+        "zone-1_preheat",
         "zone-1_comfort_strategy",
         "zone-1_boost_mode",
         "zone-1_eco_intensity",
@@ -906,6 +908,7 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
             "eco_intensity": "mild",
             "boost_delta_c": 1.5,
             "boost_duration_minutes": 45.0,
+            "preheat_duration_minutes": 75.0,
         }
     )
     runtime.publish(
@@ -988,6 +991,9 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
 
     boost = BoostModeSelect(runtime).extra_state_attributes
     assert boost["settings"] == {"boost_delta_c": 1.5, "boost_duration_minutes": 45.0}
+    assert PreheatSwitch(runtime).extra_state_attributes["settings"] == {
+        "preheat_duration_minutes": 75.0
+    }
     assert (
         AdaptiveControlSwitch(runtime).extra_state_attributes["status_context"]["control_status"]
         == "ready"
@@ -1088,3 +1094,10 @@ def test_native_entity_actions_and_values_delegate_to_one_runtime() -> None:
     assert switch.is_on
     asyncio.run(switch.async_turn_off())
     assert not switch.is_on
+    preheat = PreheatSwitch(runtime)
+    asyncio.run(preheat.async_turn_on())
+    assert preheat.is_on
+    assert preheat.icon == "mdi:radiator"
+    asyncio.run(preheat.async_turn_off())
+    assert not preheat.is_on
+    assert preheat.icon == "mdi:radiator-off"

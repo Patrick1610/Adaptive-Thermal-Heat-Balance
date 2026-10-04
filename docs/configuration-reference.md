@@ -282,7 +282,17 @@ form the heating and cooling requests for Boundary limit setback. `manual_overri
 capped at thermal neutral. Boost lasts 5–180 minutes according to `boost_duration_minutes`, then
 returns to Off. Adaptive requests that target. Rapid first uses the heating maximum or cooling
 minimum command bound to create a larger control delta, then holds the same calculated Boost
-target after the room reaches it. These five everyday values are shown in normal Setup,
+target after the room reaches it.
+
+The **Preheat** switch temporarily resolves effective occupancy to occupied without changing the
+configured occupancy source. Its 5–180 minute `preheat_duration_minutes` setting defaults to 60
+minutes. Switching Preheat on again renews the complete interval. The absolute expiry is persisted:
+a restart restores only the remaining time and never starts a fresh interval. Source occupancy,
+effective occupancy, override reason and expiry remain separately visible in entity attributes and
+diagnostics. Preheat does not enable Adaptive control, bypass input validity or manual ownership,
+shift the comfort target like Boost, or override the heating-demand buffer.
+
+These six everyday values are shown in normal Setup,
 Reconfigure and Options, not hidden behind Advanced. Boost operations occur before final actuator
 bounds and grid normalization.
 

@@ -2239,7 +2239,11 @@ async def test_manual_override_and_boost_deadlines_expire_without_polling(
                 }
             ],
         },
-        options={"manual_override_minutes": 15.0, "boost_duration_minutes": 5.0},
+        options={
+            "manual_override_minutes": 15.0,
+            "boost_duration_minutes": 5.0,
+            "preheat_duration_minutes": 5.0,
+        },
     )
     entry.add_to_hass(hass)
     runtime = ZoneRuntime(hass, cast(Any, entry), "zone-timers", "balanced", "off", True)
@@ -2266,6 +2270,19 @@ async def test_manual_override_and_boost_deadlines_expire_without_polling(
     runtime.timers.pop("boost")()
     await runtime.async_set_boost_mode("off")
     assert runtime.boost_mode == "off"
+
+    await runtime.async_set_preheat_active(True)
+    preheat_expiry = cast(datetime, runtime.values["preheat_expiry"])
+    first_timer = runtime.timers["preheat"]
+    assert runtime.preheat_active
+    await runtime.async_set_preheat_active(True)
+    renewed_expiry = cast(datetime, runtime.values["preheat_expiry"])
+    assert renewed_expiry >= preheat_expiry
+    assert runtime.timers["preheat"] is not first_timer
+    async_fire_time_changed(hass, renewed_expiry + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    assert not runtime.preheat_active
+    assert runtime.values["preheat_expiry"] is None
 
 
 async def test_failure_hold_uses_event_timer_and_elapses_after_fifteen_minutes(
@@ -2320,6 +2337,33 @@ def test_occupancy_setback_holds_last_known_state_then_reports_unknown(
     expired = runtime._resolve_profile(now + timedelta(minutes=31))
     assert expired.resolved.value == "comfort"
     assert expired.reasons == ("occupancy_unknown",)
+
+
+def test_preheat_overrides_effective_occupancy_without_hiding_source(
+    hass: HomeAssistant,
+) -> None:
+    entry = MockConfigEntry(
+        domain="athb",
+        data={"zone_uuid": "zone-preheat", "targets": []},
+        options={"occupancy_entity": "binary_sensor.heating_active"},
+    )
+    runtime = ZoneRuntime(hass, cast(Any, entry), "zone-preheat", "balanced", "off", False)
+    now = dt_util.utcnow()
+    hass.states.async_set("binary_sensor.heating_active", "off")
+    assert runtime._resolve_profile(now).resolved.value == "eco"
+
+    runtime.values["preheat_expiry"] = now + timedelta(minutes=60)
+    assert runtime._resolve_profile(now + timedelta(seconds=1)).resolved.value == "comfort"
+    assert runtime.values["occupancy_source_state"] == "off"
+    assert runtime.values["occupancy_effective_state"] == "on"
+    assert runtime.values["occupancy_override_reason"] == "preheat"
+    assert runtime.values["occupancy_available"] is True
+
+    runtime.values["preheat_expiry"] = None
+    assert runtime._resolve_profile(now + timedelta(seconds=2)).resolved.value == "eco"
+    assert runtime.values["occupancy_source_state"] == "off"
+    assert runtime.values["occupancy_effective_state"] == "off"
+    assert runtime.values["occupancy_override_reason"] is None
 
 
 def test_outdoor_history_sample_converts_fahrenheit_exactly_once(hass: HomeAssistant) -> None:
@@ -3339,10 +3383,12 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
     class Persistence:
         start_ok = False
         expiry = "2000-01-01T00:00:00+00:00"
+        preheat_expiry = "2000-01-01T00:00:00+00:00"
 
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             self.state = SimpleNamespace(
                 boost_expiry_utc=self.expiry,
+                preheat_expiry_utc=self.preheat_expiry,
                 rapid_boost_reached=False,
                 actuators=(),
             )
@@ -3365,6 +3411,8 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
     runtime = ZoneRuntime(hass, cast(Any, entry), "startup-paths", "balanced", "adaptive", False)
     await runtime.async_start()
     assert runtime.boost_mode == "off"
+    assert not runtime.preheat_active
+    assert "preheat" not in runtime.timers
     assert runtime.values["control_status"] == "storage_fault"
     assert runtime.controller is not None
     await runtime.controller.async_wait_idle()
@@ -3372,6 +3420,7 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
 
     Persistence.start_ok = True
     Persistence.expiry = "2099-01-01T00:00:00+00:00"
+    Persistence.preheat_expiry = "2099-01-01T00:30:00+00:00"
     future_entry = MockConfigEntry(
         domain="athb",
         entry_id="startup-future-boost",
@@ -3385,6 +3434,9 @@ async def test_startup_storage_fault_and_boost_recovery_paths(
     await future.async_start()
     assert future.boost_mode == "adaptive"
     assert "boost" in future.timers
+    assert future.preheat_active
+    assert "preheat" in future.timers
+    assert future.values["preheat_expiry"] == datetime(2099, 1, 1, 0, 30, tzinfo=UTC)
     assert future.controller is not None
     await future.controller.async_wait_idle()
     await future.async_unload()

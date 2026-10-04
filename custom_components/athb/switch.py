@@ -29,10 +29,37 @@ class AdaptiveControlSwitch(AthbEntity, SwitchEntity):
         await self.runtime.async_set_control_enabled(False)
 
 
+class PreheatSwitch(AthbEntity, SwitchEntity):
+    """Bounded temporary occupancy override."""
+
+    _attr_translation_key = "preheat"
+
+    def __init__(self, runtime: ZoneRuntime) -> None:
+        super().__init__(runtime, "preheat")
+
+    @property
+    def is_on(self) -> bool:
+        return self.runtime.preheat_active
+
+    @property
+    def icon(self) -> str:
+        return "mdi:radiator" if self.is_on else "mdi:radiator-off"
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        del kwargs
+        await self.runtime.async_set_preheat_active(True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        del kwargs
+        await self.runtime.async_set_preheat_active(False)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AthbConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     del hass
-    async_add_entities([AdaptiveControlSwitch(entry.runtime_data)])
+    async_add_entities(
+        [AdaptiveControlSwitch(entry.runtime_data), PreheatSwitch(entry.runtime_data)]
+    )

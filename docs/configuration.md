@@ -17,8 +17,12 @@ Adaptive bypasses setback and targets extra comfort. Rapid temporarily drives a 
 target at the configured maximum (or cooling at the minimum) until the calculated Boost target is
 reached, then holds that target. It never changes HVAC mode.
 
+Preheat is a separate runtime switch. It temporarily treats the zone as occupied while retaining
+the natural occupancy-source state for explanation and diagnostics. Its default timeout is 60
+minutes and can be configured from 5–180 minutes. Restart restores only the remaining interval.
+
 The normal setup explains each input. Its **Everyday control settings** page always shows command
-minimum/maximum, manual-override duration and Boost shift/duration. Numerical comfort assumptions,
+minimum/maximum, manual-override duration, Boost shift/duration and Preheat duration. Numerical comfort assumptions,
 fallback behaviour and specialist source settings remain behind **Configure advanced settings**.
 A final review page summarizes the zone before creation. The device's **Configure** action opens a
 short settings menu for room/measurement sources, climate targets, or comfort/control settings.

@@ -17,6 +17,9 @@ environment is used only to generate and audit independent development goldens.
   comfort level. Setback is **Boundary limit**, **Eco — 4 °C**, **Comfort — 2 °C**, or **Custom**.
 - **Boost** is separate: Adaptive moves to a bounded calculated Boost target; Rapid uses the
   command limit until that target is reached and then holds it. Expiry returns Boost to Off.
+- **Preheat** is a bounded temporary occupancy override. It selects the occupied comfort target
+  without changing the configured occupancy source, and automatically expires after 60 minutes by
+  default.
 - A configurable heating-demand buffer keeps downstream controllers at a grid-safe idle target
   until the normalized heating shortfall is meaningful. Its default 0.5 °C start and 0.1 °C stop
   thresholds provide hysteresis; Boost bypasses the buffer.

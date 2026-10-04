@@ -227,6 +227,7 @@ async def _submit_everyday_controls(
         "manual_override_minutes",
         "boost_delta_c",
         "boost_duration_minutes",
+        "preheat_duration_minutes",
     }
     manager = hass.config_entries.options if options else hass.config_entries.flow
     result = await manager.async_configure(
@@ -237,6 +238,7 @@ async def _submit_everyday_controls(
             "manual_override_minutes": 120.0,
             "boost_delta_c": 1.0,
             "boost_duration_minutes": 60.0,
+            "preheat_duration_minutes": 60.0,
         },
     )
     assert result["step_id"] == "demand_hysteresis"
@@ -368,6 +370,7 @@ async def test_config_flow_rejects_invalid_bounds_without_creating_entry(
             "manual_override_minutes": 120.0,
             "boost_delta_c": 1.0,
             "boost_duration_minutes": 60.0,
+            "preheat_duration_minutes": 60.0,
         },
     )
     assert result["type"] is FlowResultType.FORM
@@ -402,6 +405,7 @@ async def test_options_reject_demand_stop_threshold_at_or_above_start(
             "manual_override_minutes": 120.0,
             "boost_delta_c": 1.0,
             "boost_duration_minutes": 60.0,
+            "preheat_duration_minutes": 60.0,
         },
     )
     assert result["step_id"] == "demand_hysteresis"
@@ -1203,6 +1207,7 @@ async def test_max_setback_uses_command_limits_without_duplicate_fields(
         "manual_override_minutes",
         "boost_delta_c",
         "boost_duration_minutes",
+        "preheat_duration_minutes",
     }
     result = await _submit_everyday_controls(hass, result, options=True, last_step=False)
     result = await hass.config_entries.options.async_configure(

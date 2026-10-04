@@ -91,6 +91,7 @@ def test_heat_guard_deadlines_round_trip_without_breaking_older_store() -> None:
     original = serialize_control_state(_state())
     legacy = json.loads(original)
     legacy.pop("heat_guards_json")
+    legacy.pop("preheat_expiry_utc")
     assert load_control_state(json.dumps(legacy)).state is not None
     guards = json.dumps(
         {
@@ -220,6 +221,7 @@ def test_loaded_control_types_and_command_identity_are_validated_strictly() -> N
         replace(_state(), rapid_boost_reached=cast(bool, 1)),
         replace(_state(), run_id=""),
         replace(_state(), boost_expiry_utc="2026-09-11T13:00:00"),
+        replace(_state(), preheat_expiry_utc="2026-09-11T13:00:00"),
         replace(_state(), actuators=(_actuator(), _actuator())),
     ],
 )
@@ -484,6 +486,7 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
         boost_mode="rapid",
         rapid_boost_reached=True,
         boost_expiry_utc="2026-09-11T13:00:00+00:00",
+        preheat_expiry_utc="2026-09-11T12:45:00+00:00",
         configuration_fingerprint="config-updated",
         strategy="comfort",
     )
@@ -507,6 +510,7 @@ async def test_zone_persistence_serializes_runtime_and_ownership_updates() -> No
     assert loaded.state.boost_mode == "rapid"
     assert loaded.state.rapid_boost_reached is True
     assert loaded.state.boost_expiry_utc == "2026-09-11T13:00:00+00:00"
+    assert loaded.state.preheat_expiry_utc == "2026-09-11T12:45:00+00:00"
     assert loaded.state.configuration_fingerprint == "config-updated"
     assert loaded.state.strategy == "comfort"
     assert loaded.state.last_valid_values_json == '{"thermal_sensation":-0.2}'

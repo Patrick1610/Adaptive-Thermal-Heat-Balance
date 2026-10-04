@@ -154,6 +154,7 @@ def test_target_container_and_all_self_references_fail(targets: object) -> None:
             "heating_demand_deactivation_delta_c",
         ),
         ({"heating_demand_activation_delta_c": 0.0}, "heating_demand_activation_delta_c"),
+        ({"preheat_duration_minutes": 181.0}, "preheat_duration_minutes"),
         ({"auto_mapping": "guess"}, "auto_mapping"),
         ({"critical_locations": "bad"}, "critical_locations"),
         ({"critical_locations": [{}]}, "critical_locations"),

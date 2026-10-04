@@ -92,6 +92,7 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         "inactive_cooling_temperature": (5.0, 35.0),
         "boost_delta_c": (0.0, 3.0),
         "boost_duration_minutes": (5.0, 180.0),
+        "preheat_duration_minutes": (5.0, 180.0),
         "manual_override_minutes": (15.0, 1440.0),
         "running_mean_alpha": (0.6, 0.9),
         "outdoor_fixed_hold_minutes": (30.0, 1440.0),
