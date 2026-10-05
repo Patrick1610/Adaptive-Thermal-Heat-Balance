@@ -284,3 +284,19 @@ availability, lease, generation, persistence, grid and acknowledgement gate.
 An unresolved persisted command, unknown command outcome, external target intervention, corrupt
 storage or configuration/target-identity drift remains fail-closed and requires the applicable
 explicit resume or repair. Display-only last-valid values never qualify a recovery reassertion.
+
+## 8. Delegated command echoes are not manual intervention
+
+This narrows the external-context rule: a foreign context alone does not prove external ownership
+when a climate controller recreates context while executing an ATHB command. During the original
+30-second acknowledgement window only, a non-user service call or feedback matching the actually
+dispatched target within the established quarter-step/resolution tolerance is an expected echo.
+Both endpoints must match for atomic ranges. Capability, identity, ownership and external revisions
+must remain unchanged. A service event is not success; authoritative feedback is still required.
+One completed command may suppress exact duplicate callbacks until that same deadline, never beyond
+it. This evidence is inferred correlation, not caller authentication.
+
+Input and comfort-policy generations still gate unsent commands but cannot invalidate confirmation
+of a command already sent. Explicit user intervention, including an equal-value user-context call,
+and differing external targets retain manual-override protection. No blanket context/time exemption,
+ownership restoration or command-fault auto-clear is introduced.

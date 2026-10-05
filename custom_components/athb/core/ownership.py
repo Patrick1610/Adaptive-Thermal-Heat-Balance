@@ -110,6 +110,7 @@ class FeedbackObservation:
     capability_generation: int
     ownership_revision: int
     external_revision: int
+    user_initiated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -398,9 +399,11 @@ def classify_acknowledgement(
             AcknowledgementStatus.NOT_APPLICABLE, "external_temperature_target", True
         )
     identity_matches = pending.target_identity == feedback.target_identity
+    # Calculation generations gate dispatch, not acknowledgement of a command
+    # already sent. New measurements or comfort settings cannot unsend it.
     generation_matches = (
-        pending.entry_generation == feedback.entry_generation
-        and pending.input_generation == feedback.input_generation
+        pending.entry_generation <= feedback.entry_generation
+        and pending.input_generation <= feedback.input_generation
         and pending.capability_generation == feedback.capability_generation
         and pending.ownership_revision == feedback.ownership_revision
     )
@@ -411,6 +414,11 @@ def classify_acknowledgement(
         return AcknowledgementDecision(AcknowledgementStatus.REJECTED, "invalid_feedback_tolerance")
     matches = _matches(pending.requested, feedback.observed, tolerance)
     own_context = pending.context_id in {feedback.context_id, feedback.parent_context_id}
+    no_external_change = pending.external_revision == feedback.external_revision
+    if not no_external_change or feedback.user_initiated:
+        return AcknowledgementDecision(
+            AcknowledgementStatus.NOT_APPLICABLE, "external_temperature_target", True
+        )
     if own_context:
         return (
             AcknowledgementDecision(AcknowledgementStatus.ACKNOWLEDGED, "own_context_match")
@@ -418,10 +426,10 @@ def classify_acknowledgement(
             else AcknowledgementDecision(AcknowledgementStatus.REJECTED, "coerced_or_rejected")
         )
     contextless = feedback.context_id is None and feedback.parent_context_id is None
-    no_external_change = pending.external_revision == feedback.external_revision
-    if contextless and matches and no_external_change:
+    if matches:
         return AcknowledgementDecision(
-            AcknowledgementStatus.INFERRED_ACKNOWLEDGED, "contextless_exact_pending_match"
+            AcknowledgementStatus.INFERRED_ACKNOWLEDGED,
+            ("contextless_exact_pending_match" if contextless else "delegated_exact_pending_match"),
         )
     return AcknowledgementDecision(
         AcknowledgementStatus.NOT_APPLICABLE, "external_temperature_target", True

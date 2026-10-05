@@ -37,6 +37,18 @@ persisted before a transition command and restored on restart.
 
 ## Recovery and removal
 
+An ATHB comfort, Boost or Preheat change is not a manual intervention. Some controllers delegate
+an ATHB temperature command using a fresh Home Assistant context. Within the original 30-second
+acknowledgement window, ATHB recognizes an exact dispatched scalar target (or both range endpoints)
+using the existing feedback tolerance, provided capability and ownership revisions are unchanged.
+New calculation/input generations do not invalidate feedback for an already dispatched command;
+they still invalidate unsent intents. A matching service call alone does not acknowledge success:
+target-state feedback is required. Successful feedback and bounded duplicate echoes are inferred
+correlations, not proof of a particular external caller's identity. Explicit user-context calls
+and differing external targets remain interventions. No arbitrary grace period suppresses them.
+Expired or unresolved commands still require the existing command-fault recovery procedure;
+upgrading does not clear an existing manual override or press Resume for you.
+
 Clean and unclean restarts, reloads, upgrades and ordinary configuration or comfort-policy changes
 reconcile live target state automatically before any new command; persisted commands are never
 replayed. Resume remains fail-closed only for an unresolved command, corrupt control storage or an

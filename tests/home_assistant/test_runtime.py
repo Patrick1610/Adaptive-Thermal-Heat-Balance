@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.core import Context, HomeAssistant, ServiceCall, State
@@ -2545,6 +2545,12 @@ def test_service_and_registry_events_distinguish_own_context_and_removal(
         context=Context(id="own-context"),
     )
     runtime._service_event(cast(Any, own))
+    runtime._service_event(
+        cast(
+            Any,
+            SimpleNamespace(data=own.data, context=Context(id="child", parent_id="own-context")),
+        )
+    )
     assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
     runtime.persistence = None
     external = SimpleNamespace(
@@ -2820,6 +2826,44 @@ def test_external_temperature_target_all_selector_is_not_missed(hass: HomeAssist
         cancel()
 
 
+async def test_service_event_range_echo_requires_complete_temperature_payload(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1", Ownership.OWNED, DataReadiness.READY, TargetReadiness.AVAILABLE_SUPPORTED
+    )
+    runtime.capability_generations["registry-1"] = 1
+    broker = MagicMock(spec=CommandBroker)
+    broker.expected_automatic_echo.return_value = True
+    runtime.broker = broker
+    event = SimpleNamespace(
+        data={
+            "domain": "climate",
+            "service": "set_temperature",
+            "service_data": {
+                "entity_id": "climate.target",
+                "target_temp_low": 19.0,
+                "target_temp_high": 23.0,
+            },
+        },
+        context=Context(id="range-echo"),
+    )
+    runtime._service_event(cast(Any, event))
+    assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+    observation = broker.expected_automatic_echo.call_args.args[0]
+    assert observation.observed.low_ha == 19.0
+    assert observation.observed.high_ha == 23.0
+    assert not observation.user_initiated
+    del event.data["service_data"]["target_temp_high"]
+    runtime._service_event(cast(Any, event))
+    assert runtime.ownership["registry-1"].ownership is Ownership.MANUAL_OVERRIDE
+    broker.expected_automatic_echo.assert_called_once()
+    for cancel in runtime.timers.values():
+        cancel()
+
+
 class _FeedbackBroker:
     def __init__(self, outcomes: list[CommandOutcome], *, pending: int = 0) -> None:
         self.outcomes = outcomes
@@ -2839,6 +2883,126 @@ class _FeedbackBroker:
 
     async def async_drain_queued(self, _identity: str, *, now: datetime) -> CommandOutcome | None:
         return None
+
+
+@pytest.mark.parametrize(
+    "intervention", [None, "user_same", "user_different", "automation_different"]
+)
+async def test_comfort_command_delegated_echo_preserves_ownership_and_real_interventions(
+    hass: HomeAssistant, intervention: str | None
+) -> None:
+    """Exercise both service and state routes through the real runtime/broker."""
+
+    runtime = _runtime()
+    runtime.hass = hass
+    entry = MockConfigEntry(domain="athb", data=runtime.entry.data, options=runtime.entry.options)
+    entry.add_to_hass(hass)
+    runtime.entry = entry
+    runtime.control_enabled = True
+    runtime.ownership["registry-1"] = OwnershipState(
+        "registry-1", Ownership.OWNED, DataReadiness.READY, TargetReadiness.AVAILABLE_SUPPORTED
+    )
+    runtime.capability_generations["registry-1"] = 1
+    runtime_module.get_lease_registry(hass).acquire("registry-1", entry.entry_id)
+    persistence = SimpleNamespace(
+        state=None,
+        async_persist_pending=AsyncMock(return_value=True),
+        async_mark_dispatched=AsyncMock(return_value=True),
+        async_resolve=AsyncMock(return_value=True),
+        async_update_runtime=AsyncMock(return_value=True),
+        async_update_actuator=AsyncMock(return_value=True),
+    )
+    runtime.persistence = cast(Any, persistence)
+    runtime.broker = CommandBroker(
+        service=HomeAssistantClimateService(hass),
+        persistence=cast(Any, persistence),
+        preflight=runtime._broker_preflight,
+        command_id_factory=lambda: "comfort-command",
+        context_factory=runtime._context_token,
+    )
+    calculation = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    target = replace(
+        calculation.targets[0], registry_identity="registry-1", entity_id="climate.target"
+    )
+    assert target.result is not None
+    assert target.mapping is not None
+    normalized = target.result.normalized
+    assert isinstance(normalized, NormalizedScalarTarget)
+    desired = normalized.normalized_ha
+    attributes = {
+        "hvac_modes": ["off", "heat"],
+        "supported_features": 1,
+        "temperature": desired - 1.0,
+        "unit_of_measurement": "°C",
+    }
+    hass.states.async_set("climate.target", "heat", attributes)
+    old = hass.states.get("climate.target")
+    runtime.last_target_fingerprints["registry-1"] = runtime._fingerprint(
+        capability_from_state(old)
+    )
+
+    def service_event(value: float, context: Context) -> None:
+        runtime._service_event(
+            cast(
+                Any,
+                SimpleNamespace(
+                    data={
+                        "domain": "climate",
+                        "service": "set_temperature",
+                        "service_data": {"entity_id": "climate.target", "temperature": value},
+                    },
+                    context=context,
+                ),
+            )
+        )
+
+    async def capture(call: ServiceCall) -> None:
+        service_event(call.data["temperature"], call.context)
+
+    hass.services.async_register("climate", "set_temperature", capture)
+    await runtime.async_set_strategy("efficient")
+    intent = runtime._intent_from_result(
+        target, normalized, target.mapping, dt_util.utcnow(), explicit_transition=True
+    )
+    await runtime.broker.async_submit(intent, now=dt_util.utcnow())
+    assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+    # Another comfort change/measurement arrives while RoomMind's timer is pending.
+    await runtime.async_set_strategy("eco")
+    runtime.input_generation += 1
+    service_event(desired, Context(id="delegated-service"))
+    assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+    assert runtime.broker.state_counts("registry-1") == (1, 0)
+
+    if intervention is not None:
+        service_event(
+            desired if intervention == "user_same" else desired + 1.0,
+            Context(
+                id="real-intervention",
+                user_id=None if intervention == "automation_different" else "user",
+            ),
+        )
+        assert runtime.ownership["registry-1"].ownership is Ownership.MANUAL_OVERRIDE
+    new = State(
+        "climate.target",
+        "heat",
+        {**attributes, "temperature": desired},
+        context=Context(id="roommind-feedback"),
+    )
+    await runtime._async_handle_target_state(runtime.entry.data["targets"][0], old, new)
+    await hass.async_block_till_done()
+    if intervention is None:
+        assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+        assert runtime.broker.state_counts("registry-1") == (0, 0)
+        assert persistence.async_resolve.call_args.args[1] == "delegated_exact_pending_match"
+        # A duplicate delegated call after acknowledgement is harmless, still bounded.
+        service_event(desired, Context(id="duplicate-service"))
+        assert runtime.ownership["registry-1"].external_revision == 0
+    else:
+        assert runtime.ownership["registry-1"].ownership is Ownership.MANUAL_OVERRIDE
+        assert runtime.ownership["registry-1"].external_revision == 1
+        persistence.async_resolve.assert_not_awaited()
+    for cancel in runtime.timers.values():
+        cancel()
 
 
 async def test_target_return_after_startup_is_reconciled_not_manual_override(

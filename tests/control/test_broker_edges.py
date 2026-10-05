@@ -246,7 +246,7 @@ def test_queue_drain_and_early_timeout_paths() -> None:
         early = await broker.async_acknowledgement_timeout(
             "registry-1", now=NOW + timedelta(seconds=29)
         )
-        await broker.async_feedback(_feedback(20.0), now=NOW + timedelta(seconds=30))
+        await broker.async_feedback(_feedback(20.0), now=NOW + timedelta(seconds=29.5))
         drained = await broker.async_drain_queued("registry-1", now=NOW + timedelta(seconds=61))
         return missing_timeout, empty_drain, (early, drained)
 

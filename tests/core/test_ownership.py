@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -223,9 +224,19 @@ def _feedback(
     identity: str = "registry-1",
     input_generation: int = 2,
     external_revision: int = 5,
+    user_initiated: bool = False,
 ) -> FeedbackObservation:
     return FeedbackObservation(
-        identity, observed, context, parent, 1, input_generation, 3, 4, external_revision
+        identity,
+        observed,
+        context,
+        parent,
+        1,
+        input_generation,
+        3,
+        4,
+        external_revision,
+        user_initiated,
     )
 
 
@@ -267,7 +278,9 @@ def test_contextless_exact_feedback_is_inferred_only_without_external_revision()
 def test_external_same_value_still_expresses_external_ownership() -> None:
     pending = _pending()
     same = TargetFingerprint(TargetShape.SCALAR, temperature_ha=20.0)
-    decision = classify_acknowledgement(pending, _feedback(same, context="external"))
+    decision = classify_acknowledgement(
+        pending, _feedback(same, context="external", user_initiated=True)
+    )
     assert decision.reason == "external_temperature_target"
     assert decision.manual_intervention
 
@@ -280,7 +293,31 @@ def test_obsolete_identity_or_generation_cannot_restore_ownership() -> None:
         == "obsolete_feedback"
     )
     assert (
-        classify_acknowledgement(pending, _feedback(value, input_generation=99)).reason
+        classify_acknowledgement(
+            pending, replace(_feedback(value), capability_generation=99)
+        ).reason
+        == "obsolete_feedback"
+    )
+
+
+def test_delegated_feedback_survives_new_measurements_and_comfort_generation() -> None:
+    pending = _pending()
+    value = TargetFingerprint(TargetShape.SCALAR, temperature_ha=20.0)
+    feedback = replace(
+        _feedback(value, context="roommind-timer", input_generation=99), entry_generation=2
+    )
+    assert classify_acknowledgement(pending, feedback) == AcknowledgementDecision(
+        AcknowledgementStatus.INFERRED_ACKNOWLEDGED, "delegated_exact_pending_match"
+    )
+    assert classify_acknowledgement(
+        pending, replace(feedback, external_revision=6)
+    ).manual_intervention
+    assert classify_acknowledgement(
+        pending,
+        replace(feedback, observed=TargetFingerprint(TargetShape.SCALAR, temperature_ha=21.0)),
+    ).manual_intervention
+    assert (
+        classify_acknowledgement(pending, replace(feedback, ownership_revision=99)).reason
         == "obsolete_feedback"
     )
 
@@ -290,3 +327,12 @@ def test_feedback_without_pending_is_external() -> None:
     decision = classify_acknowledgement(None, _feedback(value, context=None))
     assert decision.manual_intervention
     assert decision.status is AcknowledgementStatus.NOT_APPLICABLE
+
+
+def test_feedback_from_an_older_input_or_configuration_is_obsolete() -> None:
+    value = TargetFingerprint(TargetShape.SCALAR, temperature_ha=20.0)
+    for feedback in (
+        _feedback(value, input_generation=1),
+        replace(_feedback(value), entry_generation=0),
+    ):
+        assert classify_acknowledgement(_pending(), feedback).reason == "obsolete_feedback"

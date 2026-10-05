@@ -890,6 +890,7 @@ class ZoneRuntime:
                 cast(State | None, event.data.get("new_state")),
                 event.context.id,
                 event.context.parent_id,
+                event.context.user_id is not None,
             )
         )
 
@@ -925,8 +926,38 @@ class ZoneRuntime:
                     None,
                 )
                 own_context = stored.last_command_context_id if stored is not None else None
-            if event.context.id != own_context:
-                self._transition(identity, OwnershipEvent.EXTERNAL_TARGET)
+            if own_context is not None and own_context in {
+                event.context.id,
+                event.context.parent_id,
+            }:
+                continue
+            # Some climate controllers create a fresh context for the delegated
+            # write. Match only the broker's actual command, never a preview.
+            scalar = data.get("temperature")
+            low, high = data.get("target_temp_low"), data.get("target_temp_high")
+            fingerprint = None
+            if isinstance(scalar, (int, float)) and low is None and high is None:
+                fingerprint = TargetFingerprint(TargetShape.SCALAR, temperature_ha=scalar)
+            elif (
+                scalar is None and isinstance(low, (int, float)) and isinstance(high, (int, float))
+            ):
+                fingerprint = TargetFingerprint(TargetShape.RANGE, low_ha=low, high_ha=high)
+            if (
+                self.broker is not None
+                and fingerprint is not None
+                and self.broker.expected_automatic_echo(
+                    self._target_feedback(
+                        identity,
+                        fingerprint,
+                        event.context.id,
+                        event.context.parent_id,
+                        event.context.user_id is not None,
+                    ),
+                    now=dt_util.utcnow(),
+                )
+            ):
+                continue
+            self._transition(identity, OwnershipEvent.EXTERNAL_TARGET)
 
     @callback
     def _entity_registry_event(self, event: Event[Any]) -> None:
@@ -1119,6 +1150,7 @@ class ZoneRuntime:
             fingerprint,
             new.context.id if new is not None else None,
             new.context.parent_id if new is not None else None,
+            new is not None and new.context.user_id is not None,
         )
 
     async def _async_handle_target_report(
@@ -1127,6 +1159,7 @@ class ZoneRuntime:
         new: State | None,
         context_id: str | None,
         parent_context_id: str | None,
+        user_initiated: bool = False,
     ) -> None:
         """Acknowledge a pending command from a same-value climate report."""
 
@@ -1141,21 +1174,19 @@ class ZoneRuntime:
             self._fingerprint(capability),
             context_id,
             parent_context_id,
+            user_initiated,
         )
 
-    async def _async_process_target_feedback(
+    def _target_feedback(
         self,
         identity: str,
         fingerprint: TargetFingerprint,
         context_id: str | None,
         parent_context_id: str | None,
-    ) -> None:
-        """Classify one target observation and apply its broker outcome."""
-
-        if self.broker is None:
-            return
+        user_initiated: bool = False,
+    ) -> FeedbackObservation:
         state = self.ownership[identity]
-        feedback = FeedbackObservation(
+        return FeedbackObservation(
             identity,
             fingerprint,
             context_id,
@@ -1165,6 +1196,23 @@ class ZoneRuntime:
             self.capability_generations[identity],
             state.revision,
             state.external_revision,
+            user_initiated,
+        )
+
+    async def _async_process_target_feedback(
+        self,
+        identity: str,
+        fingerprint: TargetFingerprint,
+        context_id: str | None,
+        parent_context_id: str | None,
+        user_initiated: bool = False,
+    ) -> None:
+        """Classify one target observation and apply its broker outcome."""
+
+        if self.broker is None:
+            return
+        feedback = self._target_feedback(
+            identity, fingerprint, context_id, parent_context_id, user_initiated
         )
         outcome = await self.broker.async_feedback(feedback, now=dt_util.utcnow())
         if (

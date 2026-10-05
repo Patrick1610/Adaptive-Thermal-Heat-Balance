@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.24
+
+- Correlate delegated climate service calls and target feedback with the exact, actually
+  dispatched ATHB command, even when the controller creates a new Home Assistant context.
+- Keep acknowledgement valid across newer measurements and comfort-setting changes without
+  weakening dispatch-generation checks, capability/ownership guards or the 30-second deadline.
+- Ignore bounded duplicate command echoes while preserving explicit user intervention, differing
+  external targets and unresolved command-fault protection.
+
 ## 0.2.23
 
 - Add a per-zone Preheat switch that temporarily selects occupied comfort without changing or

@@ -154,6 +154,107 @@ def test_payloads_are_exact_and_never_include_hvac_mode() -> None:
     }
 
 
+def test_automatic_echo_is_bounded_to_dispatched_command_and_cannot_ack_service() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+    echo = _feedback(20.0, context="delegated-controller")
+    assert not broker.expected_automatic_echo(echo, now=NOW)
+
+    def check_not_dispatched() -> None:
+        assert not broker.expected_automatic_echo(echo, now=NOW)
+
+    persistence.after_persist = check_not_dispatched
+
+    asyncio.run(broker.async_submit(_intent(), now=NOW))
+    assert broker.expected_automatic_echo(echo, now=NOW + timedelta(seconds=10))
+    assert broker.state_counts("registry-1") == (1, 0)
+    assert not persistence.resolved
+    assert not broker.expected_automatic_echo(
+        replace(echo, user_initiated=True), now=NOW + timedelta(seconds=10)
+    )
+    assert not broker.expected_automatic_echo(_feedback(21.0), now=NOW)
+    assert not broker.expected_automatic_echo(replace(echo, external_revision=1), now=NOW)
+    assert not broker.expected_automatic_echo(echo, now=NOW + timedelta(seconds=30))
+    current[0] = replace(current[0], ownership=Ownership.MANUAL_OVERRIDE)
+    assert not broker.expected_automatic_echo(echo, now=NOW)
+    current[0] = _preflight()
+
+    outcome = asyncio.run(broker.async_feedback(echo, now=NOW + timedelta(seconds=10)))
+    assert outcome.reason == "delegated_exact_pending_match"
+    assert broker.state_counts("registry-1") == (0, 0)
+    duplicate = asyncio.run(broker.async_feedback(echo, now=NOW + timedelta(seconds=11)))
+    assert duplicate.reason == "duplicate_command_echo"
+    assert len(persistence.resolved) == 1
+    assert not broker.expected_automatic_echo(echo, now=NOW + timedelta(seconds=30))
+    asyncio.run(broker.async_resume_target("registry-1"))
+    assert not broker.expected_automatic_echo(echo, now=NOW + timedelta(seconds=12))
+
+
+def test_undispatched_or_expired_feedback_cannot_acknowledge_a_command() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def feedback_before_dispatch(command: PendingCommand) -> bool:
+        outcome = await broker.async_feedback(_feedback(20.0), now=NOW)
+        assert outcome.reason == "outside_pending_acknowledgement_window"
+        assert broker.state_counts("registry-1") == (1, 0)
+        return True
+
+    persistence.async_persist_pending = feedback_before_dispatch
+    persistence.async_mark_dispatched = feedback_before_dispatch
+    asyncio.run(broker.async_submit(_intent(), now=NOW))
+    expired = asyncio.run(broker.async_feedback(_feedback(20.0), now=NOW + timedelta(seconds=30)))
+    assert expired.reason == "outside_pending_acknowledgement_window"
+    assert broker.state_counts("registry-1") == (1, 0)
+    timeout = asyncio.run(
+        broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
+    )
+    assert timeout is not None
+    assert timeout.acknowledgement_status is AcknowledgementStatus.UNKNOWN
+
+
+def test_automatic_range_echo_requires_both_exact_endpoints_and_open_gate() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+    asyncio.run(broker.async_submit(_intent(shape=TargetShape.RANGE), now=NOW))
+    echo = replace(
+        _feedback(20.0, context="delegated"),
+        observed=TargetFingerprint(TargetShape.RANGE, low_ha=19.0, high_ha=23.0),
+    )
+    assert broker.expected_automatic_echo(echo, now=NOW)
+    assert not broker.expected_automatic_echo(
+        replace(echo, observed=TargetFingerprint(TargetShape.RANGE, low_ha=19.0)), now=NOW
+    )
+    assert not broker.expected_automatic_echo(
+        replace(echo, observed=TargetFingerprint(TargetShape.RANGE, low_ha=19.0, high_ha=24.0)),
+        now=NOW,
+    )
+    broker.close_gate()
+    assert not broker.expected_automatic_echo(echo, now=NOW)
+
+
+def test_delegated_ack_of_old_command_drains_only_the_newest_valid_policy() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        current[0] = replace(current[0], entry_generation=2, input_generation=2)
+        latest = replace(_intent(value=21.0, explicit=True, input_generation=2), entry_generation=2)
+        queued = await broker.async_submit(latest, now=NOW + timedelta(seconds=1))
+        assert queued.reason == "command_pending"
+        assert broker.state_counts("registry-1") == (1, 1)
+        echo = replace(_feedback(20.0, context="roommind"), entry_generation=2, input_generation=2)
+        acknowledged = await broker.async_feedback(echo, now=NOW + timedelta(seconds=10))
+        assert acknowledged.acknowledgement_status is AcknowledgementStatus.INFERRED_ACKNOWLEDGED
+        drained = await broker.async_drain_queued("registry-1", now=NOW + timedelta(seconds=11))
+        assert drained is not None
+        assert drained.dispatch_status is DispatchStatus.DISPATCHED
+
+    asyncio.run(scenario())
+    assert [call[0]["temperature"] for call in service.calls] == [20.0, 21.0]
+
+
 def test_broker_persists_rechecks_then_dispatches_sole_temperature_call() -> None:
     service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
     broker = _broker(service, persistence, current)

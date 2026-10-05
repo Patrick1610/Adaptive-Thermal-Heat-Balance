@@ -126,6 +126,7 @@ class CommandOutcome:
 @dataclass(slots=True)
 class _TargetBrokerState:
     pending: PendingCommand | None = None
+    completed: PendingCommand | None = None
     queued: NormalizedIntent | None = None
     acknowledged: AcknowledgedTarget | None = None
     last_dispatch_at: datetime | None = None
@@ -393,6 +394,29 @@ class CommandBroker:
             return (0, 0)
         return (int(state.pending is not None), int(state.queued is not None))
 
+    def expected_automatic_echo(self, feedback: FeedbackObservation, *, now: datetime) -> bool:
+        """Recognize only bounded echoes of an actually dispatched command.
+
+        Service events are not acknowledgements. The caller must still wait for
+        authoritative target feedback. Retain one completed command only for
+        duplicate callbacks within its original acknowledgement deadline.
+        """
+
+        state = self._states.get(feedback.target_identity)
+        if state is None or feedback.user_initiated or not self._gate_open:
+            return False
+        command = state.pending or state.completed
+        if command is None or not command.dispatched or now >= command.acknowledgement_deadline:
+            return False
+        current = self._preflight(feedback.target_identity)
+        if current.ownership is not Ownership.OWNED:
+            return False
+        decision = classify_acknowledgement(command.acknowledgement_contract(), feedback)
+        return decision.status in {
+            AcknowledgementStatus.ACKNOWLEDGED,
+            AcknowledgementStatus.INFERRED_ACKNOWLEDGED,
+        }
+
     def close_gate(self) -> None:
         self._gate_open = False
         for state in self._states.values():
@@ -407,6 +431,7 @@ class CommandBroker:
         state = self._states.setdefault(target_identity, _TargetBrokerState())
         pending = state.pending
         state.pending = None
+        state.completed = None
         state.queued = None
         state.last_feedback_status = None
         state.last_feedback_reason = None
@@ -503,6 +528,7 @@ class CommandBroker:
             now + ACKNOWLEDGEMENT_DEADLINE,
         )
         state.pending = command
+        state.completed = None
         if not await self._persistence.async_persist_pending(command):
             state.pending = None
             return CommandOutcome(
@@ -532,7 +558,6 @@ class CommandBroker:
             command.acknowledgement_deadline,
             True,
         )
-        state.pending = dispatched
         if not await self._persistence.async_mark_dispatched(dispatched):
             state.pending = None
             return CommandOutcome(
@@ -541,6 +566,7 @@ class CommandBroker:
                 AcknowledgementStatus.NOT_APPLICABLE,
                 "storage_verification_failed",
             )
+        state.pending = dispatched
         try:
             await asyncio.wait_for(
                 self._service.async_set_temperature(service_payload(intent), context),
@@ -574,6 +600,22 @@ class CommandBroker:
     ) -> CommandOutcome:
         state = self._states.setdefault(feedback.target_identity, _TargetBrokerState())
         pending = state.pending
+        if pending is not None and (
+            not pending.dispatched or now >= pending.acknowledgement_deadline
+        ):
+            return CommandOutcome(
+                pending.command_id,
+                DispatchStatus.NOT_DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "outside_pending_acknowledgement_window",
+            )
+        if pending is None and self.expected_automatic_echo(feedback, now=now):
+            return CommandOutcome(
+                None,
+                DispatchStatus.NOT_DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "duplicate_command_echo",
+            )
         decision = classify_acknowledgement(
             pending.acknowledgement_contract() if pending is not None else None, feedback
         )
@@ -595,6 +637,7 @@ class CommandBroker:
                 now,
             )
             state.pending = None
+            state.completed = pending
             await self._persistence.async_resolve(pending, decision.reason)
         elif decision.status is AcknowledgementStatus.REJECTED or decision.manual_intervention:
             state.pending = None
