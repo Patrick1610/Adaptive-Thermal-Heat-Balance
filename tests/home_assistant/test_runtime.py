@@ -44,6 +44,7 @@ from custom_components.athb.core.contracts import (
     ObservationValidity,
     Provenance,
 )
+from custom_components.athb.core.history import HistoryQuality, RunningMeanResult
 from custom_components.athb.core.ownership import (
     DataReadiness,
     Ownership,
@@ -321,6 +322,79 @@ def _runtime(*, entry_id: str = "entry-1", target_identity: str = "registry-1") 
     )
     hass = SimpleNamespace(data={}, config_entries=SimpleNamespace(async_update_entry=MagicMock()))
     return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "off", False)
+
+
+async def test_runtime_keeps_diagnostic_history_in_the_calculation_snapshot(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.controller = MagicMock()
+    runtime.history_collector = cast(
+        Any,
+        SimpleNamespace(
+            result=lambda **kwargs: RunningMeanResult(
+                10.0,
+                HistoryQuality.DIAGNOSTIC,
+                0,
+                0.0,
+                None,
+                ("history_not_control_eligible", "history_limited_coverage"),
+            )
+        ),
+    )
+    monkeypatch.setattr(ZoneRuntime, "_schedule_freshness_expiries", lambda *_args: None)
+    runtime.async_request_snapshot()
+    captured = runtime.controller.request.call_args.args[0]
+    assert captured.running_mean_c == 10.0
+    assert captured.history_quality == HistoryQuality.DIAGNOSTIC.value
+    assert "history_limited_coverage" in captured.context_reasons
+
+
+def test_diagnostic_history_is_visible_even_with_hvac_off_without_changing_control() -> None:
+    snapshot = _captured(load_scenarios()[0])
+    target = snapshot.targets[0]
+    snapshot = replace(
+        snapshot,
+        history_quality=HistoryQuality.DIAGNOSTIC.value,
+        targets=(replace(target, capability=replace(target.capability, hvac_mode="off")),),
+    )
+    result = calculate_runtime_snapshot(snapshot)
+    runtime = _runtime(target_identity=target.registry_identity)
+    visible = runtime._observable_values(result)
+    assert visible["outdoor_running_mean"] is not None
+    assert visible["thermal_sensation"] is not None
+    assert visible["lower_comfort_boundary"] is not None
+    assert visible["thermal_neutral"] is not None
+    assert visible["upper_comfort_boundary"] is not None
+    assert visible["data_quality"] == "diagnostic_estimate"
+    assert visible["input_status"] == "history_not_control_eligible"
+    assert runtime.last_valid_values == {}
+    numerical = result.targets[0].result
+    assert numerical is not None
+    assert numerical.policy is not None
+    assert numerical.policy.fallback
+    assert result.targets[0].suppression_reason == "hvac_off"
+    assert not runtime.control_enabled
+
+
+async def test_diagnostic_estimate_clears_missing_history_repair_without_claiming_full_history(
+    hass: HomeAssistant,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    updates: list[tuple[str, bool]] = []
+    runtime.repair_manager = cast(
+        Any, SimpleNamespace(update=lambda name, active: updates.append((name, active)))
+    )
+    runtime.transition_logger = MagicMock()
+    snapshot = replace(
+        _captured(load_scenarios()[0]), history_quality=HistoryQuality.DIAGNOSTIC.value
+    )
+    runtime._update_observability_conditions(calculate_runtime_snapshot(snapshot))
+    assert ("missing_history_24h", False) in updates
+    assert "missing_history_24h" not in runtime.repair_condition_started
 
 
 def test_heating_demand_buffer_uses_actuator_grid_and_stateful_thresholds() -> None:

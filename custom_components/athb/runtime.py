@@ -1305,11 +1305,7 @@ class ZoneRuntime:
             if self.history_collector is not None
             else unavailable_history()
         )
-        running_mean = (
-            history.value_c
-            if history.quality in {HistoryQuality.COMPLETE, HistoryQuality.PARTIAL}
-            else None
-        )
+        running_mean = history.value_c
         radiant_id = self._current_radiant_id()
         primary_state = self.hass.states.get(str(self.entry.data.get("primary_temperature", "")))
         critical = self._capture_critical_locations(primary_state, now)
@@ -1355,7 +1351,7 @@ class ZoneRuntime:
                 if self.previous_requested_at is None
                 else max(0.0, (now - self.previous_requested_at).total_seconds())
             ),
-            profile_resolution.reasons,
+            (*profile_resolution.reasons, *history.reasons),
             tuple(self.source_states.items()),
             self._snapshot_state(
                 self.hass.states.get(str(self.entry.options.get("air_speed_entity", "")))
@@ -1817,6 +1813,11 @@ class ZoneRuntime:
             and result.hold_condition is None
             and projected.get("thermal_sensation") is not None
         )
+        diagnostic_current = (
+            primary_fresh
+            and result.hold_condition == "history_not_control_eligible"
+            and projected.get("thermal_sensation") is not None
+        )
         if outputs_current:
             assert accepted is not None
             self.last_valid_values = {
@@ -1876,6 +1877,8 @@ class ZoneRuntime:
         projected["data_quality"] = (
             "current"
             if outputs_current
+            else "diagnostic_estimate"
+            if diagnostic_current
             else "stale"
             if result.primary_temperature_stale
             or (self.last_valid_values and result.hold_condition is not None)
@@ -2237,10 +2240,7 @@ class ZoneRuntime:
         return "unknown"
 
     def _update_observability_conditions(self, result: RuntimeCalculation) -> None:
-        history_missing = result.history_quality in {
-            HistoryQuality.DIAGNOSTIC.value,
-            HistoryQuality.UNAVAILABLE.value,
-        }
+        history_missing = result.history_quality == HistoryQuality.UNAVAILABLE.value
         mandatory_missing = bool(result.targets) and all(
             target.result is None for target in result.targets
         )

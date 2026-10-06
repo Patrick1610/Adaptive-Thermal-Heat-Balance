@@ -152,7 +152,11 @@ async def test_each_diagnostic_scenario_completes_a_real_ha_lifecycle(
         missing_unit = "%" if humidity_starts_missing else "°C"
         hass.states.async_set(missing_id, missing_value, {"unit_of_measurement": missing_unit})
     else:
-        assert runtime.values["input_status"] in {"ready", "running_mean_unavailable"}
+        assert runtime.values["input_status"] in {
+            "ready",
+            "running_mean_unavailable",
+            "history_not_control_eligible",
+        }
         freshness = float(options["primary_temperature_freshness_minutes"])
         freezer.tick(delta=timedelta(minutes=freshness + 1.0))
         # Isolate primary staleness; measured humidity remains mandatory.
@@ -163,6 +167,7 @@ async def test_each_diagnostic_scenario_completes_a_real_ha_lifecycle(
         assert runtime.values["input_status"] in {
             "primary_temperature_stale_projection",
             "running_mean_unavailable",
+            "history_not_control_eligible",
         }
         hass.states.async_set(primary_id, "20.1", {"unit_of_measurement": "°C"})
         # Refresh the other time-sensitive sources as a real HA update cycle would.
@@ -173,7 +178,14 @@ async def test_each_diagnostic_scenario_completes_a_real_ha_lifecycle(
     async_fire_time_changed(hass, dt_util.utcnow())
     await hass.async_block_till_done()
     await runtime.controller.async_wait_idle()
-    assert runtime.values["input_status"] in {"ready", "running_mean_unavailable"}
+    assert runtime.values["input_status"] in {
+        "ready",
+        "running_mean_unavailable",
+        "history_not_control_eligible",
+    }
+    if runtime.values["input_status"] == "history_not_control_eligible":
+        assert runtime.values["thermal_sensation"] is not None
+        assert runtime.values["data_quality"] == "diagnostic_estimate"
     assert runtime.values["resume_required"] is False
 
     if not runtime.control_enabled:

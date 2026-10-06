@@ -644,7 +644,9 @@ Coverage measures the integration’s documented observation-hold assumption; it
 | Seven eligible days | `complete_history` |
 | At least three eligible days, represented exponential weight ≥60%, and an eligible day among yesterday/the day before | `partial_history`; adaptive operation allowed |
 | One or two eligible days, or insufficient represented weight | Diagnostic estimate only; fixed fallback for control |
-| No eligible history | Running mean unavailable; fixed fallback if otherwise eligible |
+| No eligible days, but covered intervals in the previous seven days | Coverage-weighted diagnostic estimate; fixed fallback/no-write for control |
+| No usable completed-day data, but integrated time today | Current-day startup diagnostic estimate; fixed fallback/no-write for control |
+| No integrated outdoor data | Running mean unavailable; fixed fallback if otherwise eligible |
 | Outdoor source unavailable today but prior-day criteria still satisfied | Continue using history; report current-source outage |
 | History no longer satisfies the criteria | Hold, then fallback |
 
@@ -655,6 +657,12 @@ Expose separately:
 - Fraction of seven-day exponential weight represented.
 - Date of most recent eligible day.
 - Bootstrap provenance.
+
+Diagnostic estimates are display-only inputs to the comfort calculation. They never qualify a
+day, inflate represented eligible weight, or enable adaptive commands. Low-coverage completed-day
+means use `alpha^(calendar_age - 1) * coverage_fraction` weights; today is used only if there is no
+completed-day estimate. The qualified seven-day estimator remains unchanged. Missing intervals
+remain uncovered; an instantaneous sensor state is not substituted for an outdoor running mean.
 
 ### 5.4 Recorder bootstrap
 

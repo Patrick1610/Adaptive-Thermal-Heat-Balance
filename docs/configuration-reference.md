@@ -20,6 +20,15 @@ summaries and the previous-seven-day exponentially weighted running mean. Outdoo
 an ATHB 2022 input: thermal adaptation uses outdoor temperature history, while comfort and
 surface-risk psychrometrics use indoor vapour pressure.
 
+History quality and display availability are separate. If no completed day reaches 90% coverage,
+ATHB can still expose a **diagnostic estimate** from the genuinely covered intervals of the last
+seven completed days, weighted by calendar age and coverage. With no usable completed-day data,
+the already integrated part of today can supply a startup estimate. A single instantaneous reading
+is not treated as a daily average, and missing hours are never filled. Comfort ranges and sensation
+are calculated and labelled `diagnostic_estimate`; `history_not_control_eligible` makes clear that
+the normal adaptive-control history requirements are not met. Fixed/no-write control fallback
+remains unchanged. A qualified running mean is never mixed with these low-coverage estimates.
+
 If calculation cannot proceed, the **Input status** sensor reports the exact hold reason, such as
 `primary_temperature_invalid`, `primary_rh_invalid`, `air_speed_invalid`, or
 `outdoor_history_insufficient`. The affected numerical sensors remain unavailable rather than
@@ -352,7 +361,8 @@ live reports over seven days, activates after 12 intervals, and uses `1.5 × p95
 minute, longer than six hours, across a restart or through an invalid state do not train it. Fixed
 mode accepts 30 minutes–24 hours and existing zones migrate to Fixed 120 minutes. Each sample keeps
 the hold active when it arrived, so later cadence changes never rewrite earlier gaps. Equal-value
-reports renew coverage without triggering ordinary recalculation. Recorder `last_updated` and
+reports renew coverage without triggering ordinary recalculation, except when the first integrated
+interval makes a startup estimate available. Recorder `last_updated` and
 distinct `last_reported` anchors improve bootstrap coverage but do not train Automatic.
 
 With insufficient outdoor history, `fixed` uses `fallback_heating_c` and

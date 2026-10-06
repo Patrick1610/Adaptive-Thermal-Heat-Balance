@@ -232,7 +232,7 @@ All 30 mandatory scenarios passed.
 - History: `complete_history`; running mean: `24.999999999999996` °C
 - RH provenance: `measured`
 - Numerical golden: `G_HUMID_B`; current sensation: `0.5639479489801329`
-- Roots: `{"cooling_control": {"status": "success", "value_c": 25.6606139216423}, "heating_control": {"status": "moisture_limited_no_solution", "value_c": null}, "lower_comfort": {"status": "moisture_limited_no_solution", "value_c": null}, "thermal_neutral": {"status": "moisture_limited_no_solution", "value_c": null}, "upper_comfort": {"status": "success", "value_c": 27.52452230405808}}`
+- Roots: `{"cooling_control": {"status": "success", "value_c": 25.6606139216423}, "heating_control": {"status": "moisture_limited_no_solution", "value_c": null}, "lower_comfort": {"status": "success", "value_c": 20.48126220703125}, "thermal_neutral": {"status": "moisture_limited_no_solution", "value_c": null}, "upper_comfort": {"status": "success", "value_c": 27.52452230405808}}`
 - Comfort/occupancy/Boost: `balanced` / `absent` / `off`; fallback: `False`
 - Requested heating/cooling: `None` / `25.6606139216423` °C
 - Normalized target: `{"bounded_c": 25.6606139216423, "calibrated_c": 25.6606139216423, "direction": "cooling_only", "grid": {"assumed_step": false, "lower_bound_ha": 18.0, "lower_index": 4, "origin_ha": 16.0, "step_ha": 0.5, "upper_bound_ha": 30.0, "upper_index": 28}, "limitations": ["grid_inward_adjustment"], "normalized_actuator_c": 25.5, "normalized_ha": 25.5, "normalized_room_c": 25.5, "requested_room_c": 25.6606139216423}`

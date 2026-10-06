@@ -94,6 +94,7 @@ class ZoneCalculationInput:
     explicit_transition: bool = False
     failure_hold_elapsed: bool = False
     fixed_fallback_reason: str | None = None
+    diagnostic_history: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +204,15 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
     current = evaluate_current_location(context, budget=budget)
     roots = solve_five_roots(context, votes, budget=budget)
     roots = complete_descriptive_comfort_range(context, votes, roots, budget=budget)
+    if inputs.diagnostic_history:
+        return _fixed_fallback(
+            inputs,
+            current=current,
+            roots=roots,
+            evaluation_count=budget.used,
+            votes=votes,
+            hold_condition="history_not_control_eligible",
+        )
     eligibility = directional_root_eligibility(
         current=current,
         roots=roots,

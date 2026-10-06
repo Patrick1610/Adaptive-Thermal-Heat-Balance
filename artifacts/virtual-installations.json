@@ -1589,7 +1589,7 @@
     "name": "Humid warm room and saturation",
     "numerical": {
       "current_sensation": 0.5639479489801329,
-      "evaluation_count": 50,
+      "evaluation_count": 128,
       "golden_key": "G_HUMID_B",
       "roots": {
         "cooling_control": {
@@ -1601,8 +1601,8 @@
           "value_c": null
         },
         "lower_comfort": {
-          "status": "moisture_limited_no_solution",
-          "value_c": null
+          "status": "success",
+          "value_c": 20.48126220703125
         },
         "thermal_neutral": {
           "status": "moisture_limited_no_solution",

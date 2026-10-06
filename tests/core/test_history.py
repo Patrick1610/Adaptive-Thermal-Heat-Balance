@@ -162,6 +162,45 @@ def test_complete_partial_diagnostic_and_unavailable_history_quality() -> None:
     assert unavailable.value_c is None
 
 
+def test_low_coverage_days_provide_only_a_coverage_weighted_diagnostic_estimate() -> None:
+    today = date(2026, 10, 6)
+    result = running_mean(
+        summaries=(
+            _summary(today - timedelta(days=1), 10.0, 0.5),
+            _summary(today - timedelta(days=3), 20.0, 0.25),
+            _summary(today - timedelta(days=8), 90.0),
+            _summary(today, 90.0),
+        ),
+        current_local_date=today,
+    )
+    assert result.value_c == pytest.approx((10 * 0.5 + 20 * 0.25 * 0.8**2) / (0.5 + 0.25 * 0.8**2))
+    assert result.quality is HistoryQuality.DIAGNOSTIC
+    assert result.eligible_days == 0
+    assert result.represented_weight_fraction == 0
+    assert result.most_recent_eligible_date is None
+    assert "history_limited_coverage" in result.reasons
+    assert "history_not_control_eligible" in result.reasons
+
+
+def test_low_coverage_days_do_not_change_the_qualified_running_mean() -> None:
+    today = date(2026, 10, 6)
+    qualified = (_summary(today - timedelta(days=1), 10.0),)
+    assert running_mean(
+        summaries=(*qualified, _summary(today - timedelta(days=2), 90.0, 0.5)),
+        current_local_date=today,
+    ) == running_mean(summaries=qualified, current_local_date=today)
+
+
+def test_zero_coverage_is_not_a_diagnostic_measurement() -> None:
+    today = date(2026, 10, 6)
+    result = running_mean(
+        summaries=(_summary(today - timedelta(days=1), 10.0, 0.0),),
+        current_local_date=today,
+    )
+    assert result.value_c is None
+    assert result.quality is HistoryQuality.UNAVAILABLE
+
+
 @pytest.mark.parametrize("alpha", [0.59, 0.91, float("nan"), True])
 def test_invalid_alpha_is_rejected(alpha: float) -> None:
     with pytest.raises(ValueError, match="alpha"):

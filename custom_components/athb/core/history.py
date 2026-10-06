@@ -399,6 +399,22 @@ def running_mean(
         reasons.append("history_not_control_eligible")
     elif quality is HistoryQuality.UNAVAILABLE:
         reasons.append("running_mean_unavailable")
+    if value is None:
+        # Preserve the qualified estimator and its control thresholds. When no
+        # day qualifies, expose only a diagnostic estimate of the covered time.
+        diagnostic_weight = 0.0
+        diagnostic_total = 0.0
+        for index in range(7):
+            summary = by_date.get(current_local_date - timedelta(days=index + 1))
+            if summary is None or summary.mean_c is None:
+                continue
+            weight = alpha_value**index * summary.coverage_fraction
+            diagnostic_total += weight * summary.mean_c
+            diagnostic_weight += weight
+        if diagnostic_weight > 0.0:
+            value = diagnostic_total / diagnostic_weight
+            quality = HistoryQuality.DIAGNOSTIC
+            reasons = ["history_not_control_eligible", "history_limited_coverage"]
     return RunningMeanResult(
         value,
         quality,

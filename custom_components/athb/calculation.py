@@ -44,6 +44,7 @@ from .core.contracts import (
     RootSuccess,
     TargetShape,
 )
+from .core.history import HistoryQuality
 from .core.inverse import RadiantModel
 from .core.locations import (
     CriticalDeltaUpdate,
@@ -599,6 +600,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 explicit_transition=snapshot.explicit_transition,
                 failure_hold_elapsed=snapshot.failure_hold_elapsed,
                 fixed_fallback_reason="air_speed_invalid" if fallback_for_speed else None,
+                diagnostic_history=snapshot.history_quality == HistoryQuality.DIAGNOSTIC.value,
             )
         )
         target_results.append(
@@ -690,6 +692,11 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             dict.fromkeys(
                 (
                     *snapshot.context_reasons,
+                    *(
+                        ("history_not_control_eligible",)
+                        if snapshot.history_quality == HistoryQuality.DIAGNOSTIC.value
+                        else ()
+                    ),
                     *(("primary_temperature_stale_projection",) if primary_stale else ()),
                     *radiant_reasons,
                     *scientific_reasons,

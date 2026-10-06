@@ -331,6 +331,7 @@ class OutdoorHistoryCollector:
     def add_sample(self, sample: OutdoorSample, *, now: datetime, live: bool = False) -> bool:
         if self.integrator is None:
             return False
+        had_coverage = self.integrator.current_summary.covered_seconds > 0.0
         previous = self.integrator.last_valid_observation
         expired = previous is None or (
             previous.hold_seconds is not None
@@ -357,6 +358,7 @@ class OutdoorHistoryCollector:
         self._schedule_boundary(now)
         return (
             rolled_over
+            or (not had_coverage and self.integrator.current_summary.covered_seconds > 0.0)
             or expired
             or previous is None
             or previous.value_c != sample.value_c
@@ -433,11 +435,25 @@ class OutdoorHistoryCollector:
             self._save_task = None
 
     def result(self, *, now: datetime, alpha: float = 0.8) -> RunningMeanResult:
+        local_date = now.astimezone(ZoneInfo(self.timezone)).date()
         result = running_mean(
             summaries=self.summaries,
-            current_local_date=now.astimezone(ZoneInfo(self.timezone)).date(),
+            current_local_date=local_date,
             alpha=alpha,
         )
+        current = self.integrator.current_summary if self.integrator is not None else None
+        if (
+            result.value_c is None
+            and current is not None
+            and current.local_date == local_date
+            and current.mean_c is not None
+        ):
+            result = replace(
+                result,
+                value_c=current.mean_c,
+                quality=HistoryQuality.DIAGNOSTIC,
+                reasons=("history_not_control_eligible", "history_current_day_estimate"),
+            )
         return (
             replace(
                 result,
@@ -531,7 +547,12 @@ class OutdoorHistoryCollector:
             if last is not None and last.hold_seconds is not None
             else None
         )
+        result = self.result(now=now)
         return {
+            "history_quality": result.quality.value,
+            "eligible_days": result.eligible_days,
+            "represented_weight_fraction": result.represented_weight_fraction,
+            "history_reasons": result.reasons,
             "hold_mode": self.hold_mode,
             "fixed_hold_minutes": self.fixed_hold_minutes,
             "effective_hold_minutes": self.effective_hold_seconds / 60.0,

@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from homeassistant.core import State
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
@@ -381,7 +382,9 @@ async def test_automatic_hold_coalesces_high_frequency_live_reports(hass: Any) -
     await collector.async_close()
 
 
-async def test_equal_live_report_renews_hold_without_notifying_subscriber(hass: Any) -> None:
+async def test_equal_live_report_notifies_once_when_initial_estimate_becomes_available(
+    hass: Any,
+) -> None:
     notifications: list[str] = []
     collector = OutdoorHistoryCollector(
         hass,
@@ -403,7 +406,7 @@ async def test_equal_live_report_renews_hold_without_notifying_subscriber(hass: 
         live=True,
     )
 
-    assert not changed
+    assert changed
     assert notifications == []
     assert collector.integrator is not None
     assert collector.integrator.last_valid_observation == OutdoorSample(
@@ -411,6 +414,80 @@ async def test_equal_live_report_renews_hold_without_notifying_subscriber(hass: 
         5.0,
         hold_seconds=3600.0,
     )
+    assert not collector.add_sample(
+        OutdoorSample(observed + timedelta(minutes=1), 5.0),
+        now=observed + timedelta(minutes=1),
+        live=True,
+    )
+    await collector.async_close()
+
+
+async def test_unchanged_ha_reports_cover_midnight_and_survive_restart(
+    hass: Any,
+    monkeypatch: Any,
+) -> None:
+    clock = [NOW.replace(hour=23, minute=50)]
+    monkeypatch.setattr(dt_util, "utcnow", lambda: clock[0])
+    store = MemoryStore()
+    collector = OutdoorHistoryCollector(
+        hass,
+        "sensor.outdoor",
+        "UTC",
+        None,
+        entity_id="sensor.outdoor",
+        references=1,
+        hold_mode="automatic",
+    )
+    collector._store = cast(Any, store)
+    await collector.async_start(now=clock[0], current=None)
+    try:
+        for minute in range(21):
+            clock[0] = NOW.replace(hour=23, minute=50) + timedelta(minutes=minute)
+            hass.states.async_set(
+                "sensor.outdoor",
+                "10",
+                {"unit_of_measurement": "°C"},
+                timestamp=clock[0].timestamp(),
+            )
+            await hass.async_block_till_done()
+        state = hass.states.get("sensor.outdoor")
+        assert state.last_changed == NOW.replace(hour=23, minute=50)
+        assert state.last_reported == clock[0]
+        assert collector.integrator.current_summary.covered_seconds == 600
+        result = collector.result(now=clock[0])
+        assert result.value_c == pytest.approx(10.0)
+        assert result.quality is HistoryQuality.DIAGNOSTIC
+        assert result.eligible_days == 0
+    finally:
+        await collector.async_close()
+    restarted = OutdoorHistoryCollector(hass, "sensor.outdoor", "UTC", None)
+    restarted._store = cast(Any, store)
+    await restarted.async_start(now=clock[0], current=None)
+    assert restarted.result(now=clock[0]) == result
+    assert restarted.integrator.current_summary.covered_seconds == 600
+    await restarted.async_close()
+
+
+async def test_current_day_estimate_uses_integrated_time_not_an_instantaneous_value(
+    hass: Any,
+) -> None:
+    collector = OutdoorHistoryCollector(hass, "sensor.outdoor", "UTC", None)
+    collector._store = cast(Any, MemoryStore())
+    await collector.async_start(now=NOW, current=OutdoorSample(NOW, 10.0))
+    assert collector.result(now=NOW).value_c is None
+    collector.add_sample(
+        OutdoorSample(NOW + timedelta(minutes=10), 20.0), now=NOW + timedelta(minutes=10)
+    )
+    result = collector.result(now=NOW + timedelta(minutes=10))
+    assert result.value_c == 10.0
+    assert result.quality is HistoryQuality.DIAGNOSTIC
+    assert result.reasons == ("history_not_control_eligible", "history_current_day_estimate")
+    assert collector.diagnostics(now=NOW + timedelta(minutes=10))["eligible_days"] == 0
+    collector.add_sample(
+        OutdoorSample(NOW + timedelta(minutes=20), 20.0), now=NOW + timedelta(minutes=20)
+    )
+    assert collector.result(now=NOW + timedelta(minutes=20)).value_c == 15.0
+    assert collector.integrator.current_summary.covered_seconds == 1200
     await collector.async_close()
 
 

@@ -30,6 +30,10 @@ persisted before a transition command and restored on restart.
 - `target_unavailable` / `restored_target_state`: wait for an authoritative live target state.
 - `manual_override`: an external temperature target owns the actuator until expiry or Resume.
 - `running_mean_unavailable`: adaptive data is insufficient; fixed fallback/no-write policy applies.
+- `history_not_control_eligible`: calculated comfort values use a labelled diagnostic outdoor
+  estimate; automatic control still uses the configured fixed/no-write fallback. Limited coverage
+  does not mean that the currently reporting sensor is unavailable. Diagnostics distinguish
+  `history_limited_coverage` (completed days) from `history_current_day_estimate` (startup).
 - `missing_required_root:*`: the root needed for that actuator direction did not solve.
 - `no_legal_inward_target` / `control_band_too_narrow`: bounds, grid or required gap are infeasible.
 - `storage_verification_failed`: control dispatch is inhibited because the recovery journal could

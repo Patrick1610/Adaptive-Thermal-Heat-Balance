@@ -129,6 +129,23 @@ def test_missing_history_is_explicit_fixed_fallback_not_adaptive_output() -> Non
     assert result.hold_condition == "running_mean_unavailable"
 
 
+@pytest.mark.parametrize("no_write", [False, True])
+def test_diagnostic_history_exposes_comfort_but_never_adaptive_control(no_write: bool) -> None:
+    result = calculate_zone(replace(_input(), diagnostic_history=True, fallback_no_write=no_write))
+    assert isinstance(result.current, AthbSuccess)
+    assert result.roots is not None
+    assert isinstance(result.roots.heating_control, RootSuccess)
+    assert result.hold_condition == "history_not_control_eligible"
+    if no_write:
+        assert result.policy is None
+        assert result.normalized is None
+    else:
+        assert result.policy is not None
+        assert result.policy.fallback
+        assert isinstance(result.normalized, NormalizedScalarTarget)
+        assert result.normalized.normalized_ha == 18.0
+
+
 @pytest.mark.parametrize(
     ("intensity", "expected_heating", "expected_cooling"),
     [
