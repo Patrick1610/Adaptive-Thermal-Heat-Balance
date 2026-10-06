@@ -34,6 +34,30 @@ persisted before a transition command and restored on restart.
 - `no_legal_inward_target` / `control_band_too_narrow`: bounds, grid or required gap are infeasible.
 - `storage_verification_failed`: control dispatch is inhibited because the recovery journal could
   not be saved and read back exactly.
+- `retry_pending`: automatic delivery has not been confirmed; ATHB will retry a fresh calculation.
+- `write_failed`: five attempts at the same normalized target have not been confirmed. Ownership
+  is retained, no Resume is required, and a new normalized target can start a new attempt series.
+
+## Climate-write retries
+
+ATHB makes at most five service calls for each normalized actuator target (initial call plus four
+retries), normally at 0, 60, 120, 180 and 240 seconds. It waits up to 30 seconds for target feedback
+after each dispatch. A service exception is not proof that the target was unchanged: late feedback
+can still confirm delivery. Matching live feedback, not successful service return alone, is success.
+
+After the fifth unconfirmed attempt ATHB reports `write_failed` rather than taking ownership away
+or waiting indefinitely for Resume. A genuinely new grid-rounded target, including a lowering,
+gets a new budget, but cannot bypass the 60-second interval while recovering a write error.
+Calculation changes that normalize to the same scalar target or the same two range endpoints do
+not reset the budget. Ordinary successfully acknowledged explicit policy changes retain the
+existing 10-second hard minimum. Retry timers capture a fresh snapshot and recalculate; they do
+not replay an old queued target. Every attempt retains normal input, lease, capability, bounds,
+HeatGuard and ownership checks. Before sending, the live setpoint must match a known baseline,
+confirmed ATHB target or an uncertain ATHB request; an unexpected external value stops writing.
+
+The `command_delivery` attributes and diagnostics report per-target status, attempts, maximum
+attempts, retry interval, last error, last send, last acknowledgement and next retry time. Counters
+are runtime-local: a restart starts with live reconciliation, not replay or restored retry timers.
 
 ## Recovery and removal
 
@@ -46,13 +70,19 @@ they still invalidate unsent intents. A matching service call alone does not ack
 target-state feedback is required. Successful feedback and bounded duplicate echoes are inferred
 correlations, not proof of a particular external caller's identity. Explicit user-context calls
 and differing external targets remain interventions. No arbitrary grace period suppresses them.
-Expired or unresolved commands still require the existing command-fault recovery procedure;
-upgrading does not clear an existing manual override or press Resume for you.
+ATHB additionally retains at most five uncertain dispatched commands until target recovery or
+Resume. Exact late echoes use the same tolerance and revision checks, never acknowledge a different
+newer command, and never suppress explicit user-context intervention. A context-free exact match
+is an inferred correlation, not proof of who changed the target. `unavailable`, `unknown`, removed
+or restored target states do not create a manual override. They suspend delivery; existing manual
+overrides remain intact. The original expiry is retained across restart and unavailability.
 
 Clean and unclean restarts, reloads, upgrades and ordinary configuration or comfort-policy changes
 reconcile live target state automatically before any new command; persisted commands are never
-replayed. Resume remains fail-closed only for an unresolved command, corrupt control storage or an
-explicit persisted recovery gate such as a command fault. `recovery_reason` identifies the primary
+replayed. An unresolved journal alone no longer requires Resume. Ordinary legacy command faults
+(`command_outcome_unknown` / `coerced_or_rejected`) are migrated to live reconciliation. Resume
+remains fail-closed for corrupt control storage or another explicit persisted hard recovery gate;
+existing manual overrides are not cleared by the upgrade. `recovery_reason` identifies the primary
 cause and `recovery_reasons` lists every detected startup condition. Disabling or unloading ATHB
 closes the dispatch gate and releases listeners, timers, tasks, leases and shared-source references;
 it does not turn climate equipment off. Removing a zone removes only its zone state and never

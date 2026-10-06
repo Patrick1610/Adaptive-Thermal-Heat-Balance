@@ -143,6 +143,7 @@ class AthbSensor(AthbEntity, RestoreSensor):
             "stale_safety_active": self.runtime.values.get("stale_safety_active", False),
             "heat_guard": self.runtime.values.get("heat_guard_details", {}),
             "command_outcomes": self.runtime.values.get("command_outcomes", {}),
+            "command_delivery": self.runtime.values.get("command_delivery", {}),
         }
         if context := ROOT_SENSOR_CONTEXT.get(self.description.key):
             root_name, range_role = context
@@ -589,6 +590,9 @@ def _per_climate_context(runtime: ZoneRuntime) -> dict[str, dict[str, Any]]:
             ),
             "command_outcome": runtime.values.get("command_outcomes", {}).get(
                 str(target["target_uuid"])
+            ),
+            "command_delivery": runtime.values.get("command_delivery", {}).get(
+                str(target.get("registry_identity", "")), {}
             ),
             "ownership": runtime.values.get("ownership", {}).get(
                 str(target.get("registry_identity", ""))

@@ -338,9 +338,29 @@ class ZoneRuntime:
             context_factory=self._context_token,
         )
         if self.control_enabled:
+            stored_actuators = self.persistence.state.actuators if self.persistence.state else ()
             await self._async_acquire_target_leases()
+            for actuator in stored_actuators:
+                if actuator.ownership == Ownership.MANUAL_OVERRIDE.value:
+                    current = self.ownership[actuator.target_identity]
+                    self.ownership[actuator.target_identity] = replace(
+                        current,
+                        ownership=Ownership.MANUAL_OVERRIDE,
+                        revision=actuator.ownership_revision,
+                        external_revision=actuator.external_revision,
+                        override_reason=actuator.override_reason,
+                        override_expiry=(
+                            datetime.fromisoformat(actuator.override_expiry)
+                            if actuator.override_expiry
+                            else None
+                        ),
+                        resume_required=False,
+                    )
+                    self._transition(actuator.target_identity, OwnershipEvent.OVERRIDE_EXPIRED)
             if self.persistence.requires_resume:
                 for identity in identities:
+                    if self.ownership[identity].ownership is Ownership.MANUAL_OVERRIDE:
+                        continue
                     self._transition(
                         identity,
                         OwnershipEvent.UNCLEAN_RESTART,
@@ -1131,6 +1151,12 @@ class ZoneRuntime:
                 ),
                 target_readiness=self._target_readiness(capability),
             )
+            if isinstance(self.broker, CommandBroker):
+                await self.broker.async_target_unavailable(identity)
+                for prefix in ("ack", "queue", "retry"):
+                    if (cancel := self.timers.pop(f"{prefix}:{identity}", None)) is not None:
+                        cancel()
+                self._publish_control_state()
         elif old is not None and old_capability.hvac_mode != capability.hvac_mode:
             self.capability_generations[identity] += 1
             self._transition(
@@ -1143,7 +1169,7 @@ class ZoneRuntime:
         self.last_target_fingerprints[identity] = fingerprint
         if prior == fingerprint or self.broker is None:
             return
-        if availability_changed and not self.broker.state_counts(identity)[0]:
+        if availability_changed or not capability.available:
             return
         await self._async_process_target_feedback(
             identity,
@@ -1228,12 +1254,13 @@ class ZoneRuntime:
         if outcome.reason == "external_temperature_target":
             self._transition(identity, OwnershipEvent.EXTERNAL_TARGET)
         elif outcome.acknowledgement_status is AcknowledgementStatus.REJECTED:
+            self.stale_safety_applied.discard(identity)
             self.rejection_counts[identity] = self.rejection_counts.get(identity, 0) + 1
             if self.repair_manager is not None:
                 self.repair_manager.update(
                     "persistent_target_rejection", self.rejection_counts[identity] >= 3
                 )
-            self._transition(identity, OwnershipEvent.COMMAND_REJECTED)
+            self._schedule_write_retry(identity)
         elif outcome.acknowledgement_status in {
             AcknowledgementStatus.ACKNOWLEDGED,
             AcknowledgementStatus.INFERRED_ACKNOWLEDGED,
@@ -1241,7 +1268,10 @@ class ZoneRuntime:
             self.rejection_counts[identity] = 0
             if self.repair_manager is not None:
                 self.repair_manager.update("persistent_target_rejection", False)
-            self._create_task(self._async_drain_queued(identity))
+            self._schedule_write_retry(identity)
+            if self.broker.state_counts(identity)[1]:
+                self._create_task(self._async_drain_queued(identity))
+        self._publish_control_state()
 
     @callback
     def schedule_environmental_snapshot(self) -> None:
@@ -2010,8 +2040,12 @@ class ZoneRuntime:
                 queued=outcome.reason == "command_interval",
                 explicit_transition=True,
             )
-            if outcome.reason == "command_outcome_unknown":
-                self._transition(identity, OwnershipEvent.COMMAND_UNKNOWN)
+            if (
+                outcome.reason == "external_temperature_target"
+                and self.ownership[identity].ownership is not Ownership.MANUAL_OVERRIDE
+            ):
+                self._transition(identity, OwnershipEvent.EXTERNAL_TARGET)
+            self._schedule_write_retry(identity)
         values = {
             **self.values,
             "command_outcomes": outcomes,
@@ -2021,6 +2055,7 @@ class ZoneRuntime:
         if self.stale_safety_applied:
             values["control_status"] = "stale_safety"
         self.publish(values)
+        self._publish_control_state()
         self.trace_ring.add(
             generation=int(self.values.get("calculation_generation", 0)),
             payload={
@@ -2179,6 +2214,15 @@ class ZoneRuntime:
             if target_state in readiness:
                 return target_state.value
         data_states = {state.data_readiness for state in self.ownership.values()}
+        if isinstance(self.broker, CommandBroker) and not data_states.intersection(
+            {DataReadiness.INVALID, DataReadiness.HOLD_LAST_GOOD}
+        ):
+            delivery = {
+                self.broker.delivery_state(identity)["status"] for identity in self.ownership
+            }
+            for status in ("write_failed", "retry_pending"):
+                if status in delivery:
+                    return status
         for data_state in (
             DataReadiness.INVALID,
             DataReadiness.HOLD_LAST_GOOD,
@@ -2529,9 +2573,15 @@ class ZoneRuntime:
                 queued=outcome.reason == "command_interval",
                 explicit_transition=result.explicit_transition,
             )
-            if outcome.reason == "command_outcome_unknown":
-                self._transition(target.registry_identity, OwnershipEvent.COMMAND_UNKNOWN)
+            if (
+                outcome.reason == "external_temperature_target"
+                and self.ownership[target.registry_identity].ownership
+                is not Ownership.MANUAL_OVERRIDE
+            ):
+                self._transition(target.registry_identity, OwnershipEvent.EXTERNAL_TARGET)
+            self._schedule_write_retry(target.registry_identity)
         self.publish({**self.values, "command_outcomes": outcomes})
+        self._publish_control_state()
         self.trace_ring.add(
             generation=int(self.values.get("calculation_generation", 0)),
             payload={
@@ -3030,13 +3080,12 @@ class ZoneRuntime:
             ),
             None,
         )
-        observed_target = (
+        capability = (
             None
             if configured is None
-            else self._fingerprint(
-                capability_from_state(self.hass.states.get(str(configured["entity_id"])))
-            )
+            else capability_from_state(self.hass.states.get(str(configured["entity_id"])))
         )
+        observed_target = self._fingerprint(capability) if capability is not None else None
         return BrokerPreflight(
             identity,
             self.configuration_generation,
@@ -3044,7 +3093,9 @@ class ZoneRuntime:
             self.capability_generations[identity],
             state.revision,
             state.ownership,
-            state.target_readiness is TargetReadiness.AVAILABLE_SUPPORTED,
+            state.target_readiness is TargetReadiness.AVAILABLE_SUPPORTED
+            and capability is not None
+            and capability.available,
             state.data_readiness
             in {DataReadiness.READY, DataReadiness.DEGRADED_READY, DataReadiness.FALLBACK_READY},
             get_lease_registry(self.hass).owner(identity),
@@ -3136,6 +3187,10 @@ class ZoneRuntime:
             identity: state.target_readiness.value for identity, state in self.ownership.items()
         }
         values["control_status"] = self._control_status()
+        if isinstance(self.broker, CommandBroker):
+            values["command_delivery"] = {
+                identity: self.broker.delivery_state(identity) for identity in self.ownership
+            }
         values["resume_required"] = any(state.resume_required for state in self.ownership.values())
         values["control_eligible"] = bool(values.get("control_eligible")) and all(
             state.ownership is Ownership.OWNED
@@ -3262,16 +3317,30 @@ class ZoneRuntime:
         explicit_transition: bool,
     ) -> None:
         if acknowledgement:
+            deadline = (
+                self.broker.acknowledgement_deadline(identity)
+                if isinstance(self.broker, CommandBroker)
+                else None
+            )
             self._replace_timer(
                 f"ack:{identity}",
-                ACKNOWLEDGEMENT_DEADLINE.total_seconds(),
+                max(0.0, (deadline - dt_util.utcnow()).total_seconds())
+                if deadline
+                else ACKNOWLEDGEMENT_DEADLINE.total_seconds(),
                 lambda: self._create_task(self._async_acknowledgement_timeout(identity)),
             )
         if queued:
             interval = HARD_COMMAND_INTERVAL if explicit_transition else ORDINARY_COMMAND_INTERVAL
+            deadline = (
+                self.broker.next_dispatch_at(identity, explicit=explicit_transition)
+                if isinstance(self.broker, CommandBroker)
+                else None
+            )
             self._replace_timer(
                 f"queue:{identity}",
-                interval.total_seconds(),
+                max(0.0, (deadline - dt_util.utcnow()).total_seconds())
+                if deadline
+                else interval.total_seconds(),
                 lambda: self._create_task(self._async_drain_queued(identity)),
             )
 
@@ -3293,20 +3362,27 @@ class ZoneRuntime:
             return
         outcome = await self.broker.async_acknowledgement_timeout(identity, now=dt_util.utcnow())
         if outcome is not None:
-            self._transition(identity, OwnershipEvent.COMMAND_UNKNOWN)
+            self.stale_safety_applied.discard(identity)
             self.publish({**self.values, "last_command_outcome": outcome.reason})
+            self._schedule_write_retry(identity)
+            self._publish_control_state()
+
+    def _schedule_write_retry(self, identity: str) -> None:
+        if not isinstance(self.broker, CommandBroker):
+            return
+        if (cancel := self.timers.pop(f"retry:{identity}", None)) is not None:
+            cancel()
+        retry_at = self.broker.delivery_state(identity)["next_retry_at"]
+        if isinstance(retry_at, str):
+            self._replace_timer(
+                f"retry:{identity}",
+                max(0.0, (datetime.fromisoformat(retry_at) - dt_util.utcnow()).total_seconds()),
+                self.async_request_snapshot,
+            )
 
     async def _async_drain_queued(self, identity: str) -> None:
-        if self.broker is None:
-            return
-        outcome = await self.broker.async_drain_queued(identity, now=dt_util.utcnow())
-        if outcome is not None:
-            self._schedule_broker_deadline(
-                identity,
-                acknowledgement=(outcome.acknowledgement_status is AcknowledgementStatus.PENDING),
-                queued=outcome.reason == "command_interval",
-                explicit_transition=False,
-            )
+        # Recalculate current policy and inputs; never retry an expired queued intent.
+        self.async_request_snapshot()
 
     def _outdoor_sample(self, now: datetime, state: State | None = None) -> OutdoorSample | None:
         outdoor = state or self.hass.states.get(str(self.entry.data.get("outdoor_source", "")))

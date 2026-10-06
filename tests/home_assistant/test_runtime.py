@@ -26,6 +26,7 @@ from custom_components.athb.adapters.storage import (
     ControlStoreState,
     HomeAssistantControlStorageBackend,
     StoredActuator,
+    StoredCommand,
     serialize_control_state,
 )
 from custom_components.athb.calculation import CapturedTarget, calculate_runtime_snapshot
@@ -54,6 +55,252 @@ from custom_components.athb.core.sources import SourceKind, SourceState
 from custom_components.athb.runtime import ZoneRuntime
 from tests.virtual_installations.runner import _captured
 from tests.virtual_installations.schema import load_scenarios
+
+
+async def _start_delivery_runtime(
+    hass: HomeAssistant, *, outcome: str = "ignore", stored: ControlStoreState | None = None
+) -> tuple[ZoneRuntime, list[ServiceCall]]:
+    calls: list[ServiceCall] = []
+    attributes = {
+        "hvac_modes": ["off", "heat"],
+        "supported_features": 1,
+        "min_temp": 16.0,
+        "max_temp": 30.0,
+        "target_temp_step": 0.5,
+        "temperature": 23.0,
+        "current_temperature": 20.0,
+        "unit_of_measurement": "°C",
+    }
+
+    async def write(call: ServiceCall) -> None:
+        calls.append(call)
+        if outcome == "error":
+            raise TimeoutError("temporary transport error")
+        if outcome == "ack":
+            hass.states.async_set(
+                "climate.target",
+                "heat",
+                {**attributes, "temperature": call.data["temperature"]},
+                context=call.context,
+            )
+
+    hass.services.async_register("climate", "set_temperature", write)
+    hass.states.async_set("sensor.room", "20", {"unit_of_measurement": "°C"})
+    hass.states.async_set("sensor.outdoor", "5", {"unit_of_measurement": "°C"})
+    hass.states.async_set("climate.target", "heat", attributes)
+    entry = MockConfigEntry(
+        domain="athb",
+        title="Zone",
+        entry_id="delivery-test",
+        data={
+            "zone_uuid": "delivery-test",
+            "primary_temperature": "sensor.room",
+            "outdoor_source": "sensor.outdoor",
+            "rh_mode": "declared",
+            "rh_declared": 50.0,
+            "targets": [
+                {
+                    "target_uuid": "target-1",
+                    "entity_id": "climate.target",
+                    "registry_identity": "registry-1",
+                }
+            ],
+        },
+        options={
+            "comfort_strategy": "balanced",
+            "control_enabled": True,
+            "minimum_control_temperature": 18.0,
+            "maximum_control_temperature": 26.0,
+        },
+    )
+    entry.add_to_hass(hass)
+    runtime = ZoneRuntime(hass, cast(Any, entry), "delivery-test", "balanced", "off", True)
+    if stored is not None:
+        await HomeAssistantControlStorageBackend(hass, "delivery-test").async_save(
+            serialize_control_state(
+                replace(
+                    stored,
+                    configuration_fingerprint=runtime._configuration_fingerprint(),
+                    strategy="balanced",
+                )
+            )
+        )
+    await runtime.async_start()
+    assert runtime.controller is not None
+    await runtime.controller.async_wait_idle()
+    await hass.async_block_till_done()
+    return runtime, calls
+
+
+@pytest.mark.parametrize("service_outcome", ["ignore", "error"])
+async def test_runtime_retries_five_times_without_resume_and_recalculates_latest_target(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    service_outcome: str,
+) -> None:
+    runtime, calls = await _start_delivery_runtime(hass, outcome=service_outcome)
+    clock = [dt_util.utcnow()]
+    monkeypatch.setattr(dt_util, "utcnow", lambda: clock[0])
+    try:
+        assert len(calls) == 1
+        assert runtime.broker is not None
+        for attempt in range(5):
+            clock[0] += timedelta(seconds=30)
+            await runtime._async_acknowledgement_timeout("registry-1")
+            assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+            assert not runtime.ownership["registry-1"].resume_required
+            assert runtime.values["command_delivery"]["registry-1"]["attempts"] == attempt + 1
+            clock[0] += timedelta(seconds=1)
+            runtime.async_request_snapshot()
+            assert runtime.controller is not None
+            await runtime.controller.async_wait_idle()
+            await hass.async_block_till_done()
+            assert len(calls) == attempt + 1
+            clock[0] += timedelta(seconds=29)
+            runtime.async_request_snapshot()
+            assert runtime.controller is not None
+            await runtime.controller.async_wait_idle()
+            await hass.async_block_till_done()
+        assert len(calls) == 5
+        assert runtime.values["control_status"] == "write_failed"
+        assert "retry:registry-1" not in runtime.timers
+        # Current policy, not the stale earlier command, controls the next series.
+        hass.config_entries.async_update_entry(
+            runtime.entry,
+            options={
+                **runtime.entry.options,
+                "minimum_control_temperature": 16.0,
+                "fallback_heating_c": 16.0,
+            },
+        )
+        runtime._mark_explicit_transition("comfort")
+        runtime.async_request_snapshot()
+        await runtime.controller.async_wait_idle()
+        await hass.async_block_till_done()
+        assert len(calls) == 6
+        assert calls[-1].data["temperature"] < calls[0].data["temperature"]
+        assert runtime.values["command_delivery"]["registry-1"]["attempts"] == 1
+    finally:
+        await runtime.async_unload()
+
+
+@pytest.mark.parametrize("manual", [False, True])
+async def test_pending_target_unavailable_and_return_never_create_manual_override(
+    hass: HomeAssistant,
+    manual: bool,
+) -> None:
+    runtime, calls = await _start_delivery_runtime(hass)
+    try:
+        assert len(calls) == 1
+        if manual:
+            runtime._transition("registry-1", OwnershipEvent.EXTERNAL_TARGET)
+        old = hass.states.get("climate.target")
+        assert old is not None
+        hass.states.async_set("climate.target", "unavailable")
+        await hass.async_block_till_done()
+        assert runtime.broker is not None
+        assert runtime.broker.state_counts("registry-1")[0] == 0
+        assert runtime.ownership["registry-1"].external_revision == int(manual)
+        assert runtime.ownership["registry-1"].ownership is (
+            Ownership.MANUAL_OVERRIDE if manual else Ownership.OWNED
+        )
+        assert not any(f"{prefix}:registry-1" in runtime.timers for prefix in ("ack", "retry"))
+        hass.states.async_set("climate.target", "heat", old.attributes)
+        await hass.async_block_till_done()
+        assert runtime.ownership["registry-1"].external_revision == int(manual)
+        runtime.async_request_snapshot()
+        assert runtime.controller is not None
+        await runtime.controller.async_wait_idle()
+        await hass.async_block_till_done()
+        assert runtime.ownership["registry-1"].ownership is (
+            Ownership.MANUAL_OVERRIDE if manual else Ownership.OWNED
+        )
+    finally:
+        await runtime.async_unload()
+
+
+@pytest.mark.parametrize("expired", [False, True])
+async def test_restart_restores_manual_override_until_its_original_expiry(
+    hass: HomeAssistant,
+    expired: bool,
+) -> None:
+    expiry = dt_util.utcnow() + timedelta(minutes=-1 if expired else 60)
+    actuator = StoredActuator(
+        "registry-1",
+        "manual_override",
+        4,
+        1,
+        "external_temperature_target",
+        expiry.isoformat(),
+        False,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    stored = ControlStoreState(2, "prior", False, "old", "balanced", (actuator,))
+    runtime, calls = await _start_delivery_runtime(hass, stored=stored)
+    try:
+        assert runtime.ownership["registry-1"].ownership is (
+            Ownership.OWNED if expired else Ownership.MANUAL_OVERRIDE
+        )
+        if not expired:
+            assert calls == []
+            assert runtime.ownership["registry-1"].override_expiry == expiry
+            assert "override:registry-1" in runtime.timers
+        else:
+            assert len(calls) == 1
+    finally:
+        await runtime.async_unload()
+
+
+@pytest.mark.parametrize("legacy_fault", [False, True])
+async def test_restart_with_uncertain_write_reconciles_without_replaying_or_resume(
+    hass: HomeAssistant,
+    legacy_fault: bool,
+) -> None:
+    command = StoredCommand(
+        "obsolete",
+        "registry-1",
+        "old-high-target",
+        "old-context",
+        1,
+        1,
+        1,
+        1,
+        "2026-09-11T12:00:00+00:00",
+        "2026-09-11T12:05:00+00:00",
+        True,
+    )
+    actuator = StoredActuator(
+        "registry-1",
+        "command_fault" if legacy_fault else "owned",
+        4,
+        0,
+        "command_outcome_unknown" if legacy_fault else None,
+        None,
+        legacy_fault,
+        None,
+        "obsolete",
+        "old-high-target",
+        "old-context",
+        command,
+    )
+    runtime, calls = await _start_delivery_runtime(
+        hass,
+        outcome="ack",
+        stored=ControlStoreState(2, "prior", False, "old", "balanced", (actuator,)),
+    )
+    try:
+        assert len(calls) == 1
+        assert calls[0].data["temperature"] == 18.0
+        assert calls[0].context.id != "old-context"
+        assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+        assert not runtime.ownership["registry-1"].resume_required
+        assert runtime.values["command_delivery"]["registry-1"]["status"] == "acknowledged"
+    finally:
+        await runtime.async_unload()
 
 
 def _runtime(*, entry_id: str = "entry-1", target_identity: str = "registry-1") -> ZoneRuntime:
@@ -3203,7 +3450,7 @@ async def test_runtime_apply_schedules_deadlines_and_marks_unknown(
     runtime.broker = cast(Any, Broker())
     await runtime._async_apply_calculation(calculation)
     assert runtime.values["command_outcomes"] == {"target-living-room": "command_outcome_unknown"}
-    assert runtime.ownership["registry-climate-living-room"].ownership is Ownership.COMMAND_FAULT
+    assert runtime.ownership["registry-climate-living-room"].ownership is Ownership.OWNED
     assert "ack:registry-climate-living-room" in runtime.timers
     for cancel in runtime.timers.values():
         cancel()
@@ -3500,8 +3747,9 @@ def test_climate_target_ack_does_not_renew_primary_temperature_feedback(
     assert runtime.primary_feedback_at == after
 
 
-async def test_broker_timer_callbacks_cover_timeout_and_queue_paths(
+async def test_broker_timer_callbacks_keep_ownership_and_recalculate_fresh_policy(
     hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runtime = _runtime()
     runtime.hass = hass
@@ -3534,9 +3782,12 @@ async def test_broker_timer_callbacks_cover_timeout_and_queue_paths(
     runtime.broker = cast(Any, Broker())
     await runtime._async_acknowledgement_timeout("registry-1")
     assert runtime.values["last_command_outcome"] == "command_outcome_unknown"
+    assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+    snapshot = MagicMock()
+    monkeypatch.setattr(ZoneRuntime, "async_request_snapshot", snapshot)
     await runtime._async_drain_queued("registry-1")
-    assert "ack:registry-1" in runtime.timers
-    assert "queue:registry-1" in runtime.timers
+    snapshot.assert_called_once()
+    assert runtime.timers == {}
     for cancel in runtime.timers.values():
         cancel()
 

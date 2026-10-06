@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol
 
@@ -23,6 +23,7 @@ HARD_COMMAND_INTERVAL = timedelta(seconds=10)
 ACKNOWLEDGEMENT_DEADLINE = timedelta(seconds=30)
 SERVICE_CALL_DEADLINE_SECONDS = 15.0
 RELEASE_HYSTERESIS_C = 0.1
+MAX_WRITE_ATTEMPTS = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +133,12 @@ class _TargetBrokerState:
     last_dispatch_at: datetime | None = None
     last_feedback_status: AcknowledgementStatus | None = None
     last_feedback_reason: str | None = None
+    goal: TargetFingerprint | None = None
+    attempts: int = 0
+    write_status: str = "idle"
+    last_error: str | None = None
+    baseline: TargetFingerprint | None = None
+    uncertain: list[PendingCommand] = field(default_factory=list)
 
 
 class ClimateTemperatureService(Protocol):
@@ -395,27 +402,111 @@ class CommandBroker:
         return (int(state.pending is not None), int(state.queued is not None))
 
     def expected_automatic_echo(self, feedback: FeedbackObservation, *, now: datetime) -> bool:
-        """Recognize only bounded echoes of an actually dispatched command.
+        """Recognize dispatched echoes, including at most five unresolved writes.
 
-        Service events are not acknowledgements. The caller must still wait for
-        authoritative target feedback. Retain one completed command only for
-        duplicate callbacks within its original acknowledgement deadline.
+        A service event never acknowledges a command. Uncertain writes retain
+        their exact value and ownership/external revision until recovery; this
+        prevents a late automatic response from being labelled manual.
         """
 
         state = self._states.get(feedback.target_identity)
         if state is None or feedback.user_initiated or not self._gate_open:
             return False
-        command = state.pending or state.completed
-        if command is None or not command.dispatched or now >= command.acknowledgement_deadline:
-            return False
         current = self._preflight(feedback.target_identity)
         if current.ownership is not Ownership.OWNED:
             return False
-        decision = classify_acknowledgement(command.acknowledgement_contract(), feedback)
-        return decision.status in {
-            AcknowledgementStatus.ACKNOWLEDGED,
-            AcknowledgementStatus.INFERRED_ACKNOWLEDGED,
+        commands = [*reversed(state.uncertain), state.pending, state.completed]
+        return any(
+            command is not None
+            and command.dispatched
+            and (command in state.uncertain or now < command.acknowledgement_deadline)
+            and classify_acknowledgement(command.acknowledgement_contract(), feedback).status
+            in {AcknowledgementStatus.ACKNOWLEDGED, AcknowledgementStatus.INFERRED_ACKNOWLEDGED}
+            for command in commands
+        )
+
+    def delivery_state(self, target_identity: str) -> dict[str, object]:
+        """Bounded, context-free command diagnostics."""
+
+        state = self._states.get(target_identity, _TargetBrokerState())
+        retry_at = (
+            state.last_dispatch_at + ORDINARY_COMMAND_INTERVAL
+            if state.last_dispatch_at is not None
+            and state.write_status == "retry_pending"
+            and state.attempts < MAX_WRITE_ATTEMPTS
+            else None
+        )
+        return {
+            "status": state.write_status,
+            "attempts": state.attempts,
+            "max_attempts": MAX_WRITE_ATTEMPTS,
+            "retry_interval_seconds": ORDINARY_COMMAND_INTERVAL.total_seconds(),
+            "last_error": state.last_error,
+            "last_sent_at": state.last_dispatch_at.isoformat() if state.last_dispatch_at else None,
+            "last_acknowledged_at": (
+                state.acknowledged.acknowledged_at.isoformat() if state.acknowledged else None
+            ),
+            "next_retry_at": retry_at.isoformat() if retry_at else None,
         }
+
+    def acknowledgement_deadline(self, target_identity: str) -> datetime | None:
+        state = self._states.get(target_identity)
+        return state.pending.acknowledgement_deadline if state and state.pending else None
+
+    def next_dispatch_at(self, target_identity: str, *, explicit: bool) -> datetime | None:
+        state = self._states.get(target_identity)
+        if state is None or state.last_dispatch_at is None:
+            return None
+        interval = (
+            HARD_COMMAND_INTERVAL
+            if explicit and state.last_error is None
+            else ORDINARY_COMMAND_INTERVAL
+        )
+        return state.last_dispatch_at + interval
+
+    def _remember_uncertain(self, state: _TargetBrokerState, command: PendingCommand) -> None:
+        if command not in state.uncertain:
+            state.uncertain.append(command)
+            del state.uncertain[:-MAX_WRITE_ATTEMPTS]
+
+    @staticmethod
+    def _write_failed(state: _TargetBrokerState, reason: str) -> None:
+        state.last_error = reason
+        state.write_status = (
+            "write_failed" if state.attempts >= MAX_WRITE_ATTEMPTS else "retry_pending"
+        )
+
+    @staticmethod
+    def _live_target_reason(
+        state: _TargetBrokerState, current: BrokerPreflight, intent: NormalizedIntent
+    ) -> str | None:
+        known = [
+            state.baseline,
+            *(
+                command.requested
+                for command in state.uncertain
+                if command.intent.ownership_revision == intent.ownership_revision
+                and command.intent.external_revision == intent.external_revision
+                and command.intent.capability_generation == intent.capability_generation
+            ),
+        ]
+        if state.acknowledged is not None:
+            known.append(state.acknowledged.fingerprint)
+        if (
+            current.observed_target is not None
+            and any(value is not None for value in known)
+            and not any(
+                value is not None
+                and _target_matches(
+                    value,
+                    current.observed_target,
+                    tolerance=min(intent.step_ha / 4, intent.feedback_resolution_ha),
+                )
+                for value in known
+            )
+        ):
+            return "external_temperature_target"
+        return None
 
     def close_gate(self) -> None:
         self._gate_open = False
@@ -425,8 +516,10 @@ class CommandBroker:
     def invalidate(self, target_identity: str) -> None:
         self._states.setdefault(target_identity, _TargetBrokerState()).queued = None
 
-    async def async_resume_target(self, target_identity: str) -> None:
-        """Resolve an uncertain command only on explicit user resume."""
+    async def async_resume_target(
+        self, target_identity: str, *, reason: str = "explicit_resume"
+    ) -> None:
+        """Discard pending delivery before explicit resume or target reconciliation."""
 
         state = self._states.setdefault(target_identity, _TargetBrokerState())
         pending = state.pending
@@ -435,8 +528,22 @@ class CommandBroker:
         state.queued = None
         state.last_feedback_status = None
         state.last_feedback_reason = None
+        state.goal = None
+        state.attempts = 0
+        state.write_status = "idle"
+        state.last_error = None
+        state.baseline = None
+        state.uncertain.clear()
         if pending is not None:
-            await self._persistence.async_resolve(pending, "explicit_resume")
+            await self._persistence.async_resolve(pending, reason)
+
+    async def async_target_unavailable(self, target_identity: str) -> None:
+        """Suspend delivery, not ownership; returning targets use live reconciliation."""
+
+        await self.async_resume_target(target_identity, reason="target_unavailable")
+        state = self._states[target_identity]
+        state.acknowledged = None
+        state.write_status = "waiting_target"
 
     @staticmethod
     def _feedback_during_dispatch(
@@ -475,8 +582,12 @@ class CommandBroker:
                 AcknowledgementStatus.PENDING,
                 "command_pending",
             )
+        requested = intent_fingerprint(intent)
+        if state.goal != requested:
+            state.goal = requested
+            state.attempts = 0
+            state.write_status = "idle"
         if intent.recovery_reassertion:
-            requested = intent_fingerprint(intent)
             if current.observed_target is not None and _target_matches(
                 requested,
                 current.observed_target,
@@ -490,6 +601,8 @@ class CommandBroker:
                     now,
                 )
                 state.queued = None
+                state.write_status = "acknowledged"
+                state.last_error = None
                 return CommandOutcome(
                     None,
                     DispatchStatus.NOT_DISPATCHED,
@@ -498,9 +611,41 @@ class CommandBroker:
                 )
             # A prior acknowledgement is not proof of the live target after recovery.
             state.acknowledged = None
+            state.baseline = current.observed_target
+        elif state.baseline is None and state.acknowledged is None:
+            state.baseline = current.observed_target
+        live_reason = self._live_target_reason(state, current, intent)
+        if live_reason is not None:
+            state.queued = None
+            return CommandOutcome(
+                None,
+                DispatchStatus.NOT_DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                live_reason,
+            )
+        if state.attempts >= MAX_WRITE_ATTEMPTS and state.last_error is not None:
+            return CommandOutcome(
+                None,
+                DispatchStatus.NOT_DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "write_failed",
+            )
+        if (
+            state.last_error is not None
+            and state.last_dispatch_at is not None
+            and now < state.last_dispatch_at + ORDINARY_COMMAND_INTERVAL
+        ):
+            state.write_status = "retry_pending"
+            state.queued = intent
+            return CommandOutcome(
+                None,
+                DispatchStatus.NOT_DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "command_interval",
+            )
         chatter = anti_chatter_reason(
             intent,
-            acknowledged=state.acknowledged,
+            acknowledged=state.acknowledged if state.last_error is None else None,
             last_dispatch_at=state.last_dispatch_at,
             now=now,
         )
@@ -517,6 +662,7 @@ class CommandBroker:
     async def _async_dispatch(
         self, intent: NormalizedIntent, state: _TargetBrokerState, now: datetime
     ) -> CommandOutcome:
+        state.queued = None
         context = self._context_factory()
         command = PendingCommand(
             self._command_id_factory(),
@@ -548,6 +694,16 @@ class CommandBroker:
                 AcknowledgementStatus.NOT_APPLICABLE,
                 reason or "dispatch_gate_closed",
             )
+        live_reason = self._live_target_reason(state, current, intent)
+        if live_reason is not None:
+            state.pending = None
+            await self._persistence.async_resolve(command, live_reason)
+            return CommandOutcome(
+                command.command_id,
+                DispatchStatus.NOT_DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                live_reason,
+            )
         dispatched = PendingCommand(
             command.command_id,
             command.intent,
@@ -566,20 +722,56 @@ class CommandBroker:
                 AcknowledgementStatus.NOT_APPLICABLE,
                 "storage_verification_failed",
             )
+        current = self._preflight(intent.target_registry_identity)
+        reason = (
+            _preflight_reason(intent, current, now)
+            or self._live_target_reason(state, current, intent)
+            or ("dispatch_gate_closed" if not self._gate_open else None)
+        )
+        if reason is not None:
+            state.pending = None
+            await self._persistence.async_resolve(dispatched, reason)
+            return CommandOutcome(
+                dispatched.command_id,
+                DispatchStatus.NOT_DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                reason,
+            )
         state.pending = dispatched
+        state.attempts += 1
+        state.last_dispatch_at = now
+        state.write_status = "awaiting_acknowledgement"
+        state.last_feedback_status = None
+        state.last_feedback_reason = None
         try:
             await asyncio.wait_for(
                 self._service.async_set_temperature(service_payload(intent), context),
                 timeout=self._service_deadline_seconds,
             )
         except Exception:
+            completed_feedback = self._feedback_during_dispatch(state)
+            if completed_feedback is not None:
+                return CommandOutcome(
+                    dispatched.command_id,
+                    DispatchStatus.FAILED,
+                    completed_feedback[0],
+                    completed_feedback[1],
+                )
+            if state.pending != dispatched:
+                return CommandOutcome(
+                    dispatched.command_id,
+                    DispatchStatus.FAILED,
+                    AcknowledgementStatus.NOT_APPLICABLE,
+                    "command_cancelled",
+                )
+            self._remember_uncertain(state, dispatched)
+            self._write_failed(state, "service_error")
             return CommandOutcome(
                 dispatched.command_id,
                 DispatchStatus.FAILED,
                 AcknowledgementStatus.UNKNOWN,
                 "command_outcome_unknown",
             )
-        state.last_dispatch_at = now
         completed_feedback = self._feedback_during_dispatch(state)
         if completed_feedback is not None:
             return CommandOutcome(
@@ -587,6 +779,13 @@ class CommandBroker:
                 DispatchStatus.DISPATCHED,
                 completed_feedback[0],
                 completed_feedback[1],
+            )
+        if state.pending != dispatched:
+            return CommandOutcome(
+                dispatched.command_id,
+                DispatchStatus.DISPATCHED,
+                AcknowledgementStatus.NOT_APPLICABLE,
+                "command_cancelled",
             )
         return CommandOutcome(
             dispatched.command_id,
@@ -600,16 +799,49 @@ class CommandBroker:
     ) -> CommandOutcome:
         state = self._states.setdefault(feedback.target_identity, _TargetBrokerState())
         pending = state.pending
-        if pending is not None and (
-            not pending.dispatched or now >= pending.acknowledgement_deadline
-        ):
+        if pending is not None and not pending.dispatched:
             return CommandOutcome(
                 pending.command_id,
                 DispatchStatus.NOT_DISPATCHED,
                 AcknowledgementStatus.NOT_APPLICABLE,
                 "outside_pending_acknowledgement_window",
             )
-        if pending is None and self.expected_automatic_echo(feedback, now=now):
+        if pending is not None and now >= pending.acknowledgement_deadline:
+            await self.async_acknowledgement_timeout(feedback.target_identity, now=now)
+            pending = None
+        if self.expected_automatic_echo(feedback, now=now) and (
+            pending is None
+            or not _target_matches(
+                pending.requested,
+                feedback.observed,
+                tolerance=min(pending.intent.step_ha / 4, pending.intent.feedback_resolution_ha),
+            )
+        ):
+            # An old response must never acknowledge a different newer command.
+            if pending is None and state.goal is not None:
+                command = next(
+                    (
+                        item
+                        for item in reversed(state.uncertain)
+                        if item.requested == state.goal
+                        and _target_matches(
+                            item.requested,
+                            feedback.observed,
+                            tolerance=min(
+                                item.intent.step_ha / 4, item.intent.feedback_resolution_ha
+                            ),
+                        )
+                    ),
+                    None,
+                )
+                if command is not None:
+                    self._acknowledge(state, command, feedback, now)
+                    return CommandOutcome(
+                        command.command_id,
+                        DispatchStatus.DISPATCHED,
+                        AcknowledgementStatus.INFERRED_ACKNOWLEDGED,
+                        "late_target_acknowledged",
+                    )
             return CommandOutcome(
                 None,
                 DispatchStatus.NOT_DISPATCHED,
@@ -629,23 +861,39 @@ class CommandBroker:
             AcknowledgementStatus.ACKNOWLEDGED,
             AcknowledgementStatus.INFERRED_ACKNOWLEDGED,
         }:
-            state.acknowledged = AcknowledgedTarget(
-                feedback.observed,
-                pending.intent.normalized_room_c,
-                pending.intent.normalized_low_room_c,
-                pending.intent.normalized_high_room_c,
-                now,
-            )
+            self._acknowledge(state, pending, feedback, now)
             state.pending = None
             state.completed = pending
             await self._persistence.async_resolve(pending, decision.reason)
         elif decision.status is AcknowledgementStatus.REJECTED or decision.manual_intervention:
             state.pending = None
             state.queued = None
+            if decision.status is AcknowledgementStatus.REJECTED:
+                self._remember_uncertain(state, pending)
+                state.baseline = feedback.observed
+                self._write_failed(state, "target_rejected")
             await self._persistence.async_resolve(pending, decision.reason)
         return CommandOutcome(
             pending.command_id, DispatchStatus.DISPATCHED, decision.status, decision.reason
         )
+
+    @staticmethod
+    def _acknowledge(
+        state: _TargetBrokerState,
+        command: PendingCommand,
+        feedback: FeedbackObservation,
+        now: datetime,
+    ) -> None:
+        state.acknowledged = AcknowledgedTarget(
+            feedback.observed,
+            command.intent.normalized_room_c,
+            command.intent.normalized_low_room_c,
+            command.intent.normalized_high_room_c,
+            now,
+        )
+        state.write_status = "acknowledged"
+        state.last_error = None
+        state.baseline = feedback.observed
 
     async def async_acknowledgement_timeout(
         self, target_identity: str, *, now: datetime
@@ -656,6 +904,8 @@ class CommandBroker:
         pending = state.pending
         state.pending = None
         state.queued = None
+        self._remember_uncertain(state, pending)
+        self._write_failed(state, "acknowledgement_timeout")
         await self._persistence.async_resolve(pending, "command_outcome_unknown")
         return CommandOutcome(
             pending.command_id,

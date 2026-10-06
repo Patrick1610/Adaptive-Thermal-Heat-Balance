@@ -317,21 +317,9 @@ def reduce_ownership(
             "target_replaced",
         )
     if event in {OwnershipEvent.COMMAND_REJECTED, OwnershipEvent.COMMAND_UNKNOWN}:
-        return OwnershipTransition(
-            replace(
-                state,
-                ownership=Ownership.COMMAND_FAULT,
-                revision=revision,
-                override_reason=(
-                    "coerced_or_rejected"
-                    if event is OwnershipEvent.COMMAND_REJECTED
-                    else "command_outcome_unknown"
-                ),
-                resume_required=True,
-            ),
-            True,
-            "command_fault",
-        )
+        # Delivery outcome is not a change of controller ownership. The broker
+        # owns bounded retries and write_failed; neither requires user Resume.
+        return OwnershipTransition(state, False, "write_delivery_failed")
     if event is OwnershipEvent.LATE_ACKNOWLEDGED:
         if (
             state.ownership is not Ownership.COMMAND_FAULT

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.25
+
+- Separate climate-write failures from controller ownership: service errors, missing feedback and
+  rejected automatic commands no longer latch `command_fault` or require Resume.
+- Try each normalized scalar or atomic range target at most five times, with 60 seconds between
+  retries. Report `retry_pending` / `write_failed`, attempts, timestamps and cause in diagnostics
+  and target attributes. A new normalized target or target recovery can start a fresh series.
+- Recalculate current inputs and policy on retry, rate-limit changing goals, and verify live
+  setpoints before dispatch so genuine external interventions remain manual overrides.
+- Recognize late feedback from the last five uncertain writes without acknowledging a different
+  newer target. Keep explicit user actions and ownership/capability/external-revision guards.
+- Suspend pending delivery on target unavailability without creating a manual override. Restore
+  existing overrides with their original expiry, reconcile unresolved journals without replay,
+  and automatically migrate ordinary legacy write-fault latches. Hard storage/recovery gates remain.
+
 ## 0.2.24
 
 - Correlate delegated climate service calls and target feedback with the exact, actually

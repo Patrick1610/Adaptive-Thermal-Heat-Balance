@@ -869,7 +869,7 @@ def _restart_variants() -> None:
         configuration_fingerprint="fingerprint",
         strategy="balanced",
     )
-    assert unclean.requires_resume
+    assert not unclean.requires_resume
     assert unclean.reason == "unresolved_command"
     assert unclean.state.actuators[0].pending_command is None
 
@@ -995,7 +995,7 @@ async def _special_case(
         recovery = prepare_startup_recovery(
             loaded, run_id="new-run", configuration_fingerprint="fingerprint", strategy="balanced"
         )
-        assert recovery.requires_resume
+        assert not recovery.requires_resume
         assert recovery.state.actuators[0].pending_command is None
         assert recovery.reason == "unresolved_command"
         state = reduce_ownership(

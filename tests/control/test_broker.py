@@ -6,6 +6,8 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from custom_components.athb.adapters.broker import (
     AcknowledgedTarget,
     BrokerPreflight,
@@ -154,6 +156,269 @@ def test_payloads_are_exact_and_never_include_hvac_mode() -> None:
     }
 
 
+@pytest.mark.parametrize("service_error", [False, True])
+def test_five_attempts_are_spaced_and_same_grid_target_does_not_reset(service_error: bool) -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    service.error = service_error
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        for attempt in range(5):
+            now = NOW + timedelta(seconds=60 * attempt)
+            intent = replace(_intent(), created_at=now, expires_at=now + timedelta(minutes=2))
+            await broker.async_submit(intent, now=now)
+            assert broker.delivery_state("registry-1")["attempts"] == attempt + 1
+            timeout = await broker.async_acknowledgement_timeout(
+                "registry-1", now=now + timedelta(seconds=30)
+            )
+            assert timeout is not None
+            blocked = await broker.async_submit(
+                replace(intent, continuous_bounded_room_c=19.9, explicit_transition=True),
+                now=now + timedelta(seconds=59),
+            )
+            assert blocked.reason == ("write_failed" if attempt == 4 else "command_interval")
+        assert broker.delivery_state("registry-1")["status"] == "write_failed"
+        assert broker.delivery_state("registry-1")["next_retry_at"] is None
+        now = NOW + timedelta(minutes=6)
+        failed = await broker.async_submit(
+            replace(_intent(), created_at=now, expires_at=now + timedelta(minutes=2)), now=now
+        )
+        assert failed.reason == "write_failed"
+        assert len(service.calls) == 5
+        # A lowering is a new goal, not blocked by the exhausted earlier raise.
+        lowered = await broker.async_submit(
+            replace(_intent(value=18), created_at=now, expires_at=now + timedelta(minutes=2)),
+            now=now,
+        )
+        assert lowered.dispatch_status in {DispatchStatus.DISPATCHED, DispatchStatus.FAILED}
+        assert broker.delivery_state("registry-1")["attempts"] == 1
+        assert len(service.calls) == 6
+
+    asyncio.run(scenario())
+
+
+def test_new_goal_during_retry_cannot_bypass_minute_interval() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
+        assert (
+            await broker.async_submit(
+                _intent(value=18, explicit=True), now=NOW + timedelta(seconds=31)
+            )
+        ).reason == "command_interval"
+        assert broker.delivery_state("registry-1")["attempts"] == 0
+        await broker.async_submit(_intent(value=18), now=NOW + timedelta(seconds=60))
+        assert [call[0]["temperature"] for call in service.calls] == [20, 18]
+
+    asyncio.run(scenario())
+
+
+def test_retry_live_preflight_does_not_overwrite_an_unprocessed_external_target() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    current[0] = replace(current[0], observed_target=_feedback(19).observed)
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
+        current[0] = replace(current[0], observed_target=_feedback(18).observed)
+        refused = await broker.async_submit(_intent(), now=NOW + timedelta(seconds=60))
+        assert refused.reason == "external_temperature_target"
+        assert len(service.calls) == 1
+        # Live unavailable is a readiness problem, never a manual intervention.
+        current[0] = replace(current[0], target_ready=False)
+        assert (await broker.async_submit(_intent(), now=NOW + timedelta(seconds=61))).reason == (
+            "target_not_ready"
+        )
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "guard", ["data_ready", "lease_owner", "ownership", "capability_generation"]
+)
+def test_retry_rechecks_all_existing_guards(guard: str) -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
+        changed = {
+            "data_ready": False,
+            "lease_owner": "other",
+            "ownership": Ownership.MANUAL_OVERRIDE,
+            "capability_generation": 2,
+        }[guard]
+        current[0] = replace(current[0], **{guard: changed})
+        outcome = await broker.async_submit(_intent(), now=NOW + timedelta(seconds=60))
+        assert outcome.dispatch_status is DispatchStatus.NOT_DISPATCHED
+        assert len(service.calls) == 1
+
+    asyncio.run(scenario())
+
+
+def test_late_old_echo_does_not_acknowledge_new_goal_or_hide_user_intervention() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
+        await broker.async_submit(_intent(value=18), now=NOW + timedelta(seconds=60))
+        echo = await broker.async_feedback(
+            _feedback(20, context="delegated"), now=NOW + timedelta(seconds=61)
+        )
+        assert echo.reason == "duplicate_command_echo"
+        assert broker.state_counts("registry-1")[0] == 1
+        user = await broker.async_feedback(
+            replace(_feedback(18), user_initiated=True), now=NOW + timedelta(seconds=62)
+        )
+        assert user.reason == "external_temperature_target"
+        assert broker.state_counts("registry-1")[0] == 0
+
+    asyncio.run(scenario())
+
+
+def test_readback_acknowledgement_wins_even_when_service_returns_error() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    service.error = True
+    broker = _broker(service, persistence, current)
+
+    async def acknowledge() -> None:
+        await broker.async_feedback(_feedback(20), now=NOW)
+
+    service.on_call = acknowledge
+    outcome = asyncio.run(broker.async_submit(_intent(), now=NOW))
+    assert outcome.acknowledgement_status is AcknowledgementStatus.ACKNOWLEDGED
+    assert broker.delivery_state("registry-1")["status"] == "acknowledged"
+    assert broker.delivery_state("registry-1")["last_error"] is None
+
+
+def test_target_return_resets_budget_and_reconciles_live_target() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        await broker.async_target_unavailable("registry-1")
+        assert broker.delivery_state("registry-1")["status"] == "waiting_target"
+        assert broker.delivery_state("registry-1")["attempts"] == 0
+        current[0] = replace(current[0], observed_target=_feedback(18).observed)
+        result = await broker.async_submit(
+            replace(_intent(), recovery_reassertion=True), now=NOW + timedelta(seconds=60)
+        )
+        assert result.dispatch_status is DispatchStatus.DISPATCHED
+        assert len(service.calls) == 2
+
+    asyncio.run(scenario())
+
+
+def test_atomic_range_has_its_own_normalized_retry_budget() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        intent = _intent(shape=TargetShape.RANGE, direction=ActuationDirection.RANGED)
+        await broker.async_submit(intent, now=NOW)
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
+        await broker.async_submit(intent, now=NOW + timedelta(seconds=60))
+        assert broker.delivery_state("registry-1")["attempts"] == 2
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=90))
+        await broker.async_submit(
+            replace(
+                intent,
+                target_temp_high_ha=24,
+                normalized_high_room_c=24,
+                expires_at=NOW + timedelta(minutes=4),
+            ),
+            now=NOW + timedelta(seconds=120),
+        )
+        assert broker.delivery_state("registry-1")["attempts"] == 1
+        assert all(
+            "target_temp_low" in call[0] and "target_temp_high" in call[0] for call in service.calls
+        )
+
+    asyncio.run(scenario())
+
+
+def test_rejected_own_write_retries_without_misclassifying_coercion_as_manual() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    current[0] = replace(current[0], observed_target=_feedback(19).observed)
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        rejected = await broker.async_feedback(_feedback(19.5), now=NOW + timedelta(seconds=1))
+        assert rejected.acknowledgement_status is AcknowledgementStatus.REJECTED
+        assert broker.delivery_state("registry-1")["status"] == "retry_pending"
+        current[0] = replace(current[0], observed_target=_feedback(19.5).observed)
+        assert (await broker.async_submit(_intent(), now=NOW + timedelta(seconds=60))).reason == (
+            "awaiting_acknowledgement"
+        )
+        assert len(service.calls) == 2
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("phase", ["persist", "dispatch"])
+def test_final_live_target_recheck_after_storage_never_overwrites_external_change(
+    phase: str,
+) -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    current[0] = replace(current[0], observed_target=_feedback(19).observed)
+    broker = _broker(service, persistence, current)
+
+    def change() -> None:
+        current[0] = replace(current[0], observed_target=_feedback(18).observed)
+
+    async def mark(command: PendingCommand) -> bool:
+        persistence.dispatched.append(command)
+        change()
+        return True
+
+    if phase == "persist":
+        persistence.after_persist = change
+    else:
+        persistence.async_mark_dispatched = mark
+    result = asyncio.run(broker.async_submit(_intent(), now=NOW))
+    assert result.reason == "external_temperature_target"
+    assert service.calls == []
+    assert broker.delivery_state("registry-1")["attempts"] == 0
+
+
+def test_dispatch_deadline_uses_last_attempt_not_latest_calculation() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+    assert broker.next_dispatch_at("registry-1", explicit=True) is None
+    asyncio.run(broker.async_submit(_intent(), now=NOW))
+    assert broker.next_dispatch_at("registry-1", explicit=True) == NOW + timedelta(seconds=10)
+    assert broker.next_dispatch_at("registry-1", explicit=False) == NOW + timedelta(seconds=60)
+    asyncio.run(broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30)))
+    assert broker.next_dispatch_at("registry-1", explicit=True) == NOW + timedelta(seconds=60)
+
+
+@pytest.mark.parametrize("error", [False, True])
+def test_unavailable_during_service_does_not_resurrect_retry_state(error: bool) -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    service.error = error
+    broker = _broker(service, persistence, current)
+
+    async def unavailable() -> None:
+        current[0] = replace(current[0], target_ready=False)
+        await broker.async_target_unavailable("registry-1")
+
+    service.on_call = unavailable
+    result = asyncio.run(broker.async_submit(_intent(), now=NOW))
+    assert result.reason == "command_cancelled"
+    assert broker.delivery_state("registry-1")["status"] == "waiting_target"
+    assert broker.delivery_state("registry-1")["next_retry_at"] is None
+    assert broker.state_counts("registry-1") == (0, 0)
+
+
 def test_automatic_echo_is_bounded_to_dispatched_command_and_cannot_ack_service() -> None:
     service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
     broker = _broker(service, persistence, current)
@@ -190,7 +455,7 @@ def test_automatic_echo_is_bounded_to_dispatched_command_and_cannot_ack_service(
     assert not broker.expected_automatic_echo(echo, now=NOW + timedelta(seconds=12))
 
 
-def test_undispatched_or_expired_feedback_cannot_acknowledge_a_command() -> None:
+def test_undispatched_feedback_is_ignored_but_late_dispatched_feedback_recovers() -> None:
     service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
     broker = _broker(service, persistence, current)
 
@@ -204,13 +469,12 @@ def test_undispatched_or_expired_feedback_cannot_acknowledge_a_command() -> None
     persistence.async_mark_dispatched = feedback_before_dispatch
     asyncio.run(broker.async_submit(_intent(), now=NOW))
     expired = asyncio.run(broker.async_feedback(_feedback(20.0), now=NOW + timedelta(seconds=30)))
-    assert expired.reason == "outside_pending_acknowledgement_window"
-    assert broker.state_counts("registry-1") == (1, 0)
+    assert expired.reason == "late_target_acknowledged"
+    assert broker.state_counts("registry-1") == (0, 0)
     timeout = asyncio.run(
         broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
     )
-    assert timeout is not None
-    assert timeout.acknowledgement_status is AcknowledgementStatus.UNKNOWN
+    assert timeout is None
 
 
 def test_automatic_range_echo_requires_both_exact_endpoints_and_open_gate() -> None:
@@ -415,7 +679,7 @@ def test_explicit_resume_resolves_uncertain_pending_before_a_fresh_command() -> 
         service.error = False
         current[0] = replace(current[0], input_generation=2)
         return await broker.async_submit(
-            _intent(value=20.5, input_generation=2), now=NOW + timedelta(seconds=1)
+            _intent(value=20.5, input_generation=2), now=NOW + timedelta(seconds=60)
         )
 
     resumed = asyncio.run(scenario())

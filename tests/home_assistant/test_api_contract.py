@@ -722,6 +722,7 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
         "athb_unoccupied_target": {"temperature": 19.5},
         "heating_demand": {},
         "command_outcome": None,
+        "command_delivery": {},
         "ownership": None,
         "target_readiness": None,
     }

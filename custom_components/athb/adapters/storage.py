@@ -622,26 +622,37 @@ def prepare_startup_recovery(
         and actuator.pending_command is None
         and actuator.ownership != "command_fault"
     }
+    ordinary_write_faults = {
+        actuator.target_identity
+        for actuator in prior.actuators
+        if actuator.ownership == "command_fault"
+        and actuator.override_reason in {"command_outcome_unknown", "coerced_or_rejected"}
+    }
+    automatic_recovery = legacy_restart_gates | ordinary_write_faults
     stored_resume_required = any(
-        actuator.resume_required and actuator.target_identity not in legacy_restart_gates
+        actuator.resume_required
+        and actuator.ownership != "manual_override"
+        and actuator.target_identity not in automatic_recovery
         for actuator in prior.actuators
     )
     stored_command_fault = any(
-        actuator.resume_required and actuator.ownership == "command_fault"
+        actuator.resume_required
+        and actuator.ownership == "command_fault"
+        and actuator.target_identity not in ordinary_write_faults
         for actuator in prior.actuators
     )
     configuration_changed = prior.configuration_fingerprint != configuration_fingerprint
     strategy_changed = prior.strategy != strategy
-    # Persistence-before-dispatch makes an unresolved command or an explicit
-    # persisted recovery flag authoritative. Configuration drift and an unclean
-    # exit without either can safely use a fresh, live-target reconciliation.
-    requires_resume = unresolved or stored_resume_required
+    # Never replay the old journal. Ordinary uncertain delivery is reconciled
+    # against live state and fresh policy, separately from hard recovery gates.
+    requires_resume = stored_resume_required
     reasons = tuple(
         reason
         for active, reason in (
             (unresolved, "unresolved_command"),
             (stored_command_fault, "command_fault"),
             (stored_resume_required and not stored_command_fault, "stored_resume_required"),
+            (bool(ordinary_write_faults), "ordinary_write_fault_cleared"),
             (bool(legacy_restart_gates), "legacy_unclean_restart_gate_cleared"),
             (configuration_changed, "configuration_changed"),
             (strategy_changed, "strategy_changed"),
@@ -654,11 +665,13 @@ def prepare_startup_recovery(
     actuators = tuple(
         replace(
             actuator,
-            ownership="reconciling",
-            resume_required=requires_resume,
+            ownership=(
+                "manual_override" if actuator.ownership == "manual_override" else "reconciling"
+            ),
+            resume_required=requires_resume and actuator.ownership != "manual_override",
             override_reason=(
                 None
-                if actuator.target_identity in legacy_restart_gates and not requires_resume
+                if actuator.target_identity in automatic_recovery and not requires_resume
                 else actuator.override_reason
             ),
             pending_command=None,

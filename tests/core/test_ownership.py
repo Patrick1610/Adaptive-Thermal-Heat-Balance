@@ -167,10 +167,17 @@ def test_until_resumed_and_override_duration_validation() -> None:
         )
 
 
-def test_command_fault_and_restart_require_explicit_reconciliation() -> None:
-    fault = reduce_ownership(_owned(), OwnershipEvent.COMMAND_UNKNOWN, now=NOW).state
-    assert fault.ownership is Ownership.COMMAND_FAULT
-    assert fault.resume_required
+@pytest.mark.parametrize("event", [OwnershipEvent.COMMAND_UNKNOWN, OwnershipEvent.COMMAND_REJECTED])
+def test_ordinary_delivery_failure_never_loses_ownership(event: OwnershipEvent) -> None:
+    owned = _owned()
+    failure = reduce_ownership(owned, event, now=NOW)
+    assert failure.state == owned
+    assert not failure.invalidate_intents
+    assert not failure.state.resume_required
+
+
+def test_hard_restart_gate_requires_explicit_reconciliation() -> None:
+    fault = replace(_owned(), ownership=Ownership.COMMAND_FAULT, resume_required=True)
     unclean = reduce_ownership(fault, OwnershipEvent.UNCLEAN_RESTART, now=NOW).state
     assert unclean.ownership is Ownership.RECONCILING
     assert unclean.resume_required
@@ -179,16 +186,16 @@ def test_command_fault_and_restart_require_explicit_reconciliation() -> None:
         fault,
         OwnershipEvent.UNCLEAN_RESTART,
         now=NOW,
-        recovery_reason="unresolved_command",
+        recovery_reason="corrupt_control_storage",
     ).state
-    assert unresolved.override_reason == "unresolved_command"
+    assert unresolved.override_reason == "corrupt_control_storage"
     clean = reduce_ownership(_owned(), OwnershipEvent.CLEAN_RESTART, now=NOW).state
     assert clean.ownership is Ownership.RECONCILING
     assert not clean.resume_required
 
 
 def test_late_acknowledgement_requires_matching_external_revision() -> None:
-    fault = reduce_ownership(_owned(), OwnershipEvent.COMMAND_UNKNOWN, now=NOW).state
+    fault = replace(_owned(), ownership=Ownership.COMMAND_FAULT, resume_required=True)
     obsolete = reduce_ownership(
         fault,
         OwnershipEvent.LATE_ACKNOWLEDGED,

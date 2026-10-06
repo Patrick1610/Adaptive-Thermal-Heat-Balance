@@ -310,7 +310,7 @@ def test_unclean_restart_without_unresolved_command_reconciles_automatically() -
     assert not recovery.state.actuators[0].resume_required
 
 
-def test_unresolved_restart_requires_resume_and_never_replays_command() -> None:
+def test_unresolved_restart_reconciles_live_state_and_never_replays_command() -> None:
     recovery = prepare_startup_recovery(
         load_control_state(
             serialize_control_state(_state(clean=True, command=_command(dispatched=True)))
@@ -320,7 +320,7 @@ def test_unresolved_restart_requires_resume_and_never_replays_command() -> None:
         strategy="balanced",
     )
 
-    assert recovery.requires_resume
+    assert not recovery.requires_resume
     assert recovery.reason == "unresolved_command"
     assert recovery.reasons == ("unresolved_command", "clean_restart")
     assert recovery.state.actuators[0].pending_command is None
@@ -334,6 +334,55 @@ def test_corrupt_store_is_preserved_and_requires_resume() -> None:
     assert recovery.requires_resume
     assert recovery.reason == "corrupt_control_storage"
     assert recovery.state.actuators == ()
+
+
+@pytest.mark.parametrize("reason", ["command_outcome_unknown", "coerced_or_rejected"])
+def test_ordinary_legacy_write_fault_is_migrated_without_resume(reason: str) -> None:
+    prior = replace(
+        _state(clean=True),
+        actuators=(
+            replace(
+                _actuator(), ownership="command_fault", resume_required=True, override_reason=reason
+            ),
+        ),
+    )
+    recovery = prepare_startup_recovery(
+        load_control_state(serialize_control_state(prior)),
+        run_id="new",
+        configuration_fingerprint="config-a",
+        strategy="balanced",
+    )
+    assert not recovery.requires_resume
+    assert recovery.reason == "ordinary_write_fault_cleared"
+    actuator = recovery.state.actuators[0]
+    assert actuator.ownership == "reconciling"
+    assert actuator.override_reason is None
+    assert not actuator.resume_required
+
+
+def test_manual_override_is_preserved_when_reconciling_unresolved_restart() -> None:
+    prior = replace(
+        _state(clean=False),
+        actuators=(
+            replace(
+                _actuator(_command(dispatched=True)),
+                ownership="manual_override",
+                override_reason="external_temperature_target",
+                override_expiry="2026-10-06T12:00:00+00:00",
+            ),
+        ),
+    )
+    recovery = prepare_startup_recovery(
+        load_control_state(serialize_control_state(prior)),
+        run_id="new",
+        configuration_fingerprint="config-a",
+        strategy="balanced",
+    )
+    assert not recovery.requires_resume
+    actuator = recovery.state.actuators[0]
+    assert actuator.ownership == "manual_override"
+    assert actuator.override_expiry == "2026-10-06T12:00:00+00:00"
+    assert actuator.pending_command is None
 
 
 def test_strategy_or_configuration_drift_cannot_restore_stale_state() -> None:
