@@ -842,6 +842,25 @@ class CommandBroker:
                         AcknowledgementStatus.INFERRED_ACKNOWLEDGED,
                         "late_target_acknowledged",
                     )
+                if (
+                    state.acknowledged is not None
+                    and state.last_error is None
+                    and not _target_matches(
+                        state.acknowledged.fingerprint,
+                        feedback.observed,
+                        tolerance=min(
+                            state.completed.intent.step_ha / 4,
+                            state.completed.intent.feedback_resolution_ha,
+                        )
+                        if state.completed
+                        else 0.0,
+                    )
+                ):
+                    # An older dispatched write can arrive after the latest goal
+                    # was confirmed. Do not let target_unchanged suppress its repair.
+                    state.attempts = 0
+                    state.baseline = feedback.observed
+                    self._write_failed(state, "late_obsolete_target")
             return CommandOutcome(
                 None,
                 DispatchStatus.NOT_DISPATCHED,

@@ -72,7 +72,9 @@ correlations, not proof of a particular external caller's identity. Explicit use
 and differing external targets remain interventions. No arbitrary grace period suppresses them.
 ATHB additionally retains at most five uncertain dispatched commands until target recovery or
 Resume. Exact late echoes use the same tolerance and revision checks, never acknowledge a different
-newer command, and never suppress explicit user-context intervention. A context-free exact match
+newer command, and never suppress explicit user-context intervention. If an older write arrives
+after the latest target was confirmed, ATHB schedules a fresh, rate-limited correction of the
+latest goal instead of suppressing it as unchanged. A context-free exact match
 is an inferred correlation, not proof of who changed the target. `unavailable`, `unknown`, removed
 or restored target states do not create a manual override. They suspend delivery; existing manual
 overrides remain intact. The original expiry is retained across restart and unavailability.

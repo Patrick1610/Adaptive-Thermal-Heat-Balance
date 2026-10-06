@@ -419,6 +419,40 @@ def test_unavailable_during_service_does_not_resurrect_retry_state(error: bool) 
     assert broker.state_counts("registry-1") == (0, 0)
 
 
+def test_late_obsolete_feedback_after_new_goal_acknowledgement_repairs_latest_goal() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    current[0] = replace(current[0], observed_target=_feedback(19).observed)
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        await broker.async_submit(_intent(), now=NOW)
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=30))
+        latest = _intent(value=18)
+        await broker.async_submit(latest, now=NOW + timedelta(seconds=60))
+        current[0] = replace(current[0], observed_target=_feedback(18).observed)
+        await broker.async_feedback(_feedback(18), now=NOW + timedelta(seconds=61))
+        current[0] = replace(current[0], observed_target=_feedback(20).observed)
+        late = await broker.async_feedback(
+            _feedback(20, context="delayed"), now=NOW + timedelta(seconds=62)
+        )
+        assert late.reason == "duplicate_command_echo"
+        assert broker.delivery_state("registry-1")["status"] == "retry_pending"
+        assert broker.delivery_state("registry-1")["last_error"] == "late_obsolete_target"
+        assert (await broker.async_submit(latest, now=NOW + timedelta(seconds=63))).reason == (
+            "command_interval"
+        )
+        await broker.async_submit(
+            replace(latest, expires_at=NOW + timedelta(minutes=4)),
+            now=NOW + timedelta(seconds=120),
+        )
+        assert [call[0]["temperature"] for call in service.calls] == [20, 18, 18]
+        await broker.async_acknowledgement_timeout("registry-1", now=NOW + timedelta(seconds=150))
+        await broker.async_feedback(_feedback(20), now=NOW + timedelta(seconds=151))
+        assert broker.delivery_state("registry-1")["attempts"] == 1
+
+    asyncio.run(scenario())
+
+
 def test_automatic_echo_is_bounded_to_dispatched_command_and_cannot_ack_service() -> None:
     service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
     broker = _broker(service, persistence, current)

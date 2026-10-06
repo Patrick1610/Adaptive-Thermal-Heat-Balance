@@ -1271,6 +1271,8 @@ class ZoneRuntime:
             self._schedule_write_retry(identity)
             if self.broker.state_counts(identity)[1]:
                 self._create_task(self._async_drain_queued(identity))
+        elif outcome.reason == "duplicate_command_echo":
+            self._schedule_write_retry(identity)
         self._publish_control_state()
 
     @callback
