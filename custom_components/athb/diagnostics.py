@@ -155,6 +155,12 @@ async def async_get_config_entry_diagnostics(
                 ),
                 "validated": accepted is not None and accepted.last_accepted is not None,
                 "recovering": bool(accepted.recovering) if accepted is not None else False,
+                "jump_protection_enabled": (
+                    entry.options.get("indoor_temperature_jump_protection", True)
+                    if kind == "primary"
+                    else True
+                ),
+                "jump_quarantined": bool(accepted is not None and accepted.quarantine is not None),
             }
         )
     raw = {

@@ -695,6 +695,11 @@ def directional_root_eligibility(
         ActuationDirection.HEATING_ONLY: (RootName.HEATING_CONTROL,),
         ActuationDirection.COOLING_ONLY: (RootName.COOLING_CONTROL,),
         ActuationDirection.RANGED: (RootName.HEATING_CONTROL, RootName.COOLING_CONTROL),
+        ActuationDirection.BIDIRECTIONAL_SCALAR: (
+            RootName.HEATING_CONTROL,
+            RootName.THERMAL_NEUTRAL,
+            RootName.COOLING_CONTROL,
+        ),
     }[direction]
     reasons: list[str] = []
     if not isinstance(current, AthbSuccess):

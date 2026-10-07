@@ -175,6 +175,7 @@ def validate_measured_source(
     received_at: datetime,
     available: bool = True,
     freshness: timedelta | None = None,
+    jump_protection: bool = True,
 ) -> SourceUpdate:
     """Validate one entity observation and advance its quarantine/recovery state."""
 
@@ -222,6 +223,11 @@ def validate_measured_source(
         # invalid-value and jump failures retain the stricter multi-report gate.
         return SourceUpdate(observation, SourceState(state.last_accepted, recovering=False))
 
+    # Only an existing jump quarantine is released by disabling its check.
+    # Other invalid/unavailable transitions have already discarded quarantine
+    # and retain their independent recovery gate.
+    if not jump_protection and state.quarantine is not None:
+        state = SourceState(state.last_accepted)
     last = state.last_accepted
     if last is not None and last.observed_at is not None:
         if observed == last.observed_at and value == last.value and canonical_unit == last.unit:
@@ -242,7 +248,8 @@ def validate_measured_source(
 
     jump = False
     if (
-        last is not None
+        jump_protection
+        and last is not None
         and last.value is not None
         and last.observed_at is not None
         and policy.jump_limit is not None

@@ -30,7 +30,7 @@ def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None
         "issue_tracker": ("https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance/issues"),
         "name": "Adaptive Thermal Heat Balance",
         "requirements": [],
-        "version": "0.2.26",
+        "version": "0.2.27",
     }
     assert manifest["domain"] == DOMAIN
 
@@ -97,6 +97,7 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "controller.py",
         "core/__init__.py",
         "core/athb_engine.py",
+        "core/bidirectional.py",
         "core/climate.py",
         "core/contracts.py",
         "core/history.py",

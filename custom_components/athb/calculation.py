@@ -9,11 +9,13 @@ from typing import Any
 from .adapters.sources import (
     StateValue,
     configured_freshness,
+    configured_jump_protection,
     valid_value,
     validate_state_value,
 )
 from .core.athb_engine import relative_air_speed
 from .core.climate import (
+    AutoMapping,
     CapabilityMapping,
     ClimateCapabilitySnapshot,
     ClimateFailure,
@@ -22,6 +24,7 @@ from .core.climate import (
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     ha_to_celsius,
+    infer_auto_mapping,
     resolve_capability,
 )
 from .core.contracts import (
@@ -300,6 +303,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         now=snapshot.now,
         prior=prior_states.get("primary"),
         freshness=configured_freshness(snapshot.options, SourceKind.PRIMARY_AIR),
+        jump_protection=configured_jump_protection(snapshot.options, SourceKind.PRIMARY_AIR),
     )
     outdoor, updated_states["outdoor"] = validate_state_value(
         snapshot.outdoor,
@@ -499,6 +503,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 now=snapshot.now,
                 prior=prior_states.get(state_key),
                 freshness=configured_freshness(snapshot.options, SourceKind.LOCAL_AIR),
+                jump_protection=configured_jump_protection(snapshot.options, SourceKind.LOCAL_AIR),
             )
             local_c = valid_value(local)
             if local_c is None or updated_states[state_key].recovering:
@@ -542,8 +547,11 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         )
         calculation_mapping: CapabilityMapping
         if isinstance(capability_result, ClimateFailure):
+            inferred = infer_auto_mapping(replace(target.capability, hvac_mode="auto"))
             calculation_mapping = CapabilityMapping(
-                ActuationDirection.RANGED
+                ActuationDirection.BIDIRECTIONAL_SCALAR
+                if inferred is AutoMapping.BIDIRECTIONAL_SCALAR
+                else ActuationDirection.RANGED
                 if target.capability.supported_features & 2
                 else ActuationDirection.COOLING_ONLY
                 if target.capability.hvac_mode == "cool"
@@ -601,8 +609,21 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 failure_hold_elapsed=snapshot.failure_hold_elapsed,
                 fixed_fallback_reason="air_speed_invalid" if fallback_for_speed else None,
                 diagnostic_history=snapshot.history_quality == HistoryQuality.DIAGNOSTIC.value,
+                outdoor_temperature_c=(
+                    outdoor_c
+                    if not primary_stale and not updated_states["outdoor"].recovering
+                    else None
+                ),
             )
         )
+        if (
+            control_mapping is not None
+            and control_mapping.bidirectional_scalar
+            and isinstance(result.normalized, NormalizedScalarTarget)
+        ):
+            control_mapping = CapabilityMapping(
+                result.normalized.direction, TargetShape.SCALAR, True
+            )
         target_results.append(
             TargetCalculation(
                 target.target_uuid,
@@ -745,7 +766,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         return float(vote) if isinstance(vote, int | float) and not isinstance(vote, bool) else None
 
     effective: dict[str, dict[str, float]] = {}
-    effective_details: dict[str, dict[str, str | bool | float | None]] = {}
+    effective_details: dict[str, dict[str, Any]] = {}
     target_scenarios: dict[str, dict[str, Any]] = {}
 
     def normalized_values(
@@ -803,7 +824,23 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             "boost_target_cooling": (
                 calculation.policy.boost_target_cooling_c if calculation.policy else None
             ),
+            "scalar_selection": (
+                {
+                    "branch": calculation.scalar_selection.branch,
+                    "reason": calculation.scalar_selection.reason,
+                    "indoor_c": calculation.scalar_selection.indoor_c,
+                    "outdoor_c": calculation.scalar_selection.outdoor_c,
+                    "heating_c": calculation.scalar_selection.heating_c,
+                    "neutral_c": calculation.scalar_selection.neutral_c,
+                    "cooling_c": calculation.scalar_selection.cooling_c,
+                    "selected_target_c": calculation.scalar_selection.requested_c,
+                }
+                if calculation.scalar_selection is not None
+                else None
+            ),
         }
+        if effective_details[target.target_uuid].get("scalar_selection") is None:
+            effective_details[target.target_uuid].pop("scalar_selection")
         if isinstance(normalized, NormalizedScalarTarget):
             effective[target.target_uuid] = {"temperature": normalized.normalized_actuator_c}
         elif isinstance(normalized, NormalizedRangeTarget):

@@ -59,16 +59,23 @@ from tests.virtual_installations.schema import load_scenarios
 
 
 async def _start_delivery_runtime(
-    hass: HomeAssistant, *, outcome: str = "ignore", stored: ControlStoreState | None = None
+    hass: HomeAssistant,
+    *,
+    outcome: str = "ignore",
+    stored: ControlStoreState | None = None,
+    mode: str = "heat",
+    control_enabled: bool = True,
+    outside: str = "5",
+    initial_target: float = 23.0,
 ) -> tuple[ZoneRuntime, list[ServiceCall]]:
     calls: list[ServiceCall] = []
     attributes = {
-        "hvac_modes": ["off", "heat"],
+        "hvac_modes": ["off", "heat_cool"] if mode != "heat" else ["off", "heat"],
         "supported_features": 1,
         "min_temp": 16.0,
         "max_temp": 30.0,
         "target_temp_step": 0.5,
-        "temperature": 23.0,
+        "temperature": initial_target,
         "current_temperature": 20.0,
         "unit_of_measurement": "°C",
     }
@@ -80,15 +87,15 @@ async def _start_delivery_runtime(
         if outcome == "ack":
             hass.states.async_set(
                 "climate.target",
-                "heat",
+                mode,
                 {**attributes, "temperature": call.data["temperature"]},
                 context=call.context,
             )
 
     hass.services.async_register("climate", "set_temperature", write)
     hass.states.async_set("sensor.room", "20", {"unit_of_measurement": "°C"})
-    hass.states.async_set("sensor.outdoor", "5", {"unit_of_measurement": "°C"})
-    hass.states.async_set("climate.target", "heat", attributes)
+    hass.states.async_set("sensor.outdoor", outside, {"unit_of_measurement": "°C"})
+    hass.states.async_set("climate.target", mode, attributes)
     entry = MockConfigEntry(
         domain="athb",
         title="Zone",
@@ -109,13 +116,15 @@ async def _start_delivery_runtime(
         },
         options={
             "comfort_strategy": "balanced",
-            "control_enabled": True,
+            "control_enabled": control_enabled,
             "minimum_control_temperature": 18.0,
             "maximum_control_temperature": 26.0,
         },
     )
     entry.add_to_hass(hass)
-    runtime = ZoneRuntime(hass, cast(Any, entry), "delivery-test", "balanced", "off", True)
+    runtime = ZoneRuntime(
+        hass, cast(Any, entry), "delivery-test", "balanced", "off", control_enabled
+    )
     if stored is not None:
         await HomeAssistantControlStorageBackend(hass, "delivery-test").async_save(
             serialize_control_state(
@@ -131,6 +140,62 @@ async def _start_delivery_runtime(
     await runtime.controller.async_wait_idle()
     await hass.async_block_till_done()
     return runtime, calls
+
+
+@pytest.mark.parametrize(
+    ("enabled", "mode"), [(False, "heat_cool"), (True, "heat_cool"), (True, "off"), (True, "auto")]
+)
+async def test_bidirectional_runtime_previews_and_optional_scalar_writes(
+    hass, monkeypatch, enabled, mode
+):
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ()),
+    )
+    runtime, calls = await _start_delivery_runtime(
+        hass,
+        outcome="ack",
+        mode=mode,
+        control_enabled=enabled,
+        outside="22",
+        initial_target=18.0,
+    )
+    try:
+        assert runtime.values["effective_targets"]["target-1"]["temperature"] == 23.0
+        details = runtime.values["effective_target_details"]["target-1"]
+        assert details["scalar_selection"]["branch"] == "cooling"
+        assert "heating_demand" not in details
+        assert len(calls) == int(enabled and mode != "off")
+        if calls:
+            assert dict(calls[0].data) == {"entity_id": "climate.target", "temperature": 23.0}
+            assert runtime.values["command_delivery"]["registry-1"]["status"] == "acknowledged"
+        hass.states.async_set("sensor.outdoor", "20", {"unit_of_measurement": "°C"})
+        runtime.async_request_snapshot()
+        assert runtime.controller is not None
+        await runtime.controller.async_wait_idle()
+        await hass.async_block_till_done()
+        assert (
+            runtime.values["effective_target_details"]["target-1"]["scalar_selection"]["branch"]
+            == "heating"
+        )
+        if enabled and mode != "off":
+            attributes = dict(hass.states.get("climate.target").attributes)
+            hass.states.async_set(
+                "climate.target",
+                mode,
+                {**attributes, "temperature": 18.0},
+                context=Context(user_id="test-user"),
+            )
+            await hass.async_block_till_done()
+            assert runtime.ownership["registry-1"].ownership is Ownership.MANUAL_OVERRIDE
+            before = len(calls)
+            runtime.async_request_snapshot()
+            await runtime.controller.async_wait_idle()
+            await hass.async_block_till_done()
+            assert len(calls) == before
+    finally:
+        await runtime.async_unload()
 
 
 @pytest.mark.parametrize("service_outcome", ["ignore", "error"])

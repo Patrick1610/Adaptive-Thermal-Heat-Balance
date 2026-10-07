@@ -31,6 +31,7 @@ def _update(
     available: bool = True,
     kind: SourceKind = SourceKind.PRIMARY_AIR,
     freshness: timedelta | None = None,
+    jump_protection: bool = True,
 ):
     return validate_measured_source(
         state=state if state is not None else SourceState(),
@@ -42,6 +43,7 @@ def _update(
         received_at=received_at,
         available=available,
         freshness=freshness,
+        jump_protection=jump_protection,
     )
 
 
@@ -72,6 +74,43 @@ def test_invalid_raw_states_or_units_are_never_replaced(value: object, unit: str
     assert result.observation.validity is ObservationValidity.INVALID
     assert result.observation.value is None
     assert result.observation.reasons == ("invalid_numeric_or_unit",)
+
+
+def test_disabling_jump_filter_releases_only_jump_quarantine() -> None:
+    baseline = _update()
+    stamp = NOW + timedelta(seconds=60)
+    jumped = _update(baseline.state, value=30, observed_at=stamp, received_at=stamp)
+    assert jumped.state.quarantine is not None
+    accepted = _update(
+        jumped.state, value=30, observed_at=stamp, received_at=stamp, jump_protection=False
+    )
+    assert accepted.observation.validity is ObservationValidity.VALID
+    assert accepted.observation.value == 30
+    assert accepted.state.quarantine is None
+    assert not accepted.state.recovering
+    broken = _update(jumped.state, available=False, received_at=stamp)
+    recovered = _update(
+        broken.state, value=30, observed_at=stamp, received_at=stamp, jump_protection=False
+    )
+    assert recovered.state.recovering
+
+
+@pytest.mark.parametrize("value", [True, "unknown", float("nan"), 100])
+def test_jump_opt_out_keeps_numeric_and_physical_checks(value) -> None:
+    assert (
+        _update(value=value, jump_protection=False).observation.validity
+        is ObservationValidity.INVALID
+    )
+
+
+def test_jump_opt_out_keeps_timestamp_and_freshness_checks() -> None:
+    state = _update().state
+    conflict = _update(state, value=30, jump_protection=False)
+    assert conflict.observation.reasons == ("timestamp_value_conflict",)
+    assert (
+        _update(observed_at=NOW - timedelta(hours=1), jump_protection=False).observation.validity
+        is ObservationValidity.STALE
+    )
 
 
 def test_measured_source_retains_identity_timestamp_and_provenance() -> None:

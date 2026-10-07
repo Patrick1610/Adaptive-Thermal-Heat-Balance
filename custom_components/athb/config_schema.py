@@ -120,6 +120,8 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
     for name, (minimum, maximum) in ranges.items():
         if name in data and not _finite_in_range(data[name], minimum, maximum):
             errors[name] = "invalid_option"
+    if not isinstance(data.get("indoor_temperature_jump_protection", True), bool):
+        errors["indoor_temperature_jump_protection"] = "invalid_option"
     for name, value in data.items():
         if name.startswith("calibration_") and not _finite_in_range(value, -3.0, 3.0):
             errors[name] = "invalid_option"

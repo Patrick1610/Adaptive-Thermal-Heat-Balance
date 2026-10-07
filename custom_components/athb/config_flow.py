@@ -18,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from .adapters.climate import capability_from_state
 from .adapters.sources import (
     configured_freshness,
+    configured_jump_protection,
     snapshot_primary_temperature,
     snapshot_state,
     valid_value,
@@ -128,6 +129,7 @@ OPTION_DEFAULTS: dict[str, object] = {
     "heating_demand_deactivation_delta_c": DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
     "feedback_resolution": 0.01,
     "primary_temperature_freshness_minutes": 30.0,
+    "indoor_temperature_jump_protection": True,
     "stale_heat_demand_margin_c": 0.5,
     "stale_heat_active_minutes": 30.0,
     "stale_heat_start_minutes": 60.0,
@@ -913,9 +915,13 @@ class _OptionsWizardMixin:
         defaults = self._pending_options
         fields: dict[vol.Marker, object] = {
             vol.Required(
+                "indoor_temperature_jump_protection",
+                default=defaults.get("indoor_temperature_jump_protection", True),
+            ): bool,
+            vol.Required(
                 "primary_temperature_freshness_minutes",
                 default=defaults.get("primary_temperature_freshness_minutes", 30.0),
-            ): _number(5.0, 360.0, 5.0, "min")
+            ): _number(5.0, 360.0, 5.0, "min"),
         }
         if self._wizard_environment.get(CONF_RH_MODE) == "measured":
             fields[
@@ -1295,6 +1301,9 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
             kind=SourceKind.PRIMARY_AIR,
             now=now,
             freshness=configured_freshness(self._pending_options, SourceKind.PRIMARY_AIR),
+            jump_protection=configured_jump_protection(
+                self._pending_options, SourceKind.PRIMARY_AIR
+            ),
         )
         value = valid_value(observation)
         age = (

@@ -1557,6 +1557,7 @@ class ZoneRuntime:
                 if isinstance(normalized, NormalizedScalarTarget)
                 and mapping is not None
                 and mapping.direction is ActuationDirection.HEATING_ONLY
+                and not mapping.bidirectional_scalar
                 else None
             )
             if heating is None or calculation is None or mapping is None:
@@ -1989,6 +1990,8 @@ class ZoneRuntime:
             mapping = resolve_capability(capability)
             if not isinstance(mapping, CapabilityMapping):
                 outcomes[str(configured["target_uuid"])] = "stale_safety_target_not_ready"
+                continue
+            if mapping.bidirectional_scalar:
                 continue
             if mapping.direction is ActuationDirection.HEATING_ONLY:
                 continue
@@ -2613,6 +2616,7 @@ class ZoneRuntime:
         mapping = resolve_capability(capability)
         if (
             not isinstance(mapping, CapabilityMapping)
+            or mapping.bidirectional_scalar
             or mapping.direction is ActuationDirection.COOLING_ONLY
         ):
             return None
@@ -3028,7 +3032,7 @@ class ZoneRuntime:
             self.entry.entry_id,
             now,
             now + timedelta(minutes=5),
-            explicit_transition,
+            explicit_transition or mapping.bidirectional_scalar,
             safety_deescalation,
             recovery_reassertion,
         )

@@ -955,6 +955,7 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
         "primary_temperature_freshness_minutes",
         "local_temperature_freshness_minutes",
         "radiant_freshness_minutes",
+        "indoor_temperature_jump_protection",
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -1165,6 +1166,7 @@ def test_freshness_page_includes_selected_mold_indicator() -> None:
 
     assert keys == {
         "primary_temperature_freshness_minutes",
+        "indoor_temperature_jump_protection",
         "relative_humidity_freshness_minutes",
         "radiant_freshness_minutes",
         "air_speed_freshness_minutes",

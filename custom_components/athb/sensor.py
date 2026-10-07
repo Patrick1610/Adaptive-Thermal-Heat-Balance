@@ -403,6 +403,7 @@ class TargetSensor(AthbEntity, RestoreSensor):
             "setback_active": self.runtime.values.get("setback_active", False),
             "setback": self.runtime.eco_intensity,
             "stale": detail.get("stale", False),
+            "scalar_selection": detail.get("scalar_selection"),
             "safety_deescalation": detail.get("safety_deescalation", False),
             "data_quality": data_quality,
             "last_valid_at": self.runtime.values.get("last_valid_at"),

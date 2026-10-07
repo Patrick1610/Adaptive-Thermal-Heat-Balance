@@ -25,6 +25,12 @@ environment is used only to generate and audit independent development goldens.
   thresholds provide hysteresis; Boost bypasses the buffer.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's
   heating/cooling control roots.
+- Bidirectional climates with a single setpoint (`heat_cool`, or a publicly identifiable `auto`)
+  continuously select the heating, neutral or cooling control point using current outside air
+  and symmetric hot/cold cabin exceptions. They expose the existing climate target and can use
+  normal Adaptive control; ATHB still never starts equipment or changes HVAC mode.
+- Indoor air temperature jump protection can be disabled per zone for legitimate rapid cabin
+  changes. It is enabled by default and does not disable numeric, range or freshness validation.
 - ATHB calls only `climate.set_temperature`. It never turns equipment on or off and never changes
   HVAC mode, preset, fan, swing or humidity settings.
 - An external temperature-target change creates a manual override. An external HVAC-mode change

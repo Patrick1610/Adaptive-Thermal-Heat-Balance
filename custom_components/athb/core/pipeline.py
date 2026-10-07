@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from .athb_engine import relative_air_speed
+from .bidirectional import ScalarSelection, select_scalar_target
 from .climate import (
     ClimateCapabilitySnapshot,
     ClimateFailure,
     GridOptions,
+    GridRoundingMode,
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     normalize_range_target,
@@ -95,6 +97,7 @@ class ZoneCalculationInput:
     failure_hold_elapsed: bool = False
     fixed_fallback_reason: str | None = None
     diagnostic_history: bool = False
+    outdoor_temperature_c: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +114,7 @@ class ZoneCalculationResult:
     hold_condition: str | None = None
     occupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
     unoccupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
+    scalar_selection: ScalarSelection | None = None
 
 
 def _fixed_fallback(
@@ -123,6 +127,18 @@ def _fixed_fallback(
     eligibility: DirectionalEligibility | None = None,
     hold_condition: str | None = None,
 ) -> ZoneCalculationResult:
+    if inputs.direction is ActuationDirection.BIDIRECTIONAL_SCALAR:
+        return ZoneCalculationResult(
+            current,
+            roots,
+            None,
+            None,
+            hold_condition or "bidirectional_roots_unavailable",
+            evaluation_count,
+            votes,
+            eligibility,
+            hold_condition=hold_condition,
+        )
     fallback = build_fixed_fallback(
         direction=inputs.direction,
         primary_air_valid=True,
@@ -243,6 +259,53 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
             hold_condition=reason,
         )
     assert isinstance(current, AthbSuccess)
+    selection: ScalarSelection | None = None
+    if inputs.direction is ActuationDirection.BIDIRECTIONAL_SCALAR:
+        heating, neutral, cooling = (
+            roots.heating_control,
+            roots.thermal_neutral,
+            roots.cooling_control,
+        )
+        assert isinstance(heating, RootSuccess)
+        assert isinstance(neutral, RootSuccess)
+        assert isinstance(cooling, RootSuccess)
+        if inputs.outdoor_temperature_c is not None:
+            selection = select_scalar_target(
+                indoor_c=inputs.air_temperature_c,
+                outdoor_c=inputs.outdoor_temperature_c,
+                heating_c=heating.mapped_room_temperature_c,
+                neutral_c=neutral.mapped_room_temperature_c,
+                cooling_c=cooling.mapped_room_temperature_c,
+            )
+        if selection is None:
+            return ZoneCalculationResult(
+                current,
+                roots,
+                None,
+                None,
+                "bidirectional_selection_inputs_invalid",
+                budget.used,
+                votes,
+                eligibility,
+                hold_condition="bidirectional_selection_inputs_invalid",
+            )
+        inputs = replace(
+            inputs,
+            direction=selection.policy_direction,
+            previous_requested=(None, None),
+            explicit_transition=True,
+        )
+        if selection.branch == "neutral":
+            inputs = replace(
+                inputs,
+                profile=ControlProfile.COMFORT,
+                boost_mode=BoostMode.OFF,
+                critical_locations=(),
+                grid=replace(
+                    inputs.grid,
+                    rounding_mode=inputs.grid.rounding_mode or GridRoundingMode.MATHEMATICAL,
+                ),
+            )
     critical_solutions = tuple(
         solve_critical_location(location, votes, budget=budget)
         for location in inputs.critical_locations
@@ -260,7 +323,7 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         )
     )
     if inputs.reject_extrapolation and extrapolated_decision:
-        if inputs.failure_hold_elapsed:
+        if inputs.failure_hold_elapsed and selection is None:
             return _fixed_fallback(
                 inputs,
                 current=current,
@@ -291,8 +354,13 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         )
         for location in critical_solutions
     )
+    policy_roots = roots
+    if selection is not None and selection.branch == "neutral":
+        policy_roots = replace(
+            roots, heating_control=roots.thermal_neutral, cooling_control=roots.thermal_neutral
+        )
     policy = build_adaptive_policy(
-        roots=roots,
+        roots=policy_roots,
         critical_demands=critical_demands,
         direction=inputs.direction,
         profile=inputs.profile,
@@ -310,7 +378,7 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         elapsed_since_previous_seconds=inputs.elapsed_since_previous_seconds,
         explicit_transition=inputs.explicit_transition,
     )
-    return _normalize_policy(
+    result = _normalize_policy(
         inputs,
         current,
         roots,
@@ -320,6 +388,19 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         eligibility,
         critical_solutions,
     )
+    if selection is not None:
+        normalized = result.normalized
+        if isinstance(normalized, NormalizedScalarTarget):
+            # Selection of the heating root may still cool a warmer cabin (and
+            # vice versa). Command safeguards follow the actual scalar request.
+            direction = (
+                ActuationDirection.HEATING_ONLY
+                if normalized.normalized_room_c >= inputs.air_temperature_c
+                else ActuationDirection.COOLING_ONLY
+            )
+            normalized = replace(normalized, direction=direction)
+        result = replace(result, normalized=normalized, scalar_selection=selection)
+    return result
 
 
 def _normalize_policy(

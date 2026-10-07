@@ -67,6 +67,15 @@ def configured_freshness(options: Mapping[str, object], kind: SourceKind) -> tim
     return timedelta(minutes=minutes)
 
 
+def configured_jump_protection(options: Mapping[str, object], kind: SourceKind) -> bool:
+    """Only primary/local indoor air may opt out of jump quarantine."""
+
+    return (
+        kind not in {SourceKind.PRIMARY_AIR, SourceKind.LOCAL_AIR}
+        or options.get("indoor_temperature_jump_protection", True) is not False
+    )
+
+
 def snapshot_state(
     state: State | None,
     *,
@@ -126,6 +135,7 @@ def validate_state_value(
     prior: SourceState | None = None,
     generation: int = 1,
     freshness: timedelta | None = None,
+    jump_protection: bool = True,
 ) -> tuple[Observation, SourceState]:
     """Validate a captured HA value through the production source validator."""
 
@@ -163,6 +173,7 @@ def validate_state_value(
         <= (freshness if freshness is not None else SOURCE_POLICIES[kind].freshness)
         and (converted := convert_source_value(kind, value.raw_state, value.unit)) is not None
         and prior.last_accepted.value == converted[0]
+        and (jump_protection or prior.quarantine is None)
     ):
         return prior.last_accepted, prior
     update = validate_measured_source(
@@ -175,6 +186,7 @@ def validate_state_value(
         received_at=now,
         available=value.available,
         freshness=freshness,
+        jump_protection=jump_protection,
     )
     return update.observation, update.state
 

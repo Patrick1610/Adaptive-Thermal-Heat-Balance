@@ -11,6 +11,18 @@ from custom_components.athb.config_schema import (
 )
 
 
+@pytest.mark.parametrize("value", [True, False])
+def test_indoor_jump_setting_accepts_only_booleans(value):
+    assert validate_options({"indoor_temperature_jump_protection": value}) == {}
+
+
+@pytest.mark.parametrize("value", ["false", 0, None])
+def test_invalid_jump_setting_is_rejected(value):
+    assert validate_options({"indoor_temperature_jump_protection": value}) == {
+        "indoor_temperature_jump_protection": "invalid_option"
+    }
+
+
 def test_measured_and_declared_rh_are_mutually_exclusive_tagged_sources() -> None:
     measured = {
         "primary_temperature": "sensor.room",

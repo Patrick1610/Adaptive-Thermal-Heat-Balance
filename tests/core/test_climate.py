@@ -82,9 +82,24 @@ def _snapshot(
             AutoMapping.UNMAPPED,
             CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE),
         ),
-        ("heat_cool", 1, AutoMapping.UNMAPPED, "unsupported_hvac_mode"),
-        ("auto", 1, AutoMapping.UNMAPPED, "unsupported_auto_mapping"),
-        ("auto", 1, AutoMapping.BIDIRECTIONAL_SCALAR, "unsupported_auto_mapping"),
+        (
+            "heat_cool",
+            1,
+            AutoMapping.UNMAPPED,
+            CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR, True),
+        ),
+        (
+            "auto",
+            1,
+            AutoMapping.UNMAPPED,
+            CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR, True),
+        ),
+        (
+            "auto",
+            1,
+            AutoMapping.BIDIRECTIONAL_SCALAR,
+            CapabilityMapping(ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR, True),
+        ),
         (
             "auto",
             1,
@@ -128,7 +143,13 @@ def test_complete_capability_mode_matrix(
         (TARGET_TEMPERATURE_RANGE, ("off", "auto"), AutoMapping.RANGE),
         (TARGET_TEMPERATURE, ("off", "heat", "auto"), AutoMapping.HEATING),
         (TARGET_TEMPERATURE, ("off", "cool", "auto"), AutoMapping.COOLING),
-        (TARGET_TEMPERATURE, ("off", "heat", "cool", "auto"), AutoMapping.UNMAPPED),
+        (TARGET_TEMPERATURE, ("off", "heat", "cool", "auto"), AutoMapping.BIDIRECTIONAL_SCALAR),
+        (TARGET_TEMPERATURE, ("off", "heat_cool", "auto"), AutoMapping.BIDIRECTIONAL_SCALAR),
+        (
+            TARGET_TEMPERATURE,
+            ("off", "heat", "heat_cool", "auto"),
+            AutoMapping.BIDIRECTIONAL_SCALAR,
+        ),
         (TARGET_TEMPERATURE, ("off", "auto"), AutoMapping.UNMAPPED),
     ],
 )

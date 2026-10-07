@@ -60,6 +60,109 @@ def _input(
     )
 
 
+@pytest.mark.parametrize(("outside", "branch"), [(5, "heating"), (30, "cooling")])
+def test_bidirectional_scalar_uses_actual_outside_not_running_mean(outside, branch):
+    inputs = replace(
+        _input(hvac_mode="heat_cool"),
+        direction=ActuationDirection.BIDIRECTIONAL_SCALAR,
+        outdoor_temperature_c=outside,
+    )
+    result = calculate_zone(inputs)
+    assert result.scalar_selection is not None
+    assert result.scalar_selection.branch == branch
+    assert result.scalar_selection.outdoor_c == outside
+    assert isinstance(result.normalized, NormalizedScalarTarget)
+    assert result.suppression_reason is None
+    assert result.roots is not None
+    expected = result.roots.heating_control if branch == "heating" else result.roots.cooling_control
+    assert isinstance(expected, RootSuccess)
+    assert result.normalized.requested_room_c == pytest.approx(expected.mapped_room_temperature_c)
+
+
+def test_bidirectional_neutral_ignores_boost_and_setback():
+    inputs = _input()
+    roots = calculate_zone(inputs).roots
+    assert roots is not None
+    assert isinstance(roots.thermal_neutral, RootSuccess)
+    neutral = roots.thermal_neutral.mapped_room_temperature_c
+    result = calculate_zone(
+        replace(
+            inputs,
+            direction=ActuationDirection.BIDIRECTIONAL_SCALAR,
+            outdoor_temperature_c=neutral,
+            profile=ControlProfile.ECO,
+            boost_mode=BoostMode.RAPID,
+        )
+    )
+    assert result.scalar_selection is not None
+    assert result.scalar_selection.branch == "neutral"
+    assert isinstance(result.normalized, NormalizedScalarTarget)
+    assert result.normalized.requested_room_c == pytest.approx(neutral)
+    assert result.policy is not None
+    assert result.policy.boost_mode is BoostMode.OFF
+
+
+def test_bidirectional_missing_outside_keeps_roots_but_not_target():
+    result = calculate_zone(replace(_input(), direction=ActuationDirection.BIDIRECTIONAL_SCALAR))
+    assert result.roots is not None
+    assert result.normalized is None
+    assert result.suppression_reason == "bidirectional_selection_inputs_invalid"
+
+
+@pytest.mark.parametrize(("inside", "outside"), [(26.0, 5.0), (16.0, 30.0)])
+def test_bidirectional_symmetric_exceptions_use_real_neutral_root(inside, outside):
+    result = calculate_zone(
+        replace(
+            _input(),
+            air_temperature_c=inside,
+            direction=ActuationDirection.BIDIRECTIONAL_SCALAR,
+            outdoor_temperature_c=outside,
+        )
+    )
+    assert result.scalar_selection is not None
+    assert result.scalar_selection.branch == "neutral"
+    assert isinstance(result.normalized, NormalizedScalarTarget)
+    assert result.normalized.requested_room_c == pytest.approx(result.scalar_selection.neutral_c)
+
+
+def test_bidirectional_policy_keeps_setback_and_boost_on_directional_branches():
+    base = replace(
+        _input(), direction=ActuationDirection.BIDIRECTIONAL_SCALAR, outdoor_temperature_c=5.0
+    )
+    normal = calculate_zone(base)
+    setback = calculate_zone(replace(base, profile=ControlProfile.ECO))
+    boosted = calculate_zone(replace(base, boost_mode=BoostMode.ADAPTIVE))
+    assert isinstance(normal.normalized, NormalizedScalarTarget)
+    assert isinstance(setback.normalized, NormalizedScalarTarget)
+    assert isinstance(boosted.normalized, NormalizedScalarTarget)
+    assert setback.normalized.requested_room_c < normal.normalized.requested_room_c
+    assert boosted.normalized.requested_room_c > normal.normalized.requested_room_c
+
+
+def test_bidirectional_has_no_invented_fixed_fallback():
+    result = calculate_zone(
+        replace(
+            _input(running_mean_c=None),
+            direction=ActuationDirection.BIDIRECTIONAL_SCALAR,
+            outdoor_temperature_c=10,
+        )
+    )
+    assert result.normalized is None
+    assert result.hold_condition == "running_mean_unavailable"
+
+
+def test_bidirectional_near_neutral_does_not_require_a_ranged_gap():
+    result = calculate_zone(
+        replace(
+            _input(strategy=ComfortStrategy.NEAR_NEUTRAL),
+            direction=ActuationDirection.BIDIRECTIONAL_SCALAR,
+            outdoor_temperature_c=10,
+        )
+    )
+    assert isinstance(result.normalized, NormalizedScalarTarget)
+    assert result.suppression_reason is None
+
+
 def test_adaptive_heating_runs_real_numerical_policy_and_grid_path() -> None:
     result = calculate_zone(_input())
 

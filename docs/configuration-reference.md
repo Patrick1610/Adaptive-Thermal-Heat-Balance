@@ -46,6 +46,36 @@ External target-temperature intervention starts a manual override. An external H
 does not. All production writes pass through the sole `CommandBroker` to
 `climate.set_temperature`.
 
+### Bidirectional single-setpoint climates
+
+`heat_cool` with scalar target support, and scalar `auto` advertising both heating and cooling
+(or `heat_cool`), use the existing climate-specific target sensor. Genuine range support takes
+precedence in `heat_cool`/`auto`; ambiguous `auto` capabilities remain unsupported. The selected
+target is continuously recalculated, not latched to a preparation session. Let H/N/C denote the
+raw heating control point, thermal neutral and cooling control point:
+
+| First matching condition | Selected point |
+|---|---|
+| Current outside < H and current inside > C | N |
+| Current outside > C and current inside < H | N |
+| Otherwise current outside < N | H |
+| Otherwise current outside > N | C |
+| Current outside = N | N |
+
+Selection uses **current** validated outside air; the long-term outdoor running mean continues
+to determine the scientific comfort roots. H/C selection then uses existing directional
+occupancy/Boost policy when configured. Neutral selection stays neutral without setback or
+Boost. Device calibration, limits and grid rounding apply to the final scalar request. The
+heating-demand buffer does not replace a bidirectional request with a heating-only idle target.
+Attributes include `scalar_selection` with the branch, reason, inputs and raw H/N/C points.
+
+Targets remain visible with Adaptive control disabled or HVAC off when public capabilities are
+known. HVAC off still blocks writes. Missing/stale current selection inputs or missing roots
+produce no new target and no invented fixed bidirectional fallback. Previously valid output
+may remain visible as an explicitly stale hold, but is not a fresh selection or a new command.
+Enable Adaptive control only deliberately: ordinary ownership, manual override, feedback and
+retry gates remain in effect, and ATHB never powers on the climate or changes its HVAC mode.
+
 ## Comfort level, occupancy and Boost
 
 The comfort band is defined by `lower_comfort_vote` and `upper_comfort_vote`, default -0.5 and
@@ -174,6 +204,14 @@ convective and evaporative heat loss and, for globe mode, the MRT conversion. Mi
 measured air speed blocks the calculation.
 
 ## Measurement freshness
+
+**Indoor air temperature jump protection** (`indoor_temperature_jump_protection`) defaults to
+enabled for existing and new zones. It quarantines changes greater than 3 °C within five minutes
+in primary or critical local indoor air. Disable it per zone for legitimate rapid changes such
+as a vehicle cabin. Disabling releases only jump quarantine when the current observation passes
+the other checks; unavailable/invalid recovery, units, physical limits, timestamps and freshness
+remain enforced. Outdoor air, radiant sources and humidity retain their own validation policies.
+Diagnostics expose whether protection is enabled and whether the primary source is quarantined.
 
 ATHB uses Home Assistant's latest report timestamp (`last_reported` where available) rather than
 assuming that an unchanged value is a new physical observation. The advanced wizard exposes a

@@ -73,6 +73,7 @@ class CapabilityMapping:
 
     direction: ActuationDirection
     shape: TargetShape
+    bidirectional_scalar: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,7 +208,13 @@ def resolve_capability(
         return (
             CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE)
             if ranged
-            else ClimateFailure("unsupported_hvac_mode", "heat_cool requires range support")
+            else CapabilityMapping(
+                ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR, True
+            )
+            if scalar
+            else ClimateFailure(
+                "unsupported_hvac_mode", "heat_cool requires scalar or range support"
+            )
         )
     if mode == "auto":
         if auto_mapping is AutoMapping.UNMAPPED:
@@ -218,6 +225,10 @@ def resolve_capability(
             return CapabilityMapping(ActuationDirection.COOLING_ONLY, TargetShape.SCALAR)
         if auto_mapping is AutoMapping.RANGE and ranged:
             return CapabilityMapping(ActuationDirection.RANGED, TargetShape.RANGE)
+        if auto_mapping is AutoMapping.BIDIRECTIONAL_SCALAR and scalar:
+            return CapabilityMapping(
+                ActuationDirection.BIDIRECTIONAL_SCALAR, TargetShape.SCALAR, True
+            )
         return ClimateFailure("unsupported_auto_mapping")
     return ClimateFailure("unsupported_hvac_mode")
 
@@ -236,6 +247,8 @@ def infer_auto_mapping(snapshot: ClimateCapabilitySnapshot) -> AutoMapping:
     modes = set(snapshot.advertised_hvac_modes)
     has_heat = "heat" in modes
     has_cool = "cool" in modes
+    if (has_heat and has_cool) or "heat_cool" in modes:
+        return AutoMapping.BIDIRECTIONAL_SCALAR
     if has_heat and not has_cool:
         return AutoMapping.HEATING
     if has_cool and not has_heat:
@@ -323,7 +336,10 @@ def _normalize_scalar_with_grid(
     options: GridOptions,
     grid: GridDefinition,
 ) -> NormalizedScalarTarget | ClimateFailure:
-    if direction is ActuationDirection.RANGED or not _finite(requested_room_c):
+    if direction in {
+        ActuationDirection.RANGED,
+        ActuationDirection.BIDIRECTIONAL_SCALAR,
+    } or not _finite(requested_room_c):
         return ClimateFailure("invalid_target_request")
     assert snapshot.min_temp_ha is not None
     assert snapshot.max_temp_ha is not None

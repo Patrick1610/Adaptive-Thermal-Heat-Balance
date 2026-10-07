@@ -10,6 +10,7 @@ from homeassistant.core import State
 
 from custom_components.athb.adapters.sources import (
     StateValue,
+    configured_jump_protection,
     snapshot_primary_temperature,
     validate_state_value,
 )
@@ -155,6 +156,103 @@ def test_climate_without_finite_current_temperature_is_invalid(raw: object) -> N
 
     assert observation.validity.value == "invalid"
     assert observation.reasons == ("invalid_numeric_or_unit",)
+
+
+@pytest.mark.parametrize("mode", ["heat_cool", "auto", "off"])
+def test_scalar_bidirectional_current_target_visible_even_when_hvac_off(mode):
+    snapshot = CapturedZoneSnapshot(
+        NOW,
+        _state("sensor.room", "20", "°C"),
+        None,
+        50.0,
+        _state("sensor.outdoor", "30", "°C"),
+        None,
+        5.0,
+        "complete_history",
+        "balanced",
+        "comfort",
+        {"minimum_control_temperature": 18.0, "maximum_control_temperature": 26.0},
+        (_target(mode=mode),),
+    )
+    result = calculate_runtime_snapshot(snapshot)
+    target = result.targets[0]
+    assert target.result is not None
+    assert target.result.scalar_selection is not None
+    assert target.result.scalar_selection.branch == "cooling"
+    assert bool(target.mapping) is (mode != "off")
+    values = result_values(result)
+    assert values["effective_targets"]["target-1"]["temperature"] >= 23
+    assert values["effective_target_details"]["target-1"]["scalar_selection"]["outdoor_c"] == 30
+
+
+@pytest.mark.parametrize("kind", list(SourceKind))
+def test_jump_setting_scope_is_only_indoor_air(kind):
+    assert configured_jump_protection({}, kind)
+    assert configured_jump_protection({"indoor_temperature_jump_protection": False}, kind) is (
+        kind not in {SourceKind.PRIMARY_AIR, SourceKind.LOCAL_AIR}
+    )
+
+
+def test_runtime_snapshot_jump_opt_out_releases_existing_quarantine():
+    baseline = CapturedZoneSnapshot(
+        NOW,
+        _state("sensor.room", "20", "°C"),
+        None,
+        50.0,
+        _state("sensor.outdoor", "5", "°C"),
+        None,
+        5.0,
+        "complete_history",
+        "balanced",
+        "comfort",
+        {},
+        (_target(),),
+    )
+    initial = calculate_runtime_snapshot(baseline)
+    stamp = NOW + timedelta(seconds=60)
+    changed = replace(
+        baseline,
+        now=stamp,
+        primary=replace(baseline.primary, raw_state="30", observed_at=stamp),
+        source_states=initial.source_states,
+    )
+    quarantined = calculate_runtime_snapshot(changed)
+    assert quarantined.hold_condition == "primary_temperature_invalid"
+    accepted = calculate_runtime_snapshot(
+        replace(
+            changed,
+            options={"indoor_temperature_jump_protection": False},
+            source_states=quarantined.source_states,
+        )
+    )
+    assert accepted.primary_value_c == 30
+    assert dict(accepted.source_states)["primary"].quarantine is None
+    assert not dict(accepted.source_states)["primary"].recovering
+    assert dict(quarantined.source_states)["primary"].quarantine is not None
+
+
+@pytest.mark.parametrize("which", ["outdoor", "primary"])
+def test_bidirectional_stale_selection_inputs_never_produce_new_target(which):
+    snapshot = CapturedZoneSnapshot(
+        NOW,
+        _state("sensor.room", "20", "°C"),
+        None,
+        50.0,
+        _state("sensor.outdoor", "5", "°C"),
+        None,
+        5.0,
+        "complete_history",
+        "balanced",
+        "comfort",
+        {},
+        (_target(mode="heat_cool"),),
+    )
+    state = snapshot.outdoor if which == "outdoor" else snapshot.primary
+    stale = replace(state, observed_at=NOW - timedelta(hours=3))
+    result = calculate_runtime_snapshot(replace(snapshot, **{which: stale}))
+    assert result.targets[0].result is not None
+    assert result.targets[0].result.roots is not None
+    assert result_values(result)["effective_targets"] == {}
 
 
 def test_snapshot_adapter_preserves_declared_rh_and_adaptive_root_path() -> None:
