@@ -85,10 +85,12 @@ async def _start_delivery_runtime(
         if outcome == "error":
             raise TimeoutError("temporary transport error")
         if outcome == "ack":
+            current = hass.states.get("climate.target")
+            assert current is not None
             hass.states.async_set(
                 "climate.target",
-                mode,
-                {**attributes, "temperature": call.data["temperature"]},
+                current.state,
+                {**current.attributes, "temperature": call.data["temperature"]},
                 context=call.context,
             )
 
@@ -194,6 +196,123 @@ async def test_bidirectional_runtime_previews_and_optional_scalar_writes(
             await runtime.controller.async_wait_idle()
             await hass.async_block_till_done()
             assert len(calls) == before
+    finally:
+        await runtime.async_unload()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("mode", ["off", "heat_cool"])
+async def test_bidirectional_diagnostic_preview_is_fresh_but_never_written(
+    hass, monkeypatch, enabled, mode
+):
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(
+            5.0, HistoryQuality.DIAGNOSTIC, 1, 0.25, None, ("history_not_control_eligible",)
+        ),
+    )
+    runtime, calls = await _start_delivery_runtime(
+        hass, outcome="ack", mode=mode, control_enabled=enabled, outside="22", initial_target=18.0
+    )
+    try:
+        assert runtime.values["effective_targets"]["target-1"]["temperature"] == 23.0
+        detail = runtime.values["effective_target_details"]["target-1"]
+        assert detail["mode"] == "diagnostic_preview"
+        assert detail["preview_only"] is True
+        assert detail["scalar_selection"]["branch"] == "cooling"
+        assert runtime.values["data_quality"] == "diagnostic_estimate"
+        assert runtime.values["control_eligible"] is False
+        assert runtime.last_valid_values == {}
+        assert calls == []
+
+        # A previous trusted target and expired failure hold cannot override or
+        # dispatch the fresh diagnostic preview.
+        runtime.last_valid_values = {
+            "effective_targets": {"target-1": {"temperature": 18.0}},
+            "effective_target_details": {"target-1": {"mode": "adaptive"}},
+        }
+        runtime.failure_hold_elapsed = True
+        hass.states.async_set("sensor.outdoor", "20", {"unit_of_measurement": "°C"})
+        runtime.async_request_snapshot()
+        assert runtime.controller is not None
+        await runtime.controller.async_wait_idle()
+        await hass.async_block_till_done()
+        detail = runtime.values["effective_target_details"]["target-1"]
+        assert detail["mode"] == "diagnostic_preview"
+        assert detail["stale"] is False
+        assert detail["scalar_selection"]["branch"] == "heating"
+        assert runtime.values["control_eligible"] is False
+        assert calls == []
+    finally:
+        await runtime.async_unload()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_bidirectional_hvac_on_automatically_uses_latest_target(hass, monkeypatch, enabled):
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ()),
+    )
+    runtime, calls = await _start_delivery_runtime(
+        hass, outcome="ack", mode="off", control_enabled=enabled, outside="22", initial_target=18.0
+    )
+    try:
+        assert calls == []
+        previous = runtime.values["effective_targets"]["target-1"]["temperature"]
+        hass.states.async_set("sensor.outdoor", "20", {"unit_of_measurement": "°C"})
+        runtime.async_request_snapshot()
+        assert runtime.controller is not None
+        await runtime.controller.async_wait_idle()
+        await hass.async_block_till_done()
+        current = runtime.values["effective_targets"]["target-1"]["temperature"]
+        assert current != previous
+        target = hass.states.get("climate.target")
+        assert target is not None
+        hass.states.async_set(
+            "climate.target", "heat_cool", target.attributes, context=Context(user_id="test-user")
+        )
+        await hass.async_block_till_done()
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=3))
+        await hass.async_block_till_done()
+        await runtime.controller.async_wait_idle()
+        await hass.async_block_till_done()
+        assert len(calls) == int(enabled)
+        if enabled:
+            assert calls[0].data["temperature"] == current
+            assert runtime.values["command_delivery"]["registry-1"]["status"] == "acknowledged"
+            assert runtime.ownership["registry-1"].ownership is Ownership.OWNED
+        else:
+            assert runtime.ownership["registry-1"].ownership is Ownership.DISABLED
+    finally:
+        await runtime.async_unload()
+
+
+async def test_bidirectional_estimated_target_becomes_executable_only_after_history_recovers(
+    hass, monkeypatch
+):
+    result = RunningMeanResult(
+        5.0, HistoryQuality.DIAGNOSTIC, 1, 0.25, None, ("history_not_control_eligible",)
+    )
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector, "result", lambda *args, **kwargs: result
+    )
+    runtime, calls = await _start_delivery_runtime(
+        hass, outcome="ack", mode="heat_cool", outside="22", initial_target=18.0
+    )
+    try:
+        assert calls == []
+        assert runtime.values["effective_target_details"]["target-1"]["preview_only"] is True
+        result = RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ())
+        runtime.async_request_snapshot()
+        assert runtime.controller is not None
+        await runtime.controller.async_wait_idle()
+        await hass.async_block_till_done()
+        assert len(calls) == 1
+        assert calls[0].data["temperature"] == 23.0
+        assert runtime.values["effective_target_details"]["target-1"]["preview_only"] is False
+        assert runtime.values["command_delivery"]["registry-1"]["status"] == "acknowledged"
     finally:
         await runtime.async_unload()
 

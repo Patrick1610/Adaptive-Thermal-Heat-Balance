@@ -34,6 +34,9 @@ persisted before a transition command and restored on restart.
   estimate; automatic control still uses the configured fixed/no-write fallback. Limited coverage
   does not mean that the currently reporting sensor is unavailable. Diagnostics distinguish
   `history_limited_coverage` (completed days) from `history_current_day_estimate` (startup).
+  Bidirectional scalar climates show a `diagnostic_preview` target with `preview_only: true`,
+  but never dispatch that estimate. They retain the existing no-invented-bidirectional-fallback
+  behavior. A restored old sensor value instead shows `restored_hold` / `restored_stale`.
 - `missing_required_root:*`: the root needed for that actuator direction did not solve.
 - `no_legal_inward_target` / `control_band_too_narrow`: bounds, grid or required gap are infeasible.
 - `storage_verification_failed`: control dispatch is inhibited because the recovery journal could

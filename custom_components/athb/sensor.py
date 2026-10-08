@@ -389,12 +389,25 @@ class TargetSensor(AthbEntity, RestoreSensor):
         targets = self.runtime.values.get("effective_target_details", {})
         detail = targets.get(self.target["target_uuid"], {})
         data_quality = self.runtime.values.get("data_quality")
-        if self._restored_native_value is not None and data_quality in {None, "unavailable"}:
+        current = self.runtime.values.get("effective_targets", {})
+        restored = (
+            current.get(self.target["target_uuid"], {}).get(self.endpoint) is None
+            and self._restored_native_value is not None
+        )
+        if restored:
             data_quality = "restored_stale"
         return {
             **super().extra_state_attributes,
-            "mode": detail.get("mode", "unavailable"),
-            "reason": detail.get("reason"),
+            "mode": "restored_hold" if restored else detail.get("mode", "unavailable"),
+            "value_origin": (
+                "restored"
+                if restored
+                else "calculated"
+                if self.native_value is not None
+                else "unavailable"
+            ),
+            "preview_only": restored or detail.get("preview_only", False),
+            "reason": "restored_value_no_current_target" if restored else detail.get("reason"),
             "fallback": detail.get("fallback", False),
             "comfort_level": self.runtime.strategy,
             "boost_mode": self.runtime.boost_mode,
@@ -402,8 +415,8 @@ class TargetSensor(AthbEntity, RestoreSensor):
             "occupancy_status": self.runtime.values.get("occupancy_status"),
             "setback_active": self.runtime.values.get("setback_active", False),
             "setback": self.runtime.eco_intensity,
-            "stale": detail.get("stale", False),
-            "scalar_selection": detail.get("scalar_selection"),
+            "stale": restored or detail.get("stale", False),
+            "scalar_selection": None if restored else detail.get("scalar_selection"),
             "safety_deescalation": detail.get("safety_deescalation", False),
             "data_quality": data_quality,
             "last_valid_at": self.runtime.values.get("last_valid_at"),

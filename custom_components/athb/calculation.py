@@ -794,8 +794,8 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             heating, cooling = policy.occupied_heating_c, policy.occupied_cooling_c
         else:
             heating, cooling = policy.unoccupied_heating_c, policy.unoccupied_cooling_c
-        if calculation.normalized is not None and isinstance(
-            calculation.normalized, NormalizedScalarTarget
+        if isinstance(
+            calculation.normalized or calculation.diagnostic_preview, NormalizedScalarTarget
         ):
             value = heating if heating is not None else cooling
             return {"temperature": value} if value is not None else {}
@@ -808,12 +808,20 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
 
     for target in result.targets:
         calculation = target.result
-        if calculation is None or calculation.normalized is None:
+        if calculation is None:
             continue
-        normalized = calculation.normalized
+        normalized = calculation.normalized or calculation.diagnostic_preview
+        if normalized is None:
+            continue
+        preview_only = calculation.diagnostic_preview is not None
         fallback = bool(calculation.policy and calculation.policy.fallback)
         effective_details[target.target_uuid] = {
-            "mode": "fallback" if fallback else "adaptive",
+            "mode": "diagnostic_preview"
+            if preview_only
+            else "fallback"
+            if fallback
+            else "adaptive",
+            "preview_only": preview_only,
             "reason": calculation.hold_condition or target.suppression_reason,
             "fallback": fallback,
             "boost_mode": calculation.policy.boost_mode.value if calculation.policy else "off",
@@ -850,6 +858,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             }
         target_scenarios[target.target_uuid] = {
             "entity_id": target.entity_id,
+            "preview_only": preview_only,
             "direction": (
                 "ranged"
                 if isinstance(normalized, NormalizedRangeTarget)
@@ -857,7 +866,7 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
             ),
             "current": {
                 "room": room_values(calculation, "current"),
-                "actuator": normalized_values(calculation.normalized),
+                "actuator": normalized_values(normalized),
             },
             "occupied": {
                 "room": room_values(calculation, "occupied"),

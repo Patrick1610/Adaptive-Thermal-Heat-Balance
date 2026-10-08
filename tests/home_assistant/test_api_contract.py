@@ -531,6 +531,39 @@ def test_restored_values_are_visible_but_explicitly_stale() -> None:
     assert high_humidity.extra_state_attributes["data_quality"] == "restored_stale"
 
 
+def test_restored_target_is_labelled_even_when_comfort_is_current():
+    runtime = _runtime()
+    target = {"target_uuid": "target-1", "entity_id": "climate.target"}
+    sensor = TargetSensor(runtime, target, "temperature")
+    sensor._restored_native_value = 18.0
+    runtime.publish({"data_quality": "diagnostic_estimate", "effective_targets": {}})
+    assert sensor.native_value == 18.0
+    attributes = sensor.extra_state_attributes
+    assert attributes["data_quality"] == "restored_stale"
+    assert attributes["mode"] == "restored_hold"
+    assert attributes["value_origin"] == "restored"
+    assert attributes["stale"] is True
+    assert attributes["preview_only"] is True
+    assert attributes["scalar_selection"] is None
+
+    runtime.publish(
+        {
+            "data_quality": "diagnostic_estimate",
+            "effective_targets": {"target-1": {"temperature": 21.5}},
+            "effective_target_details": {
+                "target-1": {"mode": "diagnostic_preview", "preview_only": True}
+            },
+        }
+    )
+    assert sensor.native_value == 21.5
+    attributes = sensor.extra_state_attributes
+    assert attributes["data_quality"] == "diagnostic_estimate"
+    assert attributes["mode"] == "diagnostic_preview"
+    assert attributes["value_origin"] == "calculated"
+    assert attributes["stale"] is False
+    assert attributes["preview_only"] is True
+
+
 async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolete_entities(
     hass: Any,
 ) -> None:

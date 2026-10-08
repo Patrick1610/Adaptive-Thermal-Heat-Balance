@@ -115,6 +115,7 @@ class ZoneCalculationResult:
     occupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
     unoccupied_normalized: NormalizedScalarTarget | NormalizedRangeTarget | None = None
     scalar_selection: ScalarSelection | None = None
+    diagnostic_preview: NormalizedScalarTarget | None = None
 
 
 def _fixed_fallback(
@@ -220,7 +221,10 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
     current = evaluate_current_location(context, budget=budget)
     roots = solve_five_roots(context, votes, budget=budget)
     roots = complete_descriptive_comfort_range(context, votes, roots, budget=budget)
-    if inputs.diagnostic_history:
+    if (
+        inputs.diagnostic_history
+        and inputs.direction is not ActuationDirection.BIDIRECTIONAL_SCALAR
+    ):
         return _fixed_fallback(
             inputs,
             current=current,
@@ -400,6 +404,16 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
             )
             normalized = replace(normalized, direction=direction)
         result = replace(result, normalized=normalized, scalar_selection=selection)
+        if inputs.diagnostic_history and isinstance(normalized, NormalizedScalarTarget):
+            # Publish an estimated target without creating an executable command.
+            # The history gate remains independent of the H/N/C calculation.
+            result = replace(
+                result,
+                normalized=None,
+                diagnostic_preview=normalized,
+                suppression_reason="history_not_control_eligible",
+                hold_condition="history_not_control_eligible",
+            )
     return result
 
 

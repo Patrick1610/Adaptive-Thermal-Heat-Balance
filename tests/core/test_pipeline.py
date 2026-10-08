@@ -151,6 +151,43 @@ def test_bidirectional_has_no_invented_fixed_fallback():
     assert result.hold_condition == "running_mean_unavailable"
 
 
+@pytest.mark.parametrize(
+    ("inside", "outside", "branch"),
+    [(20.0, 5.0, "heating"), (20.0, 30.0, "cooling"), (26.0, 5.0, "neutral")],
+)
+@pytest.mark.parametrize("no_write", [False, True])
+def test_bidirectional_diagnostic_history_has_preview_but_no_executable_target(
+    inside, outside, branch, no_write
+):
+    inputs = replace(
+        _input(hvac_mode="heat_cool"),
+        air_temperature_c=inside,
+        direction=ActuationDirection.BIDIRECTIONAL_SCALAR,
+        outdoor_temperature_c=outside,
+        diagnostic_history=True,
+        fallback_no_write=no_write,
+    )
+    result = calculate_zone(inputs)
+    trusted = calculate_zone(replace(inputs, diagnostic_history=False))
+    assert result.scalar_selection is not None
+    assert result.scalar_selection.branch == branch
+    assert result.diagnostic_preview == trusted.normalized
+    assert result.normalized is None
+    assert result.suppression_reason == "history_not_control_eligible"
+    assert result.hold_condition == "history_not_control_eligible"
+
+
+def test_bidirectional_diagnostic_preview_still_requires_current_outside():
+    result = calculate_zone(
+        replace(
+            _input(), direction=ActuationDirection.BIDIRECTIONAL_SCALAR, diagnostic_history=True
+        )
+    )
+    assert result.diagnostic_preview is None
+    assert result.normalized is None
+    assert result.suppression_reason == "bidirectional_selection_inputs_invalid"
+
+
 def test_bidirectional_near_neutral_does_not_require_a_ranged_gap():
     result = calculate_zone(
         replace(

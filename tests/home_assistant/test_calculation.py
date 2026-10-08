@@ -159,7 +159,8 @@ def test_climate_without_finite_current_temperature_is_invalid(raw: object) -> N
 
 
 @pytest.mark.parametrize("mode", ["heat_cool", "auto", "off"])
-def test_scalar_bidirectional_current_target_visible_even_when_hvac_off(mode):
+@pytest.mark.parametrize("diagnostic", [False, True])
+def test_scalar_bidirectional_current_target_visible_even_when_hvac_off(mode, diagnostic):
     snapshot = CapturedZoneSnapshot(
         NOW,
         _state("sensor.room", "20", "°C"),
@@ -168,7 +169,7 @@ def test_scalar_bidirectional_current_target_visible_even_when_hvac_off(mode):
         _state("sensor.outdoor", "30", "°C"),
         None,
         5.0,
-        "complete_history",
+        "diagnostic_estimate" if diagnostic else "complete_history",
         "balanced",
         "comfort",
         {"minimum_control_temperature": 18.0, "maximum_control_temperature": 26.0},
@@ -182,7 +183,15 @@ def test_scalar_bidirectional_current_target_visible_even_when_hvac_off(mode):
     assert bool(target.mapping) is (mode != "off")
     values = result_values(result)
     assert values["effective_targets"]["target-1"]["temperature"] >= 23
-    assert values["effective_target_details"]["target-1"]["scalar_selection"]["outdoor_c"] == 30
+    detail = values["effective_target_details"]["target-1"]
+    assert detail["scalar_selection"]["outdoor_c"] == 30
+    assert detail["mode"] == ("diagnostic_preview" if diagnostic else "adaptive")
+    assert detail["preview_only"] is diagnostic
+    assert (target.result.normalized is None) is diagnostic
+    scenarios = values["target_scenarios"]["target-1"]
+    assert scenarios["preview_only"] is diagnostic
+    assert scenarios["current"]["actuator"] == values["effective_targets"]["target-1"]
+    assert "temperature" in scenarios["current"]["room"]
 
 
 @pytest.mark.parametrize("kind", list(SourceKind))
@@ -622,6 +631,7 @@ def test_snapshot_applies_max_setback_from_command_bounds_and_reports_fallback_t
     assert values["effective_targets"]["target-1"]["temperature"] == 18.5
     assert values["effective_target_details"]["target-1"] == {
         "mode": "fallback",
+        "preview_only": False,
         "reason": "running_mean_unavailable",
         "fallback": True,
         "boost_mode": "off",

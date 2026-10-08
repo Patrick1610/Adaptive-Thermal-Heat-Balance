@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.28
+
+- Publish continuously selected scalar heating/neutral/cooling targets even when the outdoor
+  running mean is only a diagnostic estimate. Label them `diagnostic_preview` / `preview_only`
+  and keep them structurally separate from executable commands; history eligibility is unchanged.
+- Keep previews visible with HVAC off or Adaptive control disabled. When the climate is enabled,
+  recalculate and reconcile before writing the latest target if all normal control gates pass.
+- Explicitly label restored climate-target sensor values as `restored_hold` / `restored_stale`
+  instead of presenting an old target as a current calculation when comfort values are available.
+- Add regression coverage for estimated heating/cooling/neutral previews, disabled/off climates,
+  expired failure holds, history recovery, HVAC activation and restored-target replacement.
+
 ## 0.2.25
 
 - Separate climate-write failures from controller ownership: service errors, missing feedback and

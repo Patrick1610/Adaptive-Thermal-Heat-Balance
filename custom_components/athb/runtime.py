@@ -1857,9 +1857,15 @@ class ZoneRuntime:
                 projected["effective_target_details"] = {
                     target_uuid: {
                         **detail,
-                        "mode": "stale_hold",
-                        "reason": result.hold_condition,
-                        "stale": True,
+                        **(
+                            {"stale": False}
+                            if detail.get("preview_only")
+                            else {
+                                "mode": "stale_hold",
+                                "reason": result.hold_condition,
+                                "stale": True,
+                            }
+                        ),
                     }
                     for target_uuid, detail in details.items()
                     if isinstance(detail, dict)

@@ -29,6 +29,9 @@ environment is used only to generate and audit independent development goldens.
   continuously select the heating, neutral or cooling control point using current outside air
   and symmetric hot/cold cabin exceptions. They expose the existing climate target and can use
   normal Adaptive control; ATHB still never starts equipment or changes HVAC mode.
+- A bidirectional scalar target can be shown as a labelled diagnostic preview when outdoor
+  history is limited. Displaying a preview does not grant automatic-control eligibility or write
+  to a disabled/off climate. Restored old targets are explicitly labelled stale.
 - Indoor air temperature jump protection can be disabled per zone for legitimate rapid cabin
   changes. It is enabled by default and does not disable numeric, range or freshness validation.
 - ATHB calls only `climate.set_temperature`. It never turns equipment on or off and never changes

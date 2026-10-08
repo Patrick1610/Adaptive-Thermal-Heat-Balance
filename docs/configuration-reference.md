@@ -69,12 +69,26 @@ Boost. Device calibration, limits and grid rounding apply to the final scalar re
 heating-demand buffer does not replace a bidirectional request with a heating-only idle target.
 Attributes include `scalar_selection` with the branch, reason, inputs and raw H/N/C points.
 
+Limited outdoor history does not hide a numerically valid scalar selection. The target sensor
+then shows `mode: diagnostic_preview`, `preview_only: true` and
+`data_quality: diagnostic_estimate`. Its inputs must still be valid and current. The estimate
+cannot create an executable command: `history_not_control_eligible` remains in effect until
+the ordinary adaptive-history requirements are met. This is distinct from a stale cabin reading;
+it does not relax current indoor-temperature validation or heating-safety checks.
+
 Targets remain visible with Adaptive control disabled or HVAC off when public capabilities are
 known. HVAC off still blocks writes. Missing/stale current selection inputs or missing roots
 produce no new target and no invented fixed bidirectional fallback. Previously valid output
 may remain visible as an explicitly stale hold, but is not a fresh selection or a new command.
+When only a restored sensor value is available, attributes identify `mode: restored_hold`,
+`value_origin: restored`, `stale: true` and `data_quality: restored_stale`. A fresh calculated
+target takes precedence over that stored value, including a diagnostic preview.
 Enable Adaptive control only deliberately: ordinary ownership, manual override, feedback and
 retry gates remain in effect, and ATHB never powers on the climate or changes its HVAC mode.
+Turning the climate from `off` to a supported mode triggers a debounced fresh calculation and
+live reconciliation. If Adaptive control is enabled and all control gates pass, ATHB writes the
+latest selected target automatically; it does not replay the previously stored target. Limited
+history can therefore show a preview while still inhibiting automatic adaptive writes.
 
 ## Comfort level, occupancy and Boost
 
