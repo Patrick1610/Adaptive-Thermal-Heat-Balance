@@ -17,7 +17,7 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.athb import runtime as runtime_module
-from custom_components.athb.adapters.broker import CommandBroker, CommandOutcome
+from custom_components.athb.adapters.broker import AcknowledgedTarget, CommandBroker, CommandOutcome
 from custom_components.athb.adapters.climate import (
     HomeAssistantClimateService,
     capability_from_state,
@@ -43,6 +43,7 @@ from custom_components.athb.core.contracts import (
     Observation,
     ObservationValidity,
     Provenance,
+    TargetShape,
 )
 from custom_components.athb.core.history import HistoryQuality, RunningMeanResult
 from custom_components.athb.core.ownership import (
@@ -50,6 +51,7 @@ from custom_components.athb.core.ownership import (
     Ownership,
     OwnershipEvent,
     OwnershipState,
+    TargetFingerprint,
     TargetReadiness,
 )
 from custom_components.athb.core.sources import SourceKind, SourceState
@@ -579,6 +581,163 @@ async def test_diagnostic_estimate_clears_missing_history_repair_without_claimin
     runtime._update_observability_conditions(calculate_runtime_snapshot(snapshot))
     assert ("missing_history_24h", False) in updates
     assert "missing_history_24h" not in runtime.repair_condition_started
+
+
+@pytest.mark.parametrize("unit", [TemperatureUnit.CELSIUS, TemperatureUnit.FAHRENHEIT])
+def test_current_target_retains_broker_decision_without_changing_candidate(unit) -> None:
+    calculation = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    target = calculation.targets[0]
+    assert target.result is not None
+    assert isinstance(target.result.normalized, NormalizedScalarTarget)
+    candidate = replace(
+        target.result.normalized,
+        normalized_ha=20.5 if unit is TemperatureUnit.CELSIUS else 68.9,
+        normalized_actuator_c=20.5,
+        normalized_room_c=20.5,
+        bounded_c=20.96002,
+    )
+    target = replace(
+        target,
+        capability=replace(target.capability, temperature_unit=unit),
+        result=replace(target.result, normalized=candidate),
+    )
+    calculation = replace(calculation, targets=(target,), explicit_transition=False)
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.control_enabled = True
+    runtime.capability_generations[target.registry_identity] = 1
+    runtime.ownership[target.registry_identity] = OwnershipState(
+        target.registry_identity,
+        Ownership.OWNED,
+        DataReadiness.READY,
+        TargetReadiness.AVAILABLE_SUPPORTED,
+    )
+    ack = AcknowledgedTarget(
+        TargetFingerprint(
+            TargetShape.SCALAR, temperature_ha=21.0 if unit is TemperatureUnit.CELSIUS else 69.8
+        ),
+        21.0,
+        None,
+        None,
+        dt_util.utcnow(),
+    )
+    broker = MagicMock(spec=CommandBroker)
+    broker.retained_target.return_value = (ack, "quantization_hysteresis")
+    runtime.broker = broker
+    visible = runtime._observable_values(calculation)
+    assert visible["effective_targets"][target.target_uuid]["temperature"] == pytest.approx(21.0)
+    assert visible["target_scenarios"][target.target_uuid]["current"]["actuator"][
+        "temperature"
+    ] == pytest.approx(21.0)
+    assert (
+        visible["effective_target_details"][target.target_uuid]["reason"]
+        == "quantization_hysteresis"
+    )
+    assert runtime.last_valid_values["effective_targets"] == visible["effective_targets"]
+    assert calculation.targets[0].result.normalized is candidate
+    assert broker.retained_target.call_args.args[0].temperature_ha == candidate.normalized_ha
+    # Releasing the guard must project the intact candidate, not the previously held value.
+    broker.retained_target.return_value = None
+    released = runtime._observable_values(
+        calculation, explicit_targets=frozenset({target.registry_identity})
+    )
+    assert released["effective_targets"][target.target_uuid]["temperature"] == 20.5
+    assert broker.retained_target.call_args.args[0].explicit_transition is True
+    assert (
+        released["target_scenarios"][target.target_uuid]["occupied"]
+        == visible["target_scenarios"][target.target_uuid]["occupied"]
+    )
+    # Calculation-only zones never get pinned to old control acknowledgements.
+    runtime.control_enabled = False
+    broker.retained_target.return_value = (ack, "quantization_hysteresis")
+    assert (
+        runtime._observable_values(calculation)["effective_targets"][target.target_uuid][
+            "temperature"
+        ]
+        == 20.5
+    )
+
+
+@pytest.mark.parametrize("phase", ["ramp", "exhausted"])
+async def test_current_target_matches_real_dispatch_during_heat_guard(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, phase: str
+) -> None:
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ()),
+    )
+    runtime, calls = await _start_delivery_runtime(hass, outcome="ack")
+    assert runtime.controller is not None
+    await runtime.controller.async_stop()
+    try:
+        result = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+        target = result.targets[0]
+        assert target.result is not None
+        assert isinstance(target.result.normalized, NormalizedScalarTarget)
+        target = replace(
+            target,
+            target_uuid="target-1",
+            registry_identity="registry-1",
+            entity_id="climate.target",
+            capability=replace(target.capability, scalar_target_ha=21.0),
+            result=replace(
+                target.result,
+                normalized=replace(
+                    target.result.normalized,
+                    normalized_ha=21.0,
+                    normalized_actuator_c=21.0,
+                    normalized_room_c=21.0,
+                ),
+            ),
+        )
+        result = replace(result, targets=(target,), explicit_transition=True, primary_value_c=18.0)
+        # Establish an actual acknowledged target through the production broker.
+        now = dt_util.utcnow() + timedelta(seconds=65)
+        monkeypatch.setattr(dt_util, "utcnow", lambda: now)
+        runtime.heat_guards.clear()
+        runtime.primary_feedback_at = dt_util.utcnow()
+        await runtime._async_apply_calculation(result)
+        await hass.async_block_till_done()
+        assert calls[-1].data["temperature"] == 21.0
+        now += timedelta(seconds=65)
+        runtime.entry = cast(
+            Any,
+            SimpleNamespace(
+                title=runtime.entry.title,
+                entry_id=runtime.entry.entry_id,
+                data=runtime.entry.data,
+                options={**runtime.entry.options, "target_rounding_mode": "floor"},
+            ),
+        )
+        assert target.result is not None
+        candidate = replace(
+            target.result.normalized,
+            normalized_ha=20.5,
+            normalized_actuator_c=20.5,
+            normalized_room_c=20.5,
+            bounded_c=20.96002,
+        )
+        target = replace(target, result=replace(target.result, normalized=candidate))
+        result = replace(result, targets=(target,), explicit_transition=False)
+        runtime.heating_demand_active["registry-1"] = True
+        runtime.primary_feedback_at = now - timedelta(minutes=10)
+        runtime.heat_guards["registry-1"] = runtime_module.HeatGuard(
+            phase=runtime_module.HeatGuardPhase(phase),
+            report_at=runtime.primary_feedback_at,
+            evidence_at=runtime.primary_feedback_at,
+            ramp_at=now,
+            ramp_start_c=20.5,
+        )
+        runtime._publish_calculation(2, result)
+        # HeatGuard bypasses quantization hold; no acknowledged 21-degree overlay.
+        expected = 20.5 if phase == "ramp" else 18.0
+        assert runtime.values["effective_targets"]["target-1"]["temperature"] == expected
+        await hass.async_block_till_done()
+        assert calls[-1].data["temperature"] == expected
+        assert runtime.values["effective_targets"]["target-1"]["temperature"] == expected
+        assert result.targets[0].result.normalized is candidate
+    finally:
+        await runtime.async_unload()
 
 
 def test_heating_demand_buffer_uses_actuator_grid_and_stateful_thresholds() -> None:

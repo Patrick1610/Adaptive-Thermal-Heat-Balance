@@ -1722,7 +1722,14 @@ class ZoneRuntime:
         recovery_reassertions = self._reconcile_targets(result)
         # Preserve the established cooling safety while heat uses its own guard.
         self._schedule_stale_safety(result)
-        values = {**self.values, **self._observable_values(result)}
+        values = {
+            **self.values,
+            **self._observable_values(
+                result,
+                explicit_targets=recovery_reassertions | frozenset(demand_transitions),
+                recovery_reassertions=recovery_reassertions,
+            ),
+        }
         values["calculation_generation"] = generation
         values["control_enabled"] = self.control_enabled
         values["ownership"] = {
@@ -1788,10 +1795,17 @@ class ZoneRuntime:
             # directly instead of being slewed from an obsolete target.
             self._mark_explicit_transition("input_recovery")
 
-    def _observable_values(self, result: RuntimeCalculation) -> dict[str, Any]:
+    def _observable_values(
+        self,
+        result: RuntimeCalculation,
+        *,
+        explicit_targets: frozenset[str] = frozenset(),
+        recovery_reassertions: frozenset[str] = frozenset(),
+    ) -> dict[str, Any]:
         """Keep the last valid output visible while clearly labelling held data."""
 
         projected = result_values(result)
+        self._project_retained_targets(projected, result, explicit_targets, recovery_reassertions)
         effective_details = projected.get("effective_target_details", {})
         if isinstance(effective_details, dict):
             for target_uuid, demand in self.heating_demand_details.items():
@@ -1903,6 +1917,64 @@ class ZoneRuntime:
         )
         projected["stale_safety_active"] = bool(self.stale_safety_applied)
         return projected
+
+    def _project_retained_targets(
+        self,
+        projected: dict[str, Any],
+        result: RuntimeCalculation,
+        explicit_targets: frozenset[str],
+        recovery_reassertions: frozenset[str],
+    ) -> None:
+        """Show the broker's held target without changing the calculation candidate."""
+
+        if not self.control_enabled or self.broker is None or result.hold_condition is not None:
+            return
+        now = dt_util.utcnow()
+        for target in result.targets:
+            calculation, mapping = target.result, target.mapping
+            if (
+                calculation is None
+                or calculation.normalized is None
+                or mapping is None
+                or target.suppression_reason is not None
+                or result.primary_temperature_stale
+            ):
+                continue
+            safety_deescalation = self.heat_guards.get(
+                target.registry_identity, HeatGuard()
+            ).phase in {HeatGuardPhase.RAMP, HeatGuardPhase.EXHAUSTED}
+            intent = self._intent_from_result(
+                target,
+                calculation.normalized,
+                mapping,
+                now,
+                explicit_transition=(
+                    result.explicit_transition
+                    or target.registry_identity in explicit_targets
+                    or safety_deescalation
+                ),
+                recovery_reassertion=target.registry_identity in recovery_reassertions,
+                safety_deescalation=safety_deescalation,
+            )
+            retained = self.broker.retained_target(intent, now=now)
+            if retained is None:
+                continue
+            acknowledged, reason = retained
+            fingerprint = acknowledged.fingerprint
+            held = {
+                endpoint: ha_to_celsius(value, target.capability.temperature_unit)
+                for endpoint, value in (
+                    ("temperature", fingerprint.temperature_ha),
+                    ("target_low", fingerprint.low_ha),
+                    ("target_high", fingerprint.high_ha),
+                )
+                if value is not None
+            }
+            projected["effective_targets"][target.target_uuid] = held
+            projected["target_scenarios"][target.target_uuid]["current"]["actuator"] = dict(held)
+            projected["effective_target_details"][target.target_uuid].update(
+                {"mode": "broker_hold", "reason": reason}
+            )
 
     def _schedule_last_valid_persistence(self) -> None:
         """Persist changed last-valid display values without blocking publication."""

@@ -401,6 +401,40 @@ class CommandBroker:
             return (0, 0)
         return (int(state.pending is not None), int(state.queued is not None))
 
+    def retained_target(
+        self, intent: NormalizedIntent, *, now: datetime
+    ) -> tuple[AcknowledgedTarget, str] | None:
+        """Return the established target when anti-chatter rejects a candidate.
+
+        This read-only projection uses the same decision as dispatch. Queued,
+        uncertain, disabled and recovery commands are not anti-chatter holds.
+        """
+
+        state = self._states.get(intent.target_registry_identity)
+        if (
+            not self._gate_open
+            or state is None
+            or state.acknowledged is None
+            or state.pending is not None
+            or state.last_error is not None
+        ):
+            return None
+        current = self._preflight(intent.target_registry_identity)
+        if (
+            _preflight_reason(intent, current, now) is not None
+            or self._live_target_reason(state, current, intent) is not None
+        ):
+            return None
+        reason = anti_chatter_reason(
+            intent,
+            acknowledged=state.acknowledged,
+            last_dispatch_at=state.last_dispatch_at,
+            now=now,
+        )
+        if reason in {"below_minimum_change", "quantization_hysteresis"}:
+            return state.acknowledged, reason
+        return None
+
     def expected_automatic_echo(self, feedback: FeedbackObservation, *, now: datetime) -> bool:
         """Recognize dispatched echoes, including at most five unresolved writes.
 

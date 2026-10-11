@@ -759,6 +759,71 @@ def _ack(
     )
 
 
+@pytest.mark.parametrize(
+    "guard", [None, "minimum_change", "external", "unavailable", "disabled", "pending", "error"]
+)
+def test_retained_target_matches_dispatch_and_releases_original_candidate(
+    guard: str | None,
+) -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        initial = _intent(value=21.0, explicit=True)
+        assert broker.retained_target(initial, now=NOW) is None
+        await broker.async_submit(initial, now=NOW)
+        await broker.async_feedback(_feedback(21.0), now=NOW + timedelta(seconds=1))
+        now = NOW + timedelta(seconds=65)
+        candidate = replace(
+            _intent(value=20.5),
+            continuous_bounded_room_c=20.96002,
+            rounding_mode="floor",
+            step_room_c=0.5,
+            created_at=now,
+            expires_at=now + timedelta(minutes=2),
+        )
+        if guard == "minimum_change":
+            candidate = replace(candidate, meaningful_delta_ha=1.0)
+        elif guard == "external":
+            current[0] = replace(current[0], observed_target=_feedback(18.0).observed)
+        elif guard == "unavailable":
+            current[0] = replace(current[0], target_ready=False)
+        elif guard == "disabled":
+            broker.close_gate()
+        elif guard == "pending":
+            await broker.async_submit(replace(candidate, explicit_transition=True), now=now)
+        elif guard == "error":
+            service.error = True
+            await broker.async_submit(replace(candidate, explicit_transition=True), now=now)
+        retained = broker.retained_target(candidate, now=now)
+        if guard in {"external", "unavailable", "disabled", "pending", "error"}:
+            assert retained is None
+            return
+        assert retained is not None
+        acknowledged, reason = retained
+        assert acknowledged.scalar_room_c == 21.0
+        assert reason == ("below_minimum_change" if guard else "quantization_hysteresis")
+        counts = broker.state_counts("registry-1")
+        outcome = await broker.async_submit(candidate, now=now)
+        assert outcome.reason == reason
+        assert broker.state_counts("registry-1") == counts
+        assert len(service.calls) == 1
+        # The original candidate remains intact; only its continuous boundary changes.
+        released = replace(candidate, continuous_bounded_room_c=20.88, meaningful_delta_ha=0.5)
+        assert broker.retained_target(released, now=now) is None
+        assert (
+            broker.retained_target(
+                replace(candidate, explicit_transition=True, meaningful_delta_ha=0.5), now=now
+            )
+            is None
+        )
+        outcome = await broker.async_submit(released, now=now)
+        assert outcome.dispatch_status is DispatchStatus.DISPATCHED
+        assert service.calls[-1][0]["temperature"] == 20.5
+
+    asyncio.run(scenario())
+
+
 def test_anti_chatter_reason_order_and_directional_release_hysteresis() -> None:
     acknowledged = _ack(20.0)
     assert (

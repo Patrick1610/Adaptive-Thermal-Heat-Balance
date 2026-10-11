@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.29
+
+- Keep **Target — current** and its per-climate current target at the established acknowledged
+  setpoint when the command broker retains it because of quantization hysteresis or minimum
+  change. Apply the same broker decision before publishing, including last-valid display storage.
+- Preserve the internal calculation candidate and occupied/unoccupied comfort scenarios. The
+  candidate can still be released and written by the existing command path when the guard clears;
+  no new sensor, threshold or controller behavior is introduced.
+
 ## 0.2.28
 
 - Publish continuously selected scalar heating/neutral/cooling targets even when the outdoor

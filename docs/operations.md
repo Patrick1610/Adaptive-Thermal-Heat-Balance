@@ -16,6 +16,14 @@ the command or exact suppression reason. Household identifiers are consistently 
 user/context identity, coordinates, URLs, arbitrary attributes and raw occupancy history are
 removed.
 
+When quantization hysteresis or minimum change retains an acknowledged setpoint, **Target —
+current** retains that same setpoint, with `mode: broker_hold` and the broker's reason in its
+per-target details. The lower/higher calculation candidate remains internal and is recalculated
+normally; when the guard releases it, the existing command path can write it and Current shows
+the released target. Occupied/unoccupied comfort scenarios remain calculation values. This does
+not turn Current into a delivery acknowledgement: queued commands and write failures retain
+their separate existing command diagnostics.
+
 The `heating_demand` decision on **Target — current** explains whether the calculated heating
 request is active or replaced by an idle target, the room shortfall, configured start/stop
 thresholds, Boost override and both desired and final actuator targets. The demand latch is
