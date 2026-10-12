@@ -10,6 +10,7 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+from math import isfinite
 from typing import Any, cast
 from uuid import uuid4
 
@@ -99,6 +100,7 @@ from .core.contracts import (
     ActuationDirection,
     BoostMode,
     DispatchStatus,
+    RootSuccess,
     TargetShape,
 )
 from .core.history import HistoryQuality, OutdoorSample
@@ -1359,6 +1361,7 @@ class ZoneRuntime:
             self.failure_hold_elapsed,
             self.boost_mode,
             self.rapid_boost_reached,
+            effective_occupancy_on=self.values.get("occupancy_effective_state") == "on",
         )
         self.values["source_states"] = {
             entity_id: (
@@ -1576,6 +1579,7 @@ class ZoneRuntime:
                 "desired_actuator_target_c": heating.normalized_actuator_c,
                 "current_temperature_c": result.primary_value_c,
                 "boost_override": False,
+                "comfort_lower_boundary_c": None,
             }
             if target.suppression_reason is not None:
                 details[target.target_uuid] = {
@@ -1600,6 +1604,16 @@ class ZoneRuntime:
                 calculation.policy is not None
                 and calculation.policy.boost_mode is not BoostMode.OFF
             )
+            lower_root = calculation.roots.lower_comfort if calculation.roots is not None else None
+            comfort_boundary = (
+                lower_root.mapped_room_temperature_c
+                if result.effective_occupancy_on
+                and calculation.policy is not None
+                and not calculation.policy.fallback
+                and isinstance(lower_root, RootSuccess)
+                and isfinite(lower_root.mapped_room_temperature_c)
+                else None
+            )
             decision = resolve_heating_demand(
                 previous_active=previous_active,
                 desired_target_c=heating.normalized_room_c,
@@ -1607,6 +1621,7 @@ class ZoneRuntime:
                 activation_delta_c=activation_delta,
                 deactivation_delta_c=deactivation_delta,
                 force_active=force_active,
+                lower_comfort_boundary_c=comfort_boundary,
             )
             effective_normalized = normalized
             if not decision.active:
@@ -1643,6 +1658,7 @@ class ZoneRuntime:
                 "reason": decision.reason,
                 "demand_delta_c": decision.demand_delta_c,
                 "boost_override": force_active,
+                "comfort_lower_boundary_c": comfort_boundary,
                 "idle_target_c": (None if decision.active else effective_heating.normalized_room_c),
                 "actuator_target_c": effective_heating.normalized_actuator_c,
             }

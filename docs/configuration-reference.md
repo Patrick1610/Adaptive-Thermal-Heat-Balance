@@ -372,7 +372,7 @@ No Auto-mapping choice is shown to the user. Capability inference never causes a
 
 ATHB applies a stateful heating-demand buffer after final target normalization and before any
 command is offered to the climate entity. `heating_demand_activation_delta_c` defaults to 0.5 °C:
-an inactive target becomes active only when the normalized heating target minus the fresh primary
+an inactive target normally becomes active when the normalized heating target minus the fresh primary
 room temperature reaches that shortfall. Once active, it remains active until the difference is at
 or below `heating_demand_deactivation_delta_c`, which defaults to 0.1 °C. The stop threshold must
 always be lower than the start threshold.
@@ -385,6 +385,16 @@ active actuator target. For an atomic heat/cool range only the heating endpoint 
 cooling endpoint is preserved exactly.
 
 Adaptive and Rapid Boost bypass the buffer and expose their calculated heating request directly.
+Effective occupancy explicitly on (including native Preheat) also protects comfort: a fresh primary
+temperature strictly below the valid calculated lower comfort limit activates demand even when
+the normalized shortfall is smaller than the start threshold. Existing active demand remains
+active below that limit plus the configured stop margin, then follows normal demand hysteresis.
+An absent, off or unknown effective occupancy does not enable this exception, nor does a fixed
+fallback or missing/invalid comfort root. Protection keeps the normal rounded target; it neither
+clamps idle targets nor raises setpoints to meet another integration's thresholds. Existing
+ownership, input and write safeguards still apply. The diagnostic reasons are
+`comfort_lower_bound_reached` and `comfort_recovery_hold`, with `comfort_lower_boundary_c` showing
+the eligible limit in the heating-demand details. No new setting or persisted latch is needed.
 Stale, recovering or invalid primary temperature input cannot change the demand latch or create a
 new idle target; the existing stale-measurement safety remains authoritative. The latch is stored
 before a changed command is dispatched and restored across restart or reload. Attributes and

@@ -22,7 +22,10 @@ environment is used only to generate and audit independent development goldens.
   default.
 - A configurable heating-demand buffer keeps downstream controllers at a grid-safe idle target
   until the normalized heating shortfall is meaningful. Its default 0.5 °C start and 0.1 °C stop
-  thresholds provide hysteresis; Boost bypasses the buffer.
+  thresholds provide hysteresis; Boost bypasses the buffer. Effective occupancy with a fresh
+  temperature below the calculated comfort lower limit also bypasses small-demand suppression,
+  retaining the normal rounded comfort target until the lower limit plus the stop margin is
+  reached. This does not raise targets to satisfy downstream controllers' thresholds.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's
   heating/cooling control roots.
 - Bidirectional climates with a single setpoint (`heat_cool`, or a publicly identifiable `auto`)

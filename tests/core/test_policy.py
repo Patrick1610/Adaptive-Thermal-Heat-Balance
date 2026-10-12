@@ -92,6 +92,64 @@ def test_heating_demand_hysteresis_requires_distinct_ordered_thresholds(
         )
 
 
+@pytest.mark.parametrize(
+    ("previous", "current", "boundary", "force", "active", "reason"),
+    [
+        (False, 18.69, 18.88, False, True, "comfort_lower_bound_reached"),
+        (False, 18.88, 18.88, False, False, "below_activation_threshold"),
+        (False, 18.90, 18.88, False, False, "below_activation_threshold"),
+        (True, 18.90, 18.88, False, True, "comfort_recovery_hold"),
+        (True, 18.98, 18.88, False, False, "deactivation_threshold_reached"),
+        (True, 18.98, 19.0, False, True, "comfort_lower_bound_reached"),
+        (True, 18.95, 18.7, False, False, "deactivation_threshold_reached"),
+        (False, 18.69, None, False, False, "below_activation_threshold"),
+        (False, 18.69, float("nan"), False, False, "below_activation_threshold"),
+        (False, 18.69, float("inf"), False, False, "below_activation_threshold"),
+        (False, 18.69, True, False, False, "below_activation_threshold"),
+        (False, 18.69, 18.88, True, True, "boost_override"),
+        (False, 18.5, None, False, True, "activation_threshold_reached"),
+        (False, 19.05, 19.1, False, True, "comfort_lower_bound_reached"),
+    ],
+)
+def test_heating_demand_comfort_exception_reuses_existing_latch(
+    previous: bool,
+    current: float,
+    boundary: float | None,
+    force: bool,
+    active: bool,
+    reason: str,
+) -> None:
+    decision = resolve_heating_demand(
+        previous_active=previous,
+        desired_target_c=19.0,
+        current_temperature_c=current,
+        lower_comfort_boundary_c=boundary,
+        force_active=force,
+    )
+    assert decision.active is active
+    assert decision.reason == reason
+    assert decision.demand_delta_c == pytest.approx(19.0 - current)
+
+
+def test_comfort_recovery_uses_configured_margin_then_normal_hysteresis() -> None:
+    options = {"lower_comfort_boundary_c": 18.88, "deactivation_delta_c": 0.2}
+    assert (
+        resolve_heating_demand(
+            previous_active=True, desired_target_c=19.0, current_temperature_c=19.07, **options
+        ).reason
+        == "comfort_recovery_hold"
+    )
+    assert not resolve_heating_demand(
+        previous_active=True, desired_target_c=19.0, current_temperature_c=19.08, **options
+    ).active
+    assert (
+        resolve_heating_demand(
+            previous_active=True, desired_target_c=19.5, current_temperature_c=19.08, **options
+        ).reason
+        == "active_hysteresis_hold"
+    )
+
+
 def _root(name: RootName, vote: float, temperature: float) -> RootSuccess:
     return RootSuccess(name, vote, temperature, temperature, 0.0, 0.001, 50)
 

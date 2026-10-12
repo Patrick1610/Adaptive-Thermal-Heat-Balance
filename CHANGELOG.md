@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.30
+
+- Protect effectively occupied rooms below the calculated lower comfort limit from ATHB's
+  small-heating-demand suppression. Retain the normal rounded target, reusing the existing demand
+  latch and configured stop margin for recovery; no downstream-dependent target increase.
+- Capture effective occupancy with the calculation snapshot, retain all input/ownership/write
+  safeguards, and explain comfort activation and recovery in existing demand diagnostics.
+
 ## 0.2.29
 
 - Keep **Target — current** and its per-climate current target at the established acknowledged

@@ -150,6 +150,7 @@ def resolve_heating_demand(
     activation_delta_c: float = DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
     deactivation_delta_c: float = DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
     force_active: bool = False,
+    lower_comfort_boundary_c: float | None = None,
 ) -> HeatingDemandDecision:
     """Apply a two-threshold heating-demand latch in room coordinates."""
 
@@ -166,6 +167,20 @@ def resolve_heating_demand(
     demand_delta_c = desired_target_c - current_temperature_c
     if force_active:
         return HeatingDemandDecision(True, demand_delta_c, "boost_override")
+    if (
+        lower_comfort_boundary_c is not None
+        and not isinstance(lower_comfort_boundary_c, bool)
+        and math.isfinite(lower_comfort_boundary_c)
+    ):
+        if current_temperature_c < lower_comfort_boundary_c:
+            return HeatingDemandDecision(True, demand_delta_c, "comfort_lower_bound_reached")
+        recovery_boundary = lower_comfort_boundary_c + deactivation_delta_c
+        if (
+            previous_active
+            and current_temperature_c < recovery_boundary
+            and not math.isclose(current_temperature_c, recovery_boundary, abs_tol=1e-9)
+        ):
+            return HeatingDemandDecision(True, demand_delta_c, "comfort_recovery_hold")
     if previous_active:
         if demand_delta_c < deactivation_delta_c or math.isclose(
             demand_delta_c, deactivation_delta_c, abs_tol=1e-9

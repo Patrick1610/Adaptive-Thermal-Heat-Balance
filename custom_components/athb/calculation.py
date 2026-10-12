@@ -119,6 +119,7 @@ class CapturedZoneSnapshot:
     failure_hold_elapsed: bool = False
     boost_mode: str = "off"
     rapid_boost_reached: bool = False
+    effective_occupancy_on: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +153,7 @@ class RuntimeCalculation:
     provenance: tuple[tuple[str, str], ...] = ()
     surface_high_humidity: bool | None = None
     primary_temperature_stale: bool = False
+    effective_occupancy_on: bool = False
 
 
 def _finite_option(options: dict[str, Any], name: str, default: float) -> float:
@@ -435,6 +437,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             hold_condition=failure_reason,
             provenance=(*base_provenance, ("radiant", configured_radiant_provenance)),
             primary_temperature_stale=primary_stale,
+            effective_occupancy_on=snapshot.effective_occupancy_on,
         )
     assert air_c is not None
     assert rh_value is not None
@@ -747,6 +750,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             else None
         ),
         primary_temperature_stale=primary_stale,
+        effective_occupancy_on=snapshot.effective_occupancy_on,
     )
 
 

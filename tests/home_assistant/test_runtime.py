@@ -29,20 +29,29 @@ from custom_components.athb.adapters.storage import (
     StoredCommand,
     serialize_control_state,
 )
-from custom_components.athb.calculation import CapturedTarget, calculate_runtime_snapshot
+from custom_components.athb.calculation import (
+    CapturedTarget,
+    RuntimeCalculation,
+    calculate_runtime_snapshot,
+)
 from custom_components.athb.core.climate import (
     ClimateCapabilitySnapshot,
+    GridOptions,
+    GridRoundingMode,
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     TemperatureUnit,
+    normalize_scalar_target,
 )
 from custom_components.athb.core.contracts import (
     AcknowledgementStatus,
+    ActuationDirection,
     BoostMode,
     DispatchStatus,
     Observation,
     ObservationValidity,
     Provenance,
+    RootSuccess,
     TargetShape,
 )
 from custom_components.athb.core.history import HistoryQuality, RunningMeanResult
@@ -832,6 +841,264 @@ def test_heating_demand_buffer_preserves_range_high_and_boost_bypasses_idle() ->
     assert transformed.targets[0].result is not None
     assert transformed.targets[0].result.normalized == scalar_target.result.normalized
     assert runtime.heating_demand_details[scalar_target.target_uuid]["reason"] == "boost_override"
+
+
+def _cold_occupied_calculation(
+    *, ranged: bool = False, rounding: str = "floor"
+) -> RuntimeCalculation:
+    scenario = next(
+        scenario
+        for scenario in load_scenarios()
+        if scenario["scenario_id"] == ("VI-018" if ranged else "VI-001")
+    )
+    result = calculate_runtime_snapshot(replace(_captured(scenario), effective_occupancy_on=True))
+    target = result.targets[0]
+    assert target.result is not None
+    assert target.result.roots is not None
+    lower = target.result.roots.lower_comfort
+    assert isinstance(lower, RootSuccess)
+    heating = normalize_scalar_target(
+        requested_room_c=19.28,
+        direction=ActuationDirection.HEATING_ONLY,
+        snapshot=target.capability,
+        options=GridOptions(16.0, 30.0, rounding_mode=GridRoundingMode(rounding)),
+    )
+    assert isinstance(heating, NormalizedScalarTarget)
+    original = target.result.normalized
+    assert isinstance(original, NormalizedScalarTarget | NormalizedRangeTarget)
+    normalized = replace(original, heating=heating) if ranged else heating
+    return replace(
+        result,
+        primary_value_c=18.69,
+        targets=(
+            replace(
+                target,
+                result=replace(
+                    target.result,
+                    normalized=normalized,
+                    roots=replace(
+                        target.result.roots,
+                        lower_comfort=replace(lower, mapped_room_temperature_c=18.88),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+@pytest.mark.parametrize("ranged", [False, True])
+@pytest.mark.parametrize("rounding", ["floor", "mathematical"])
+def test_comfort_exception_preserves_normal_grid_target_and_range_high(
+    ranged: bool, rounding: str
+) -> None:
+    calculation = _cold_occupied_calculation(ranged=ranged, rounding=rounding)
+    target = calculation.targets[0]
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options.update({"minimum_control_temperature": 16.0})
+    protected, transitions = runtime._apply_heating_demand_hysteresis(calculation)
+    assert protected.targets[0].result is not None
+    assert target.result is not None
+    assert protected.targets[0].result.normalized == target.result.normalized
+    if ranged:
+        assert isinstance(protected.targets[0].result.normalized, NormalizedRangeTarget)
+        assert isinstance(target.result.normalized, NormalizedRangeTarget)
+        assert protected.targets[0].result.normalized.cooling == target.result.normalized.cooling
+    assert transitions == {target.registry_identity: None}
+    detail = runtime.heating_demand_details[target.target_uuid]
+    assert detail["reason"] == "comfort_lower_bound_reached"
+    assert detail["comfort_lower_boundary_c"] == 18.88
+    assert detail["actuator_target_c"] == (19.0 if rounding == "floor" else 19.5)
+    visible = runtime._observable_values(protected)
+    assert (
+        visible["effective_targets"][target.target_uuid]["target_low" if ranged else "temperature"]
+        == detail["actuator_target_c"]
+    )
+    # The old calculation remains bound to its own occupancy despite newer runtime values.
+    runtime.values["occupancy_effective_state"] = "on"
+    unoccupied = replace(calculation, effective_occupancy_on=False)
+    runtime.heating_demand_active.clear()
+    idle, _ = runtime._apply_heating_demand_hysteresis(unoccupied)
+    if rounding == "floor":
+        assert idle.targets[0].result is not None
+        assert idle.targets[0].result.normalized != target.result.normalized
+        assert runtime.heating_demand_details[target.target_uuid]["state"] == "idle"
+    assert runtime.heating_demand_details[target.target_uuid]["comfort_lower_boundary_c"] is None
+
+
+@pytest.mark.parametrize(
+    "gate",
+    [
+        "missing_root",
+        "invalid_root",
+        "fallback",
+        "manual_override",
+        "hvac_off",
+        "stale",
+        "recovering",
+        "invalid_inputs",
+    ],
+)
+def test_comfort_exception_does_not_bypass_existing_guards(gate: str) -> None:
+    calculation = _cold_occupied_calculation()
+    target = calculation.targets[0]
+    assert target.result is not None
+    assert target.result.roots is not None
+    assert target.result.policy is not None
+    if gate == "missing_root":
+        target = replace(target, result=replace(target.result, roots=None))
+    elif gate == "invalid_root":
+        root = target.result.roots.lower_comfort
+        assert isinstance(root, RootSuccess)
+        target = replace(
+            target,
+            result=replace(
+                target.result,
+                roots=replace(
+                    target.result.roots,
+                    lower_comfort=replace(root, mapped_room_temperature_c=float("nan")),
+                ),
+            ),
+        )
+    elif gate == "fallback":
+        target = replace(
+            target,
+            result=replace(target.result, policy=replace(target.result.policy, fallback=True)),
+        )
+    elif gate in {"manual_override", "hvac_off"}:
+        target = replace(target, suppression_reason=gate)
+    elif gate == "stale":
+        calculation = replace(calculation, primary_temperature_stale=True)
+    elif gate == "recovering":
+        primary = dict(calculation.source_states)["primary"]
+        calculation = replace(
+            calculation, source_states=(("primary", replace(primary, recovering=True)),)
+        )
+    else:
+        calculation = replace(calculation, hold_condition="primary_invalid")
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime._apply_heating_demand_hysteresis(replace(calculation, targets=(target,)))
+    detail = runtime.heating_demand_details[target.target_uuid]
+    assert detail["reason"] != "comfort_lower_bound_reached"
+    assert not detail["active"]
+    assert "comfort_lower_boundary_c" in detail
+    if gate == "invalid_root":
+        assert detail["comfort_lower_boundary_c"] is None
+
+
+def test_comfort_exception_occupancy_changes_reuse_one_latch() -> None:
+    occupied = _cold_occupied_calculation()
+    target = occupied.targets[0]
+    assert target.result is not None
+    assert isinstance(target.result.normalized, NormalizedScalarTarget)
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options["minimum_control_temperature"] = 16.0
+    _, first = runtime._apply_heating_demand_hysteresis(occupied)
+    assert first == {target.registry_identity: None}
+    setback = replace(
+        target.result.normalized,
+        normalized_ha=17.0,
+        normalized_room_c=17.0,
+        normalized_actuator_c=17.0,
+    )
+    unoccupied = replace(
+        occupied,
+        effective_occupancy_on=False,
+        targets=(replace(target, result=replace(target.result, normalized=setback)),),
+    )
+    _, off = runtime._apply_heating_demand_hysteresis(unoccupied)
+    assert off == {target.registry_identity: True}
+    assert runtime.heating_demand_details[target.target_uuid]["comfort_lower_boundary_c"] is None
+    _, on = runtime._apply_heating_demand_hysteresis(occupied)
+    assert on == {target.registry_identity: False}
+    assert (
+        runtime.heating_demand_details[target.target_uuid]["reason"]
+        == "comfort_lower_bound_reached"
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "preheat", "expected"),
+    [
+        ("on", False, True),
+        ("off", False, False),
+        ("unknown", False, False),
+        (None, False, False),
+        ("off", True, True),
+    ],
+)
+def test_effective_occupancy_is_captured_with_calculation(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str | None,
+    preheat: bool,
+    expected: bool,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.controller = MagicMock()
+    runtime.history_collector = cast(
+        Any,
+        SimpleNamespace(
+            result=lambda **kwargs: RunningMeanResult(
+                10.0,
+                HistoryQuality.COMPLETE,
+                7,
+                1.0,
+                None,
+                (),
+            )
+        ),
+    )
+    if source is not None:
+        runtime.entry.options["occupancy_entity"] = "binary_sensor.occupied"
+        hass.states.async_set("binary_sensor.occupied", source)
+    if preheat:
+        runtime.values["preheat_expiry"] = dt_util.utcnow() + timedelta(minutes=60)
+    monkeypatch.setattr(ZoneRuntime, "_schedule_freshness_expiries", lambda *_args: None)
+    runtime.async_request_snapshot()
+    snapshot = runtime.controller.request.call_args.args[0]
+    assert snapshot.effective_occupancy_on is expected
+    # Both successful and invalid-input calculations retain the captured flag.
+    assert calculate_runtime_snapshot(snapshot).effective_occupancy_on is expected
+    valid = replace(_captured(load_scenarios()[0]), effective_occupancy_on=expected)
+    assert calculate_runtime_snapshot(valid).effective_occupancy_on is expected
+
+
+async def test_comfort_exception_target_is_written_and_published_without_extra_increase(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ()),
+    )
+    runtime, calls = await _start_delivery_runtime(hass, outcome="ack", initial_target=18.5)
+    assert runtime.controller is not None
+    await runtime.controller.async_stop()
+    try:
+        calculation = _cold_occupied_calculation()
+        target = replace(
+            calculation.targets[0],
+            target_uuid="target-1",
+            registry_identity="registry-1",
+            entity_id="climate.target",
+            capability=capability_from_state(hass.states.get("climate.target")),
+        )
+        calculation = replace(calculation, targets=(target,))
+        runtime.capability_generations[target.registry_identity] = 1
+        now = dt_util.utcnow() + timedelta(seconds=65)
+        monkeypatch.setattr(dt_util, "utcnow", lambda: now)
+        runtime.heat_guards.clear()
+        runtime.primary_feedback_at = now
+        runtime._publish_calculation(2, calculation)
+        assert runtime.values["effective_targets"][target.target_uuid]["temperature"] == 19.0
+        await hass.async_block_till_done()
+        assert calls[-1].data["temperature"] == 19.0
+        assert runtime.values["effective_targets"][target.target_uuid]["temperature"] == 19.0
+        assert runtime.heating_demand_active[target.registry_identity]
+    finally:
+        await runtime.async_unload()
 
 
 def test_heating_demand_buffer_does_not_change_target_for_stale_primary() -> None:
