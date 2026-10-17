@@ -1570,12 +1570,19 @@ class ZoneRuntime:
             identity = target.registry_identity
             previous_stored = self.heating_demand_active.get(identity)
             previous_active = bool(previous_stored)
+            # Keep command/device bounds and calibration, but exclude grid rounding
+            # from the room shortfall used to start a new heating request.
+            activation_target = heating.bounded_c - (
+                heating.calibrated_c - heating.requested_room_c
+            )
             base_detail: dict[str, Any] = {
                 "active": previous_active,
                 "state": "active" if previous_active else "idle",
                 "activation_delta_c": activation_delta,
                 "deactivation_delta_c": deactivation_delta,
                 "desired_target_c": heating.normalized_room_c,
+                "activation_target_c": activation_target,
+                "activation_shortfall_c": None,
                 "desired_actuator_target_c": heating.normalized_actuator_c,
                 "current_temperature_c": result.primary_value_c,
                 "boost_override": False,
@@ -1618,6 +1625,7 @@ class ZoneRuntime:
                 previous_active=previous_active,
                 desired_target_c=heating.normalized_room_c,
                 current_temperature_c=result.primary_value_c,
+                activation_target_c=activation_target,
                 activation_delta_c=activation_delta,
                 deactivation_delta_c=deactivation_delta,
                 force_active=force_active,
@@ -1657,6 +1665,7 @@ class ZoneRuntime:
                 "state": "active" if decision.active else "idle",
                 "reason": decision.reason,
                 "demand_delta_c": decision.demand_delta_c,
+                "activation_shortfall_c": activation_target - result.primary_value_c,
                 "boost_override": force_active,
                 "comfort_lower_boundary_c": comfort_boundary,
                 "idle_target_c": (None if decision.active else effective_heating.normalized_room_c),

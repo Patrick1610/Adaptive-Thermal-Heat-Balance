@@ -372,10 +372,18 @@ No Auto-mapping choice is shown to the user. Capability inference never causes a
 
 ATHB applies a stateful heating-demand buffer after final target normalization and before any
 command is offered to the climate entity. `heating_demand_activation_delta_c` defaults to 0.5 °C:
-an inactive target normally becomes active when the normalized heating target minus the fresh primary
-room temperature reaches that shortfall. Once active, it remains active until the difference is at
-or below `heating_demand_deactivation_delta_c`, which defaults to 0.1 °C. The stop threshold must
-always be lower than the start threshold.
+an inactive target normally becomes active when the **unrounded** heating target minus the fresh
+primary room temperature reaches that shortfall. This is the current policy request after command
+and device bounds, expressed in room coordinates without the calibration offset, but before grid
+rounding. Once active, it remains active until the **normalized executable** target's shortfall is
+at or below `heating_demand_deactivation_delta_c`, which defaults to 0.1 °C. The stop threshold must
+always be lower than the start threshold. A normal start is also withheld if the rounded target
+has already reached that stop threshold, preventing on/off toggling on coarse grids.
+
+For example, a calculated target of 20.24 °C rounded to 20.0 °C now starts heating at a room
+temperature of 19.74 °C rather than waiting for 19.5 °C. The actuator still receives 20.0 °C;
+normal demand stops at 19.9 °C. Occupancy selects the applicable comfort/setback request before
+this decision; activation does not always use the occupied scenario when setback is applicable.
 
 While inactive, ATHB writes a **rustdoel / idle target** at or below the current room temperature,
 rounded downward on the target's actual grid. This removes the logical heating request before a
@@ -399,7 +407,8 @@ Stale, recovering or invalid primary temperature input cannot change the demand 
 new idle target; the existing stale-measurement safety remains authoritative. The latch is stored
 before a changed command is dispatched and restored across restart or reload. Attributes and
 diagnostics report the state, reason, normalized demand delta, both thresholds, desired target,
-idle target and final actuator target.
+idle target and final actuator target. `activation_target_c` and `activation_shortfall_c` expose
+the unrounded activation basis separately; `demand_delta_c` retains its normalized-target meaning.
 
 ## Command normalization and fallback
 

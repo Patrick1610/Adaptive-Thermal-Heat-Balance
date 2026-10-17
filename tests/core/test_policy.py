@@ -93,6 +93,60 @@ def test_heating_demand_hysteresis_requires_distinct_ordered_thresholds(
 
 
 @pytest.mark.parametrize(
+    ("raw", "current", "previous", "active", "reason"),
+    [
+        (20.09, 19.56, False, True, "activation_threshold_reached"),
+        (20.24, 19.56, False, True, "activation_threshold_reached"),
+        (20.24, 19.50, False, True, "activation_threshold_reached"),
+        (20.24, 19.74, False, True, "activation_threshold_reached"),
+        (20.24, 19.741, False, False, "below_activation_threshold"),
+        (19.76, 19.40, False, False, "below_activation_threshold"),
+        (20.24, 19.80, True, True, "active_hysteresis_hold"),
+        (20.24, 19.90, True, False, "deactivation_threshold_reached"),
+    ],
+)
+def test_unrounded_activation_keeps_normalized_stop_and_diagnostics(
+    raw: float, current: float, previous: bool, active: bool, reason: str
+) -> None:
+    decision = resolve_heating_demand(
+        previous_active=previous,
+        desired_target_c=20.0,
+        activation_target_c=raw,
+        current_temperature_c=current,
+    )
+    assert decision.active is active
+    assert decision.reason == reason
+    assert decision.demand_delta_c == pytest.approx(20.0 - current)
+
+
+@pytest.mark.parametrize("raw", [float("nan"), float("inf"), True])
+def test_unrounded_activation_rejects_invalid_target(raw: float) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        resolve_heating_demand(
+            previous_active=False,
+            desired_target_c=20.0,
+            activation_target_c=raw,
+            current_temperature_c=19.5,
+        )
+
+
+def test_unrounded_activation_cannot_toggle_at_an_already_reached_stop_threshold() -> None:
+    for previous in (False, True, False):
+        decision = resolve_heating_demand(
+            previous_active=previous,
+            desired_target_c=20.0,
+            activation_target_c=20.24,
+            current_temperature_c=19.9,
+            activation_delta_c=0.2,
+            deactivation_delta_c=0.1,
+        )
+        assert not decision.active
+        assert decision.reason == (
+            "deactivation_threshold_reached" if previous else "rounded_target_at_stop_threshold"
+        )
+
+
+@pytest.mark.parametrize(
     ("previous", "current", "boundary", "force", "active", "reason"),
     [
         (False, 18.69, 18.88, False, True, "comfort_lower_bound_reached"),

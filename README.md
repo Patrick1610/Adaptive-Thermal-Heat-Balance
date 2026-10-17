@@ -21,8 +21,10 @@ environment is used only to generate and audit independent development goldens.
   without changing the configured occupancy source, and automatically expires after 60 minutes by
   default.
 - A configurable heating-demand buffer keeps downstream controllers at a grid-safe idle target
-  until the normalized heating shortfall is meaningful. Its default 0.5 °C start and 0.1 °C stop
-  thresholds provide hysteresis; Boost bypasses the buffer. Effective occupancy with a fresh
+  until the unrounded heating shortfall is meaningful. Its default 0.5 °C start threshold uses
+  the calculated target before grid rounding; the 0.1 °C stop threshold still uses the executable
+  rounded target. Command/device bounds and calibration remain effective. Boost bypasses the buffer.
+  Effective occupancy with a fresh
   temperature below the calculated comfort lower limit also bypasses small-demand suppression,
   retaining the normal rounded comfort target until the lower limit plus the stop margin is
   reached. This does not raise targets to satisfy downstream controllers' thresholds.

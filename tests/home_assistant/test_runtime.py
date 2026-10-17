@@ -779,7 +779,7 @@ def test_heating_demand_buffer_uses_actuator_grid_and_stateful_thresholds() -> N
     assert runtime.heating_demand_details[target.target_uuid]["state"] == "idle"
     assert idle_normalized.occupied_normalized == target.result.occupied_normalized
 
-    at_activation = replace(calculation, primary_value_c=desired.normalized_room_c - 0.5)
+    at_activation = replace(calculation, primary_value_c=desired.requested_room_c - 0.5)
     active, transitions = runtime._apply_heating_demand_hysteresis(at_activation)
     assert active.targets[0].result is not None
     assert active.targets[0].result.normalized == desired
@@ -799,6 +799,184 @@ def test_heating_demand_buffer_uses_actuator_grid_and_stateful_thresholds() -> N
     assert isinstance(released.targets[0].result.normalized, NormalizedScalarTarget)
     assert released.targets[0].result.normalized.normalized_room_c <= released.primary_value_c
     assert transitions == {target.registry_identity: True}
+
+
+@pytest.mark.parametrize("ranged", [False, True])
+@pytest.mark.parametrize(
+    ("raw", "current", "active"),
+    [
+        (20.09, 19.56, True),
+        (20.24, 19.56, True),
+        (20.24, 19.50, True),
+        (20.24, 19.74, True),
+        (20.24, 19.75, False),
+        (19.76, 19.40, False),
+    ],
+)
+def test_demand_runtime_uses_unrounded_room_target_before_grid(
+    ranged: bool, raw: float, current: float, active: bool
+) -> None:
+    scenario = next(
+        item
+        for item in load_scenarios()
+        if item["scenario_id"] == ("VI-018" if ranged else "VI-001")
+    )
+    calculation = calculate_runtime_snapshot(_captured(scenario))
+    target = calculation.targets[0]
+    assert target.result is not None
+    original = target.result.normalized
+    assert isinstance(original, NormalizedScalarTarget | NormalizedRangeTarget)
+    heating = normalize_scalar_target(
+        requested_room_c=raw,
+        direction=ActuationDirection.HEATING_ONLY,
+        snapshot=target.capability,
+        options=GridOptions(16.0, 30.0, rounding_mode=GridRoundingMode.MATHEMATICAL),
+    )
+    assert isinstance(heating, NormalizedScalarTarget)
+    assert heating.normalized_room_c == 20.0
+    normalized = replace(original, heating=heating) if ranged else heating
+    calculation = replace(
+        calculation,
+        primary_value_c=current,
+        effective_occupancy_on=False,
+        targets=(replace(target, result=replace(target.result, normalized=normalized)),),
+    )
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options.update({"minimum_control_temperature": 16.0})
+    result, _ = runtime._apply_heating_demand_hysteresis(calculation)
+    detail = runtime.heating_demand_details[target.target_uuid]
+    assert detail["active"] is active
+    assert detail["activation_target_c"] == pytest.approx(raw)
+    assert detail["activation_shortfall_c"] == pytest.approx(raw - current)
+    assert detail["demand_delta_c"] == pytest.approx(20.0 - current)
+    assert result.targets[0].result is not None
+    effective = result.targets[0].result.normalized
+    if ranged:
+        assert isinstance(effective, NormalizedRangeTarget)
+        assert isinstance(original, NormalizedRangeTarget)
+        assert effective.cooling == original.cooling
+        effective = effective.heating
+    assert isinstance(effective, NormalizedScalarTarget)
+    assert effective.normalized_room_c == (20.0 if active else 19.0 if current < 19.5 else 19.5)
+    visible = runtime._observable_values(result)
+    for published in (
+        visible["heating_demand_hysteresis"][target.target_uuid],
+        visible["effective_target_details"][target.target_uuid]["heating_demand"],
+    ):
+        assert published["activation_target_c"] == pytest.approx(raw)
+        assert published["activation_shortfall_c"] == pytest.approx(raw - current)
+        assert published["demand_delta_c"] == pytest.approx(20.0 - current)
+
+
+@pytest.mark.parametrize("calibration", [-1.0, 0.0, 1.0])
+@pytest.mark.parametrize("maximum", [20.0, 30.0])
+def test_unrounded_activation_retains_bounds_and_room_calibration(
+    calibration: float, maximum: float
+) -> None:
+    calculation = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    target = calculation.targets[0]
+    assert target.result is not None
+    heating = normalize_scalar_target(
+        requested_room_c=20.24,
+        direction=ActuationDirection.HEATING_ONLY,
+        snapshot=target.capability,
+        options=GridOptions(
+            16.0, maximum, calibration, rounding_mode=GridRoundingMode.MATHEMATICAL
+        ),
+    )
+    assert isinstance(heating, NormalizedScalarTarget)
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options.update(
+        {
+            "minimum_control_temperature": 16.0,
+            "maximum_control_temperature": maximum,
+            f"calibration_{target.target_uuid}": calibration,
+        }
+    )
+    runtime._apply_heating_demand_hysteresis(
+        replace(
+            calculation,
+            primary_value_c=19.56,
+            effective_occupancy_on=False,
+            targets=(replace(target, result=replace(target.result, normalized=heating)),),
+        )
+    )
+    detail = runtime.heating_demand_details[target.target_uuid]
+    assert detail["activation_target_c"] == pytest.approx(
+        min(20.24 + calibration, maximum) - calibration
+    )
+    if maximum == 20.0 and calibration >= 0:
+        assert not detail["active"]
+    else:
+        assert detail["active"]
+
+
+@pytest.mark.parametrize("raw", [20.09, 20.24])
+async def test_raw_activation_writes_and_publishes_one_target_through_full_cycle(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, raw: float
+) -> None:
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ()),
+    )
+    runtime, calls = await _start_delivery_runtime(hass, outcome="ack")
+    assert runtime.controller is not None
+    await runtime.controller.async_stop()
+    try:
+        runtime.entry = cast(
+            Any,
+            SimpleNamespace(
+                title=runtime.entry.title,
+                entry_id=runtime.entry.entry_id,
+                data=runtime.entry.data,
+                options={**runtime.entry.options, "target_rounding_mode": "mathematical"},
+            ),
+        )
+        base = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+        now = dt_util.utcnow() + timedelta(seconds=65)
+        monkeypatch.setattr(dt_util, "utcnow", lambda: now)
+        for generation, requested, current, expected, active in (
+            (2, 19.6, 19.56, 19.5, False),
+            (3, raw, 19.56, 20.0, True),
+            (4, raw, 19.90, 19.5, False),
+        ):
+            capability = capability_from_state(hass.states.get("climate.target"))
+            heating = normalize_scalar_target(
+                requested_room_c=requested,
+                direction=ActuationDirection.HEATING_ONLY,
+                snapshot=capability,
+                options=GridOptions(18.0, 26.0, rounding_mode=GridRoundingMode.MATHEMATICAL),
+            )
+            assert isinstance(heating, NormalizedScalarTarget)
+            original = base.targets[0]
+            assert original.result is not None
+            target = replace(
+                original,
+                target_uuid="target-1",
+                registry_identity="registry-1",
+                entity_id="climate.target",
+                capability=capability,
+                result=replace(original.result, normalized=heating),
+            )
+            calculation = replace(
+                base,
+                primary_value_c=current,
+                effective_occupancy_on=False,
+                targets=(target,),
+            )
+            runtime.capability_generations[target.registry_identity] = 1
+            runtime.heat_guards.clear()
+            runtime.primary_feedback_at = now
+            runtime._publish_calculation(generation, calculation)
+            await hass.async_block_till_done()
+            assert calls[-1].data["temperature"] == expected
+            assert hass.states.get("climate.target").attributes["temperature"] == expected
+            assert runtime.values["effective_targets"]["target-1"]["temperature"] == expected
+            assert runtime.heating_demand_active["registry-1"] is active
+            now += timedelta(seconds=65)
+    finally:
+        await runtime.async_unload()
 
 
 def test_heating_demand_buffer_preserves_range_high_and_boost_bypasses_idle() -> None:
@@ -869,7 +1047,9 @@ def _cold_occupied_calculation(
     normalized = replace(original, heating=heating) if ranged else heating
     return replace(
         result,
-        primary_value_c=18.69,
+        # Stay below the comfort limit but within 0.5 C of the *raw* target,
+        # so these tests still isolate the comfort exception rather than normal start.
+        primary_value_c=18.80,
         targets=(
             replace(
                 target,
@@ -918,10 +1098,9 @@ def test_comfort_exception_preserves_normal_grid_target_and_range_high(
     unoccupied = replace(calculation, effective_occupancy_on=False)
     runtime.heating_demand_active.clear()
     idle, _ = runtime._apply_heating_demand_hysteresis(unoccupied)
-    if rounding == "floor":
-        assert idle.targets[0].result is not None
-        assert idle.targets[0].result.normalized != target.result.normalized
-        assert runtime.heating_demand_details[target.target_uuid]["state"] == "idle"
+    assert idle.targets[0].result is not None
+    assert idle.targets[0].result.normalized != target.result.normalized
+    assert runtime.heating_demand_details[target.target_uuid]["state"] == "idle"
     assert runtime.heating_demand_details[target.target_uuid]["comfort_lower_boundary_c"] is None
 
 

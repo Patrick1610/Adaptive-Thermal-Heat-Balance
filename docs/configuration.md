@@ -57,7 +57,8 @@ without adding more entities to the device page.
 
 The normal comfort flow also configures the heating-demand buffer. Its default 0.5 °C start and
 0.1 °C stop thresholds keep **Target — current** at a downward-rounded idle target until a real
-heating shortfall exists. This buffer acts before downstream controllers; it is distinct from the
+heating shortfall exists. Start uses the unrounded calculated target after bounds; stop still uses
+the rounded executable target. This buffer acts before downstream controllers; it is distinct from the
 advanced minimum-meaningful-change setting, which only suppresses redundant writes. Boost
 temporarily bypasses the buffer.
 

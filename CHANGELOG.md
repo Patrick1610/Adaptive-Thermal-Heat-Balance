@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.31
+
+- Start normal heating demand from the unrounded, bounded policy target in room coordinates,
+  rather than letting actuator-grid rounding change the configured activation shortfall.
+- Keep the existing normalized-target stop threshold, rounded writes, comfort/Boost exceptions
+  and ownership/input guards. Do not activate an already satisfied rounded target.
+- Expose the unrounded activation target and shortfall in existing demand diagnostics and clarify
+  setup descriptions; no new entity or setting is introduced.
+
 ## 0.2.30
 
 - Protect effectively occupied rooms below the calculated lower comfort limit from ATHB's

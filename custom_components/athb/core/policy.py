@@ -147,16 +147,19 @@ def resolve_heating_demand(
     previous_active: bool,
     desired_target_c: float,
     current_temperature_c: float,
+    activation_target_c: float | None = None,
     activation_delta_c: float = DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
     deactivation_delta_c: float = DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
     force_active: bool = False,
     lower_comfort_boundary_c: float | None = None,
 ) -> HeatingDemandDecision:
-    """Apply a two-threshold heating-demand latch in room coordinates."""
+    """Start on unrounded shortfall; stop on the executable target shortfall."""
 
+    activation_target = desired_target_c if activation_target_c is None else activation_target_c
     values = (
         desired_target_c,
         current_temperature_c,
+        activation_target,
         activation_delta_c,
         deactivation_delta_c,
     )
@@ -181,15 +184,21 @@ def resolve_heating_demand(
             and not math.isclose(current_temperature_c, recovery_boundary, abs_tol=1e-9)
         ):
             return HeatingDemandDecision(True, demand_delta_c, "comfort_recovery_hold")
+    stop_reached = demand_delta_c < deactivation_delta_c or math.isclose(
+        demand_delta_c, deactivation_delta_c, abs_tol=1e-9
+    )
     if previous_active:
-        if demand_delta_c < deactivation_delta_c or math.isclose(
-            demand_delta_c, deactivation_delta_c, abs_tol=1e-9
-        ):
+        if stop_reached:
             return HeatingDemandDecision(False, demand_delta_c, "deactivation_threshold_reached")
         return HeatingDemandDecision(True, demand_delta_c, "active_hysteresis_hold")
-    if demand_delta_c > activation_delta_c or math.isclose(
-        demand_delta_c, activation_delta_c, abs_tol=1e-9
+    activation_shortfall = activation_target - current_temperature_c
+    if activation_shortfall > activation_delta_c or math.isclose(
+        activation_shortfall, activation_delta_c, abs_tol=1e-9
     ):
+        # Coarse grids or small start thresholds must not activate a target that
+        # would immediately deactivate again without any temperature change.
+        if stop_reached:
+            return HeatingDemandDecision(False, demand_delta_c, "rounded_target_at_stop_threshold")
         return HeatingDemandDecision(True, demand_delta_c, "activation_threshold_reached")
     return HeatingDemandDecision(False, demand_delta_c, "below_activation_threshold")
 
