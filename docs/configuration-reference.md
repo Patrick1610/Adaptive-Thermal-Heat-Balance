@@ -380,6 +380,11 @@ at or below `heating_demand_deactivation_delta_c`, which defaults to 0.1 °C. Th
 always be lower than the start threshold. A normal start is also withheld if the rounded target
 has already reached that stop threshold, preventing on/off toggling on coarse grids.
 
+Preheat changes still recalculate the zone immediately, but bypass command hysteresis only when
+the occupancy resolver changes the effective comfort/setback profile. Starting, renewing, stopping
+or expiring Preheat while that profile stays unchanged does not release a held idle target. For
+example, expiry while the normal occupancy source remains on preserves the normal command hold.
+
 For example, a calculated target of 20.24 °C rounded to 20.0 °C now starts heating at a room
 temperature of 19.74 °C rather than waiting for 19.5 °C. The actuator still receives 20.0 °C;
 normal demand stops at 19.9 °C. Occupancy selects the applicable comfort/setback request before

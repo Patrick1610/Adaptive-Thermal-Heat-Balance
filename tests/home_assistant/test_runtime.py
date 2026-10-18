@@ -3476,6 +3476,139 @@ def test_preheat_overrides_effective_occupancy_without_hiding_source(
     assert runtime.values["occupancy_override_reason"] is None
 
 
+@pytest.mark.parametrize(
+    ("source", "before", "after", "expected_profile", "transition"),
+    [
+        ("on", False, True, "comfort", False),
+        ("on", True, False, "comfort", False),
+        ("on", True, True, "comfort", False),
+        ("off", False, True, "comfort", True),
+        ("off", True, False, "eco", True),
+        ("off", True, True, "comfort", False),
+        ("unknown", True, False, "comfort", False),
+    ],
+)
+async def test_preheat_only_bypasses_command_hold_for_a_real_profile_change(
+    hass: HomeAssistant,
+    source: str,
+    before: bool,
+    after: bool,
+    expected_profile: str,
+    transition: bool,
+) -> None:
+    runtime = _runtime()
+    runtime.hass = hass
+    runtime.entry.options["occupancy_entity"] = "binary_sensor.occupied"
+    hass.states.async_set("binary_sensor.occupied", source)
+    if before:
+        await runtime.async_set_preheat_active(True)
+    runtime._resolve_profile(dt_util.utcnow())
+    previous_timer = runtime.timers.get("preheat")
+    runtime.explicit_transition = False
+    runtime.pending_transition_reasons.clear()
+
+    try:
+        await runtime.async_set_preheat_active(after)
+        resolution = runtime._resolve_profile(dt_util.utcnow())
+
+        assert resolution.resolved.value == expected_profile
+        assert runtime.explicit_transition is transition
+        assert runtime.pending_transition_reasons == ({"occupancy"} if transition else set())
+        assert runtime.preheat_active is after
+        if before and after:
+            assert runtime.timers["preheat"] is not previous_timer
+    finally:
+        await runtime.async_unload()
+
+
+async def test_preheat_expiry_keeps_acknowledged_target_when_room_remains_occupied(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ()),
+    )
+    runtime, calls = await _start_delivery_runtime(hass, outcome="ack")
+    assert runtime.controller is not None
+    await runtime.controller.async_stop()
+    calls.clear()
+    try:
+        runtime.entry = cast(
+            Any,
+            SimpleNamespace(
+                title=runtime.entry.title,
+                entry_id=runtime.entry.entry_id,
+                data=runtime.entry.data,
+                options={
+                    **runtime.entry.options,
+                    "target_rounding_mode": "mathematical",
+                    "heating_demand_deactivation_delta_c": 0.0,
+                    "occupancy_entity": "binary_sensor.occupied",
+                },
+            ),
+        )
+        hass.states.async_set("binary_sensor.occupied", "on")
+        await runtime.async_set_preheat_active(True)
+        runtime._resolve_profile(dt_util.utcnow())
+        base = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+        now = dt_util.utcnow() + timedelta(seconds=65)
+        monkeypatch.setattr(dt_util, "utcnow", lambda: now)
+        for generation, current, expire in (
+            (2, 19.4, False),
+            (3, 20.0404, False),
+            (4, 19.94039, False),
+            (5, 19.94039, True),
+            (6, 20.0404, False),
+        ):
+            if expire:
+                # Exercise the real expiry callback, not a climate or helper write.
+                now = cast(datetime, runtime.values["preheat_expiry"]) + timedelta(seconds=1)
+                async_fire_time_changed(hass, now)
+                await hass.async_block_till_done()
+            runtime._resolve_profile(now)
+            capability = capability_from_state(hass.states.get("climate.target"))
+            heating = normalize_scalar_target(
+                requested_room_c=20.039864,
+                direction=ActuationDirection.HEATING_ONLY,
+                snapshot=capability,
+                options=GridOptions(18.0, 26.0, rounding_mode=GridRoundingMode.MATHEMATICAL),
+            )
+            assert isinstance(heating, NormalizedScalarTarget)
+            original = base.targets[0]
+            assert original.result is not None
+            target = replace(
+                original,
+                target_uuid="target-1",
+                registry_identity="registry-1",
+                entity_id="climate.target",
+                capability=capability,
+                result=replace(original.result, normalized=heating),
+            )
+            calculation = replace(
+                base,
+                primary_value_c=current,
+                explicit_transition=runtime.explicit_transition,
+                effective_occupancy_on=True,
+                targets=(target,),
+            )
+            runtime.capability_generations["registry-1"] = 1
+            runtime.heat_guards.clear()
+            runtime.primary_feedback_at = now
+            runtime._publish_calculation(generation, calculation)
+            await hass.async_block_till_done()
+            assert hass.states.get("climate.target").attributes["temperature"] == 20.0
+            assert runtime.values["effective_targets"]["target-1"]["temperature"] == 20.0
+            if generation in {4, 5}:
+                assert runtime.values["command_outcomes"]["target-1"] == "quantization_hysteresis"
+            now += timedelta(seconds=65)
+        assert not runtime.preheat_active
+        assert not runtime.ownership["registry-1"].resume_required
+        assert all(call.data["temperature"] != 19.5 for call in calls)
+    finally:
+        await runtime.async_unload()
+
+
 def test_outdoor_history_sample_converts_fahrenheit_exactly_once(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain="athb",

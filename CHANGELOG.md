@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.32
+
+- Preserve command hysteresis when Preheat starts, renews, stops or expires without changing
+  the effective comfort/setback profile. A timer-only change no longer releases a held idle
+  candidate and causes a temporary setpoint dip.
+- Keep immediate comfort/setback transitions through the existing occupancy resolver, together
+  with normal recalculation, timer renewal, persistence and all command/ownership/input guards.
+- Add transition and end-to-end expiry regressions; no new settings, entities or thresholds.
+- Diagnostics now label genuine Preheat-driven profile transitions as `occupancy`; timer-only
+  changes no longer add a `preheat` entry to `transition_reasons`.
+
 ## 0.2.31
 
 - Start normal heating demand from the unrounded, bounded policy target in room coordinates,

@@ -3584,7 +3584,8 @@ class ZoneRuntime:
                 timer()
             self.values["preheat_expiry"] = None
             self.values["preheat_active"] = False
-        self._mark_explicit_transition("preheat")
+        # _resolve_profile marks real comfort/setback changes when capturing inputs.
+        # A timer-only change must not release an otherwise held climate target.
         self.publish({**self.values, "preheat_active": self.preheat_active})
         self._schedule_runtime_persistence()
         self.async_request_snapshot()
