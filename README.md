@@ -28,6 +28,9 @@ environment is used only to generate and audit independent development goldens.
   temperature below the calculated comfort lower limit also bypasses small-demand suppression,
   retaining the normal rounded comfort target until the lower limit plus the stop margin is
   reached. This does not raise targets to satisfy downstream controllers' thresholds.
+- An optional numeric central-demand source can let an effectively occupied/preheated room join
+  an existing heating cycle below its normal start threshold. The explicitly configured positive
+  source threshold is inclusive; the ordinary room stop threshold and all write guards remain.
 - Thermal neutral is a reference. Heating, cooling and ranged control use the selected strategy's
   heating/cooling control roots.
 - Bidirectional climates with a single setpoint (`heat_cool`, or a publicly identifiable `auto`)

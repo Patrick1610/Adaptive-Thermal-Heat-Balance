@@ -979,6 +979,96 @@ async def test_raw_activation_writes_and_publishes_one_target_through_full_cycle
         await runtime.async_unload()
 
 
+async def test_assisted_cycle_uses_existing_delivery_and_no_target_chatter_at_zero_stop(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        runtime_module.OutdoorHistoryCollector,
+        "result",
+        lambda *args, **kwargs: RunningMeanResult(5.0, HistoryQuality.COMPLETE, 7, 1.0, None, ()),
+    )
+    runtime, calls = await _start_delivery_runtime(hass, outcome="ack")
+    assert runtime.controller is not None
+    await runtime.controller.async_stop()
+    runtime.entry = cast(
+        Any,
+        SimpleNamespace(
+            title=runtime.entry.title,
+            entry_id=runtime.entry.entry_id,
+            data=runtime.entry.data,
+            options={
+                **runtime.entry.options,
+                "heating_demand_assist_entity": "sensor.central_demand",
+                "heating_demand_assist_threshold": 0.5,
+                "heating_demand_deactivation_delta_c": 0.0,
+            },
+        ),
+    )
+    base = calculate_runtime_snapshot(_captured(load_scenarios()[0]))
+    original = base.targets[0]
+    assert original.result is not None
+    assert original.result.roots is not None
+    lower = original.result.roots.lower_comfort
+    assert isinstance(lower, RootSuccess)
+    now = dt_util.utcnow() + timedelta(seconds=65)
+    monkeypatch.setattr(dt_util, "utcnow", lambda: now)
+    count_after_start = 0
+    try:
+        for generation, source, current, expected, active in (
+            (2, "0.49", 20.0, 20.0, False),
+            (3, "0.49", 19.7, 19.5, False),
+            (4, "0.5", 19.7, 20.0, True),
+            (5, "0", 19.8, 20.0, True),
+            (6, "0.5", 20.0, 20.0, False),
+            (7, "0.5", 19.999, 20.0, True),
+            (8, "0.5", 20.0, 20.0, False),
+        ):
+            hass.states.async_set("sensor.central_demand", source)
+            capability = capability_from_state(hass.states.get("climate.target"))
+            heating = normalize_scalar_target(
+                requested_room_c=20.0,
+                direction=ActuationDirection.HEATING_ONLY,
+                snapshot=capability,
+                options=GridOptions(18.0, 26.0),
+            )
+            assert isinstance(heating, NormalizedScalarTarget)
+            target = replace(
+                original,
+                target_uuid="target-1",
+                registry_identity="registry-1",
+                entity_id="climate.target",
+                capability=capability,
+                result=replace(
+                    original.result,
+                    normalized=heating,
+                    roots=replace(
+                        original.result.roots,
+                        lower_comfort=replace(lower, mapped_room_temperature_c=18.0),
+                    ),
+                ),
+            )
+            runtime.capability_generations["registry-1"] = 1
+            runtime.heat_guards.clear()
+            runtime.primary_feedback_at = now
+            runtime._publish_calculation(
+                generation,
+                replace(
+                    base, primary_value_c=current, effective_occupancy_on=True, targets=(target,)
+                ),
+            )
+            await hass.async_block_till_done()
+            assert runtime.values["effective_targets"]["target-1"]["temperature"] == expected
+            assert hass.states.get("climate.target").attributes["temperature"] == expected
+            assert runtime.heating_demand_active["registry-1"] is active
+            if generation == 4:
+                count_after_start = len(calls)
+            elif generation > 4:
+                assert len(calls) == count_after_start
+            now += timedelta(seconds=65)
+    finally:
+        await runtime.async_unload()
+
+
 def test_heating_demand_buffer_preserves_range_high_and_boost_bypasses_idle() -> None:
     ranged_scenario = next(
         scenario for scenario in load_scenarios() if scenario["scenario_id"] == "VI-018"

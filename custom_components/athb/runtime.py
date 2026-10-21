@@ -70,6 +70,8 @@ from .const import (
     CONF_BOOST_MODE,
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
+    CONF_DEMAND_ASSIST_ENTITY,
+    CONF_DEMAND_ASSIST_THRESHOLD,
     CONF_ECO_INTENSITY,
     CONF_MOLD_INDICATOR_ENTITY,
     CONF_PRIMARY_DEVICE_ACTIVITY_ENTITY,
@@ -487,14 +489,18 @@ class ZoneRuntime:
     def _tracked_entity_ids(self) -> set[str]:
         ids = self._reported_source_entity_ids()
         ids.add(str(self.entry.options.get("occupancy_entity", "")))
+        ids.add(str(self.entry.options.get(CONF_DEMAND_ASSIST_ENTITY, "")))
         ids.update(str(target["entity_id"]) for target in self.entry.data.get("targets", ()))
         ids.discard("")
         return ids
 
     def _reported_source_entity_ids(self) -> set[str]:
-        """Return measured inputs whose unchanged reports renew freshness."""
+        """Return inputs whose unchanged reports renew freshness or permission."""
 
-        return self._measurement_source_entity_ids() | self._activity_source_entity_ids()
+        ids = self._measurement_source_entity_ids() | self._activity_source_entity_ids()
+        if source := self.entry.options.get(CONF_DEMAND_ASSIST_ENTITY):
+            ids.add(str(source))
+        return ids
 
     def _measurement_source_entity_ids(self) -> set[str]:
         """Return entities whose values are numerical model inputs."""
@@ -541,6 +547,12 @@ class ZoneRuntime:
             (old_state.state if old_state is not None else None)
             != (new_state.state if new_state is not None else None)
         )
+        assist_changed = entity_id == str(
+            self.entry.options.get(CONF_DEMAND_ASSIST_ENTITY, "")
+        ) and (
+            (old_state.state if old_state is not None else None)
+            != (new_state.state if new_state is not None else None)
+        )
         target = next(
             (item for item in self.entry.data.get("targets", ()) if item["entity_id"] == entity_id),
             None,
@@ -560,9 +572,15 @@ class ZoneRuntime:
         recovered = self._refresh_freshness_evidence(dt_util.utcnow()) if activity_event else set()
         if material_source_event:
             self._update_critical_delta(entity_id, new_state)
-        if material_source_event or recovered or occupancy_changed:
+        if material_source_event or recovered or occupancy_changed or assist_changed:
             self.input_generation += 1
-        if target is not None or material_source_event or recovered or occupancy_changed:
+        if (
+            target is not None
+            or material_source_event
+            or recovered
+            or occupancy_changed
+            or assist_changed
+        ):
             self.schedule_environmental_snapshot()
         elif activity_event:
             self._reschedule_freshness_only()
@@ -574,6 +592,12 @@ class ZoneRuntime:
         entity_id = str(event.data.get("entity_id", ""))
         new_state = cast(State | None, event.data.get("new_state"))
         reported_at = cast(datetime | None, event.data.get("last_reported"))
+        old_reported_at = cast(datetime | None, event.data.get("old_last_reported"))
+        assist_recovered = entity_id == self.entry.options.get(CONF_DEMAND_ASSIST_ENTITY) and (
+            old_reported_at is not None
+            and dt_util.utcnow() - old_reported_at
+            > configured_freshness(self.entry.options, SourceKind.PRIMARY_AIR)
+        )
         measurement_event = entity_id in self._measurement_source_entity_ids()
         activity_event = entity_id in self._activity_source_entity_ids()
         if measurement_event or activity_event:
@@ -585,7 +609,7 @@ class ZoneRuntime:
         )
         material = measurement_event and self._source_report_is_material(entity_id, new_state)
         recovered = self._refresh_freshness_evidence(dt_util.utcnow())
-        if material or primary_report or recovered:
+        if material or primary_report or recovered or assist_recovered:
             self.input_generation += 1
             if measurement_event:
                 self._update_critical_delta(entity_id, new_state)
@@ -1045,6 +1069,7 @@ class ZoneRuntime:
             "globe_temperature_entity",
             "surface_temperature_entity",
             CONF_MOLD_INDICATOR_ENTITY,
+            CONF_DEMAND_ASSIST_ENTITY,
         ):
             if options.get(key) == old_entity_id:
                 options[key] = entity_id
@@ -1522,6 +1547,44 @@ class ZoneRuntime:
         )
         return converted[0] if converted is not None else None
 
+    def _central_demand_assist(self) -> dict[str, Any]:
+        """Read an optional permission source, never a temperature/model input."""
+
+        entity_id = self.entry.options.get(CONF_DEMAND_ASSIST_ENTITY)
+        threshold = self.entry.options.get(CONF_DEMAND_ASSIST_THRESHOLD)
+        detail: dict[str, Any] = {
+            "entity_id": entity_id,
+            "threshold": threshold,
+            "value": None,
+            "eligible": False,
+        }
+        if not entity_id:
+            return detail
+        if (
+            isinstance(threshold, bool)
+            or not isinstance(threshold, int | float)
+            or not isfinite(threshold)
+            or threshold <= 0.0
+        ):
+            return detail
+        state = self.hass.states.get(str(entity_id))
+        registered = er.async_get(self.hass).async_get(str(entity_id))
+        if registered is not None and registered.platform == DOMAIN:
+            return detail
+        if state is not None and (
+            dt_util.utcnow() - state.last_reported
+            > configured_freshness(self.entry.options, SourceKind.PRIMARY_AIR)
+        ):
+            return detail
+        try:
+            value = float(state.state) if state is not None else float("nan")
+        except TypeError, ValueError:
+            return detail
+        if isfinite(value):
+            detail["value"] = value
+            detail["eligible"] = value >= threshold
+        return detail
+
     def _apply_heating_demand_hysteresis(
         self, result: RuntimeCalculation
     ) -> tuple[RuntimeCalculation, dict[str, bool | None]]:
@@ -1546,6 +1609,7 @@ class ZoneRuntime:
             and result.hold_condition is None
             and (primary is None or not primary.recovering)
         )
+        assist = self._central_demand_assist()
         updated_targets: list[TargetCalculation] = []
         details: dict[str, dict[str, Any]] = {}
         transitions: dict[str, bool | None] = {}
@@ -1587,6 +1651,7 @@ class ZoneRuntime:
                 "current_temperature_c": result.primary_value_c,
                 "boost_override": False,
                 "comfort_lower_boundary_c": None,
+                **({"central_demand_assist": assist} if assist["entity_id"] else {}),
             }
             if target.suppression_reason is not None:
                 details[target.target_uuid] = {
@@ -1630,6 +1695,12 @@ class ZoneRuntime:
                 deactivation_delta_c=deactivation_delta,
                 force_active=force_active,
                 lower_comfort_boundary_c=comfort_boundary,
+                central_demand_assist=(
+                    assist["eligible"]
+                    and result.effective_occupancy_on is True
+                    and calculation.policy is not None
+                    and not calculation.policy.fallback
+                ),
             )
             effective_normalized = normalized
             if not decision.active:

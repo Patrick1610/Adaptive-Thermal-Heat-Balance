@@ -41,6 +41,48 @@ NOW = datetime(2026, 9, 11, 10, 0, tzinfo=UTC)
 
 
 @pytest.mark.parametrize(
+    ("raw", "target", "current", "assist", "active", "reason"),
+    [
+        (20.0, 20.0, 19.77, True, True, "central_demand_assist"),
+        (20.0, 20.0, 19.53, True, True, "central_demand_assist"),
+        (20.0, 20.0, 19.77, False, False, "below_activation_threshold"),
+        (20.0, 20.0, 19.5, True, True, "activation_threshold_reached"),
+        (20.0, 20.0, 19.9, True, False, "below_activation_threshold"),
+        (20.0, 20.0, 20.0, True, False, "below_activation_threshold"),
+        (20.1, 20.0, 20.05, True, False, "below_activation_threshold"),
+        (20.1, 20.5, 20.2, True, False, "below_activation_threshold"),
+        (19.8, 20.0, 19.9, True, False, "below_activation_threshold"),
+    ],
+)
+def test_central_assist_only_bypasses_start_for_positive_unsatisfied_targets(
+    raw: float, target: float, current: float, assist: bool, active: bool, reason: str
+) -> None:
+    decision = resolve_heating_demand(
+        previous_active=False,
+        desired_target_c=target,
+        activation_target_c=raw,
+        current_temperature_c=current,
+        central_demand_assist=assist,
+    )
+    assert decision.active is active
+    assert decision.reason == reason
+
+
+def test_assist_with_nonzero_stop_preserves_the_documented_request_boundary() -> None:
+    active = False
+    for current, expected in ((19.899, True), (19.9, False), (19.899, True), (19.9, False)):
+        decision = resolve_heating_demand(
+            previous_active=active,
+            desired_target_c=20.0,
+            current_temperature_c=current,
+            central_demand_assist=True,
+            deactivation_delta_c=0.1,
+        )
+        assert decision.active is expected
+        active = decision.active
+
+
+@pytest.mark.parametrize(
     ("previous", "current", "force", "active", "reason"),
     [
         (False, 21.2, False, False, "below_activation_threshold"),

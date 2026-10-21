@@ -152,6 +152,7 @@ def resolve_heating_demand(
     deactivation_delta_c: float = DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
     force_active: bool = False,
     lower_comfort_boundary_c: float | None = None,
+    central_demand_assist: bool = False,
 ) -> HeatingDemandDecision:
     """Start on unrounded shortfall; stop on the executable target shortfall."""
 
@@ -200,6 +201,8 @@ def resolve_heating_demand(
         if stop_reached:
             return HeatingDemandDecision(False, demand_delta_c, "rounded_target_at_stop_threshold")
         return HeatingDemandDecision(True, demand_delta_c, "activation_threshold_reached")
+    if central_demand_assist and activation_shortfall > 0.0 and not stop_reached:
+        return HeatingDemandDecision(True, demand_delta_c, "central_demand_assist")
     return HeatingDemandDecision(False, demand_delta_c, "below_activation_threshold")
 
 

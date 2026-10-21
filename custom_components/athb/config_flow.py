@@ -29,6 +29,8 @@ from .const import (
     CONF_BOOST_MODE,
     CONF_COMFORT_STRATEGY,
     CONF_CONTROL_ENABLED,
+    CONF_DEMAND_ASSIST_ENTITY,
+    CONF_DEMAND_ASSIST_THRESHOLD,
     CONF_ECO_INTENSITY,
     CONF_MOLD_INDICATOR_ENTITY,
     CONF_OUTDOOR_SOURCE,
@@ -676,6 +678,11 @@ class _OptionsWizardMixin:
 
         if user_input is not None:
             pending = {**self._pending_options, **user_input}
+            if not user_input.get(CONF_DEMAND_ASSIST_ENTITY):
+                pending.pop(CONF_DEMAND_ASSIST_ENTITY, None)
+                pending.pop(CONF_DEMAND_ASSIST_THRESHOLD, None)
+            elif CONF_DEMAND_ASSIST_THRESHOLD not in user_input:
+                pending.pop(CONF_DEMAND_ASSIST_THRESHOLD, None)
             errors = validate_options(pending)
             relevant = {
                 key: value
@@ -684,8 +691,15 @@ class _OptionsWizardMixin:
                 in {
                     "heating_demand_activation_delta_c",
                     "heating_demand_deactivation_delta_c",
+                    CONF_DEMAND_ASSIST_ENTITY,
+                    CONF_DEMAND_ASSIST_THRESHOLD,
                 }
             }
+            assist_entity = pending.get(CONF_DEMAND_ASSIST_ENTITY)
+            if assist_entity:
+                registered = er.async_get(self.hass).async_get(str(assist_entity))
+                if registered is not None and registered.platform == DOMAIN:
+                    relevant[CONF_DEMAND_ASSIST_ENTITY] = "invalid_option"
             if not relevant:
                 self._pending_options = pending
                 return (
@@ -693,10 +707,20 @@ class _OptionsWizardMixin:
                     if self._advanced
                     else await self._async_complete_wizard()
                 )
+            form_errors = {
+                key: value
+                for key, value in relevant.items()
+                if key in {CONF_DEMAND_ASSIST_ENTITY, CONF_DEMAND_ASSIST_THRESHOLD}
+            }
+            if set(relevant) & {
+                "heating_demand_activation_delta_c",
+                "heating_demand_deactivation_delta_c",
+            }:
+                form_errors["base"] = "invalid_demand_hysteresis"
             return self._show_wizard_form(
                 step_id="demand_hysteresis",
                 data_schema=self._demand_hysteresis_schema(),
-                errors={"base": "invalid_demand_hysteresis"},
+                errors=form_errors,
             )
         return self._show_wizard_form(
             step_id="demand_hysteresis", data_schema=self._demand_hysteresis_schema()
@@ -720,6 +744,20 @@ class _OptionsWizardMixin:
                         DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
                     ),
                 ): _number(0.0, 1.9, 0.1, "°C"),
+                vol.Optional(
+                    CONF_DEMAND_ASSIST_ENTITY,
+                    description={"suggested_value": defaults.get(CONF_DEMAND_ASSIST_ENTITY)},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "number", "input_number"])
+                ),
+                vol.Optional(
+                    CONF_DEMAND_ASSIST_THRESHOLD,
+                    description={"suggested_value": defaults.get(CONF_DEMAND_ASSIST_THRESHOLD)},
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.1, step=0.1, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
             }
         )
 

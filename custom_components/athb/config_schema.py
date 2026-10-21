@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from .const import (
+    CONF_DEMAND_ASSIST_ENTITY,
+    CONF_DEMAND_ASSIST_THRESHOLD,
     CONF_OUTDOOR_SOURCE,
     CONF_PRIMARY_TEMPERATURE,
     CONF_RH_DECLARED,
@@ -122,6 +124,23 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
             errors[name] = "invalid_option"
     if not isinstance(data.get("indoor_temperature_jump_protection", True), bool):
         errors["indoor_temperature_jump_protection"] = "invalid_option"
+    assist_entity = data.get(CONF_DEMAND_ASSIST_ENTITY)
+    if assist_entity and (
+        not isinstance(assist_entity, str)
+        or not assist_entity.startswith(("sensor.", "number.", "input_number."))
+        or assist_entity.startswith("sensor.athb_")
+    ):
+        errors[CONF_DEMAND_ASSIST_ENTITY] = "invalid_option"
+    if not assist_entity and CONF_DEMAND_ASSIST_THRESHOLD in data:
+        errors[CONF_DEMAND_ASSIST_ENTITY] = "required"
+    if assist_entity and CONF_DEMAND_ASSIST_THRESHOLD not in data:
+        errors[CONF_DEMAND_ASSIST_THRESHOLD] = "required"
+    elif CONF_DEMAND_ASSIST_THRESHOLD in data:
+        threshold = data[CONF_DEMAND_ASSIST_THRESHOLD]
+        if not _finite_in_range(threshold, 0.1, math.inf) or not math.isclose(
+            float(threshold), round(float(threshold), 1), rel_tol=0.0, abs_tol=1e-9
+        ):
+            errors[CONF_DEMAND_ASSIST_THRESHOLD] = "invalid_assist_threshold"
     for name, value in data.items():
         if name.startswith("calibration_") and not _finite_in_range(value, -3.0, 3.0):
             errors[name] = "invalid_option"

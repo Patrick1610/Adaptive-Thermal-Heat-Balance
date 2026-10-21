@@ -246,6 +246,8 @@ async def _submit_everyday_controls(
     assert _schema_keys(result) == {
         "heating_demand_activation_delta_c",
         "heating_demand_deactivation_delta_c",
+        "heating_demand_assist_entity",
+        "heating_demand_assist_threshold",
     }
     return await manager.async_configure(
         result["flow_id"],

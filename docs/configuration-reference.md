@@ -370,6 +370,35 @@ No Auto-mapping choice is shown to the user. Capability inference never causes a
 
 ## Heating demand buffer
 
+### Optional central-demand permission
+
+`heating_demand_assist_entity` optionally selects a numeric `sensor`, `number`, or `input_number`.
+Selecting a source requires an explicit `heating_demand_assist_threshold` greater than zero,
+with at most one decimal place, in that source's unit. There is no assumed unit or implicit
+threshold: for example, 10 may mean PI percent, while 0.5 may mean a room delta in °C.
+When the finite current source value is **greater than or equal to** this threshold, an effectively
+occupied zone (including native Preheat) may start with a positive unrounded room shortfall below
+the normal start threshold, provided the executable rounded target is still above its stop
+threshold. Source values are never rounded before comparison. Missing, unavailable, unknown, or
+nonnumeric sources grant no permission; absence of a configured source preserves ordinary logic.
+The permission source uses the zone's existing primary-temperature freshness window (30 minutes
+by default), checked against `last_reported`, not the last value change. Fresh unchanged reports
+can restore permission without changing the value. Native ATHB entities cannot be selected as the
+central source; do not disguise an ATHB target as an external demand source through a template.
+
+This is a start permission only. Once started, the existing restart-safe room-demand latch and
+stop threshold govern the remainder of the cycle even if the central source falls or disappears.
+It can therefore extend the central heating cycle; it is not a guarantee of unused heat or physical
+heat delivery. Setback/inactive occupancy, fallback, stale room temperature, unsupported targets,
+manual override, and all normal command safeguards receive no new bypass. Cooling is unchanged.
+While permission is present there is deliberately no additional room-start margin: the configured
+stop threshold, target grid, and existing command hysteresis/rate limits still apply. A central
+source is therefore not a guarantee against small request-state changes around the stop boundary.
+The existing heating-demand diagnostics include the selected source, value, threshold, and source
+eligibility, with `central_demand_assist` as the reason for an assisted start; no entities are added.
+
+### Normal start and stop
+
 ATHB applies a stateful heating-demand buffer after final target normalization and before any
 command is offered to the climate entity. `heating_demand_activation_delta_c` defaults to 0.5 °C:
 an inactive target normally becomes active when the **unrounded** heating target minus the fresh

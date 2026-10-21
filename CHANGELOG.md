@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.33
+
+- Add an opt-in numeric central-demand source and an explicit positive threshold with one decimal.
+  The source is compared without rounding, inclusively (`value >= threshold`), and invalid or
+  unavailable values never grant an assisted start.
+- Let effectively occupied/preheated rooms with a positive, executable heating shortfall join
+  below the ordinary start threshold. Reuse the existing restart-safe demand latch and stop
+  threshold so a room may finish after central demand falls.
+- Keep default operation, setbacks, cooling, Boost/comfort protection, ownership, command guards,
+  and existing instances unchanged. Add source-change recalculation and existing diagnostics,
+  without new entities, timers, dependencies, or automatic configuration changes.
+
 ## 0.2.32
 
 - Preserve command hysteresis when Preheat starts, renews, stops or expires without changing
