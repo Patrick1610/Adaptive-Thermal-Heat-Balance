@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.34
+
+- Allow timed heating-only Boost and Preheat with unavailable/stale/recovering measured RH,
+  using the last valid occupied comfort goal rather than a sent idle/setback target. Rapid can
+  use its explicit maximum and expiry without a prior comfort reference; Adaptive never invents
+  a neutral reference or an RH measurement.
+- Keep cache timestamps, normal automatic operation, cooling/dewpoint protection, fresh primary
+  requirements, bounds, HeatGuard, ownership and the sole broker write path intact. Expose the
+  manual fallback, actual RH failure and reference timestamp in existing diagnostics/attributes.
+- Journal downward-only withdrawal on manual stop/expiry, including restart reconciliation and
+  storage failure handling. No new entities, setup choices, dependencies or config-entry migration.
+
 ## 0.2.33
 
 - Add an opt-in numeric central-demand source and an explicit positive threshold with one decimal.

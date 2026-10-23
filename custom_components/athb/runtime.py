@@ -57,6 +57,7 @@ from .adapters.storage import (
     ZoneCommandPersistence,
 )
 from .calculation import (
+    CachedHeatingReference,
     CapturedCriticalLocation,
     CapturedTarget,
     CapturedZoneSnapshot,
@@ -220,6 +221,7 @@ class ZoneRuntime:
     heat_guards: dict[str, HeatGuard] = field(default_factory=dict)
     heating_demand_active: dict[str, bool] = field(default_factory=dict)
     heating_demand_details: dict[str, dict[str, Any]] = field(default_factory=dict)
+    manual_heating_fallback_pending: bool = False
 
     async def async_start(self) -> None:
         """Acquire recovery state, shared history, listeners and initial calculation."""
@@ -244,6 +246,9 @@ class ZoneRuntime:
             )
             self.repair_manager.update("corrupt_control_storage", True)
         if self.persistence.state is not None:
+            self.manual_heating_fallback_pending = getattr(
+                self.persistence.state, "manual_heating_fallback_pending", False
+            )
             stored_values = getattr(self.persistence.state, "last_valid_values_json", None)
             stored_at = getattr(self.persistence.state, "last_valid_at", None)
             if stored_values is not None and stored_at is not None:
@@ -1387,6 +1392,13 @@ class ZoneRuntime:
             self.boost_mode,
             self.rapid_boost_reached,
             effective_occupancy_on=self.values.get("occupancy_effective_state") == "on",
+            preheat_active=self.preheat_active,
+            cached_heating_references=self._cached_heating_references(),
+            withdraw_manual_heating=(
+                self.manual_heating_fallback_pending
+                and not self.preheat_active
+                and self.boost_mode == BoostMode.OFF.value
+            ),
         )
         self.values["source_states"] = {
             entity_id: (
@@ -1427,6 +1439,54 @@ class ZoneRuntime:
         self.values["configuration_generation"] = self.configuration_generation
         self._schedule_freshness_expiries(now, radiant_id)
         self.controller.request(snapshot)
+
+    def _cached_heating_references(self) -> tuple[CachedHeatingReference, ...]:
+        """Read room-policy references, never a sent idle/Boost actuator goal."""
+
+        if self.last_valid_at is None:
+            return ()
+        scenarios = self.last_valid_values.get("target_scenarios", {})
+        if not isinstance(scenarios, dict):
+            return ()
+
+        def number(value: object) -> float | None:
+            return (
+                float(value)
+                if isinstance(value, int | float)
+                and not isinstance(value, bool)
+                and isfinite(value)
+                else None
+            )
+
+        references = []
+        for target in self.entry.data.get("targets", ()):
+            scenario = scenarios.get(target["target_uuid"])
+            if not isinstance(scenario, dict) or (
+                scenario.get("entity_id") != target["entity_id"]
+                or scenario.get("direction") != ActuationDirection.HEATING_ONLY.value
+            ):
+                continue
+            occupied = scenario.get("occupied", {})
+            unoccupied = scenario.get("unoccupied", {})
+            if not isinstance(occupied, dict) or not isinstance(unoccupied, dict):
+                continue
+            room = occupied.get("room", {})
+            idle = unoccupied.get("room", {})
+            if not isinstance(room, dict) or not isinstance(idle, dict):
+                continue
+            heating = number(room.get("temperature"))
+            if heating is not None:
+                references.append(
+                    CachedHeatingReference(
+                        str(target["target_uuid"]),
+                        str(target["registry_identity"]),
+                        heating,
+                        number(self.last_valid_values.get("thermal_neutral")),
+                        self.last_valid_at,
+                        number(idle.get("temperature")),
+                    )
+                )
+        return tuple(references)
 
     def _capture_critical_locations(
         self, primary_state: State | None, now: datetime
@@ -1606,7 +1666,7 @@ class ZoneRuntime:
         primary_fresh = (
             result.primary_value_c is not None
             and not result.primary_temperature_stale
-            and result.hold_condition is None
+            and (result.hold_condition is None or result.manual_heating_fallback)
             and (primary is None or not primary.recovering)
         )
         assist = self._central_demand_assist()
@@ -1968,7 +2028,9 @@ class ZoneRuntime:
                     target_uuid: {
                         **detail,
                         **(
-                            {"stale": False}
+                            {"stale": True}
+                            if result.manual_heating_fallback
+                            else {"stale": False}
                             if detail.get("preview_only")
                             else {
                                 "mode": "stale_hold",
@@ -2418,8 +2480,8 @@ class ZoneRuntime:
 
     def _update_observability_conditions(self, result: RuntimeCalculation) -> None:
         history_missing = result.history_quality == HistoryQuality.UNAVAILABLE.value
-        mandatory_missing = bool(result.targets) and all(
-            target.result is None for target in result.targets
+        mandatory_missing = result.manual_heating_fallback or (
+            bool(result.targets) and all(target.result is None for target in result.targets)
         )
         self._update_delayed_repair("missing_history_24h", history_missing, timedelta(hours=24))
         self._update_delayed_repair(
@@ -2434,7 +2496,9 @@ class ZoneRuntime:
         self.transition_logger.update(
             "fallback",
             fallback,
-            active_message="ATHB entered fixed fallback",
+            active_message="ATHB entered manual heating fallback"
+            if result.manual_heating_fallback
+            else "ATHB entered fixed fallback",
             recovery_message="ATHB recovered from fixed fallback",
         )
         self.transition_logger.update(
@@ -2639,6 +2703,54 @@ class ZoneRuntime:
             self.repair_manager.update("incompatible_auto_mapping", incompatible)
         return frozenset(recovery_reassertions)
 
+    async def _async_prepare_manual_heating(self, result: RuntimeCalculation) -> bool:
+        """Journal bounded manual heat and reject an intent changed during I/O."""
+
+        def intent_matches() -> bool:
+            active = (
+                self.boost_mode
+                if self.boost_mode != BoostMode.OFF.value
+                else "preheat"
+                if self.preheat_active
+                else "withdraw"
+            )
+            return not result.manual_heating_fallback or result.manual_heating_intent == active
+
+        if not intent_matches():
+            self.async_request_snapshot()
+            return False
+        executable = any(
+            t.result is not None
+            and t.result.normalized is not None
+            and t.suppression_reason is None
+            for t in result.targets
+        )
+        pending = self.manual_heating_fallback_pending
+        if executable:
+            if result.manual_heating_fallback:
+                pending = True
+            elif result.hold_condition is None:
+                pending = False
+        if pending != self.manual_heating_fallback_pending:
+            if (
+                self.persistence is None
+                or not await self.persistence.async_update_manual_heating_fallback(pending)
+            ):
+                self.publish(
+                    {
+                        **self.values,
+                        "command_outcomes": {
+                            t.target_uuid: "manual_heating_storage_fault" for t in result.targets
+                        },
+                    }
+                )
+                return False
+            self.manual_heating_fallback_pending = pending
+        if not intent_matches():
+            self.async_request_snapshot()
+            return False
+        return True
+
     async def _async_apply_calculation(
         self,
         result: RuntimeCalculation,
@@ -2647,6 +2759,9 @@ class ZoneRuntime:
         demand_states_json: str | None = None,
     ) -> None:
         if not self.control_enabled or self.broker is None:
+            return
+        manual_generation = (self.configuration_generation, self.input_generation)
+        if not await self._async_prepare_manual_heating(result):
             return
         outcomes: dict[str, str] = {}
         demand_transitions = demand_transitions or {}
@@ -2714,6 +2829,12 @@ class ZoneRuntime:
             ):
                 outcomes[target.target_uuid] = "stale_heat_guard_storage_fault"
                 continue
+            if result.manual_heating_fallback:
+                if manual_generation != (self.configuration_generation, self.input_generation):
+                    self.async_request_snapshot()
+                    return
+                if not await self._async_prepare_manual_heating(result):
+                    return
             intent = self._intent_from_result(
                 target,
                 normalized,

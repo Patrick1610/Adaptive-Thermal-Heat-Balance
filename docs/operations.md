@@ -53,6 +53,34 @@ persisted before a transition command and restored on restart.
 - `write_failed`: five attempts at the same normalized target have not been confirmed. Ownership
   is retained, no Resume is required, and a new normalized target can start a new attempt series.
 
+## Manual heating with unavailable humidity
+
+Timed Boost/Preheat has a separate heating-only fallback when measured RH is invalid, stale or
+recovering. **Target — current** exposes `manual_heating_fallback: true` in its control context;
+per-target details show `mode: manual_heating_fallback`, the actual `primary_rh_*` reason,
+`reference` and the original `reference_at` timestamp. Cached comfort outputs stay labelled stale;
+the cache and its age are not refreshed by the manual request.
+
+The reference is `last_valid_occupied`, not a last sent idle goal. Preheat retains the ordinary
+heating-demand buffer and does not force heating in an already satisfied room. Adaptive Boost
+uses the configured shift toward cached neutral; `boost_neutral_unavailable` means no shift was
+guessed. Rapid without a comfort reference uses only `configured_heating_limit` and its timer;
+`manual_heating_reference_unavailable` blocks Adaptive/Preheat without an occupied reference.
+
+Stopping/expiry returns downwards to the cached non-Boost occupied/unoccupied goal, or to the
+configured minimum if no reference exists. `manual_heating_return` identifies that cleanup. A
+small verified journal marker retains this obligation across restart; commands are not replayed
+and timers are not extended. After restart a new trustworthy temperature report is still required
+if the persisted temperature evidence is stale. Existing HeatGuard remains authoritative when
+primary temperature is invalid/stale. A journal error reports `manual_heating_storage_fault` and
+prevents dispatch. Fresh eligible RH returns control to the ordinary calculation path.
+
+The exception never applies to normal automatic operation, invalid fixed declarations, cooling,
+bidirectional/ranged or mixed heating/cooling zones. Missing primary temperature, invalid measured
+air speed, manual override, disabled/off/unavailable climates, bounds, normalization, leases,
+generations, acknowledgement and command-rate guards remain effective. ATHB still writes only
+temperature targets; downstream controllers and HVAC modes are unchanged.
+
 ## Climate-write retries
 
 ATHB makes at most five service calls for each normalized actuator target (initial call plus four

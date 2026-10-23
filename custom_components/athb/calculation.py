@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime
+from math import isfinite
 from typing import Any
 
 from .adapters.sources import (
@@ -25,6 +26,7 @@ from .core.climate import (
     NormalizedScalarTarget,
     ha_to_celsius,
     infer_auto_mapping,
+    normalize_scalar_target,
     resolve_capability,
 )
 from .core.contracts import (
@@ -55,7 +57,12 @@ from .core.locations import (
     prepare_critical_location,
 )
 from .core.pipeline import ZoneCalculationInput, ZoneCalculationResult, calculate_zone
-from .core.policy import OpposingTarget, check_cross_actuator_coordination
+from .core.policy import (
+    OpposingTarget,
+    PolicyFailure,
+    build_manual_heating_fallback,
+    check_cross_actuator_coordination,
+)
 from .core.psychrometrics import MoistureFailure, moisture_state
 from .core.radiant import (
     DirectRadiantModel,
@@ -96,6 +103,16 @@ class CapturedCriticalLocation:
 
 
 @dataclass(frozen=True, slots=True)
+class CachedHeatingReference:
+    target_uuid: str
+    registry_identity: str
+    occupied_heating_c: float
+    neutral_c: float | None
+    observed_at: datetime
+    unoccupied_heating_c: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class CapturedZoneSnapshot:
     now: datetime
     primary: StateValue | None
@@ -120,6 +137,9 @@ class CapturedZoneSnapshot:
     boost_mode: str = "off"
     rapid_boost_reached: bool = False
     effective_occupancy_on: bool = False
+    preheat_active: bool = False
+    cached_heating_references: tuple[CachedHeatingReference, ...] = ()
+    withdraw_manual_heating: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +151,7 @@ class TargetCalculation:
     mapping: CapabilityMapping | None
     result: ZoneCalculationResult | None
     suppression_reason: str | None
+    manual_reference_at: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +175,144 @@ class RuntimeCalculation:
     surface_high_humidity: bool | None = None
     primary_temperature_stale: bool = False
     effective_occupancy_on: bool = False
+    manual_heating_fallback: bool = False
+    manual_heating_intent: str | None = None
+
+
+def _manual_heating_targets(
+    snapshot: CapturedZoneSnapshot, air_c: float
+) -> tuple[TargetCalculation, ...] | None:
+    """Use cached room-policy goals only; never feed stale RH to the engine."""
+
+    if not (
+        snapshot.preheat_active or snapshot.boost_mode != "off" or snapshot.withdraw_manual_heating
+    ):
+        return None
+    mappings = tuple(resolve_capability(t.capability) for t in snapshot.targets)
+    if any(
+        isinstance(m, CapabilityMapping)
+        and (m.direction is not ActuationDirection.HEATING_ONLY or m.bidirectional_scalar)
+        for m in mappings
+    ):
+        # Unknown RH must not defeat cooling/dewpoint or mixed-actuator guards.
+        return None
+    references = {
+        (r.target_uuid, r.registry_identity): r
+        for r in snapshot.cached_heating_references
+        if r.observed_at.tzinfo is not None
+        and r.observed_at <= snapshot.now
+        and not isinstance(r.occupied_heating_c, bool)
+        and isfinite(r.occupied_heating_c)
+    }
+    targets = []
+    for target, mapping in zip(snapshot.targets, mappings, strict=True):
+        if isinstance(mapping, ClimateFailure):
+            targets.append(
+                TargetCalculation(
+                    target.target_uuid,
+                    target.registry_identity,
+                    target.entity_id,
+                    target.capability,
+                    None,
+                    None,
+                    mapping.reason,
+                )
+            )
+            continue
+        ref = references.get((target.target_uuid, target.registry_identity))
+        grid = GridOptions(
+            _finite_option(snapshot.options, "minimum_control_temperature", 18.0),
+            _finite_option(snapshot.options, "maximum_control_temperature", 26.0),
+            _finite_option(snapshot.options, f"calibration_{target.target_uuid}", 0.0),
+            rounding_mode=_grid_rounding_mode(snapshot.options.get("target_rounding_mode")),
+        )
+        if snapshot.withdraw_manual_heating:
+            # Expiry may not leave a stale-RH Rapid limit in force. Return only
+            # downwards to the cached non-Boost scenario (or explicit user min).
+            goal = (
+                ref.unoccupied_heating_c
+                if ref is not None and snapshot.profile == "eco"
+                else ref.occupied_heating_c
+                if ref is not None
+                else None
+            )
+            observed = target.capability.scalar_target_ha
+            goal = min(
+                goal if goal is not None else grid.user_min_c,
+                ha_to_celsius(observed, target.capability.temperature_unit)
+                - grid.calibration_offset_c
+                if observed is not None
+                else grid.user_min_c,
+            )
+            policy = build_manual_heating_fallback(
+                occupied_heating_c=goal,
+                neutral_c=None,
+                boost_mode=BoostMode.OFF,
+                current_air_temperature_c=air_c,
+                maximum_heating_c=grid.user_max_c,
+                boost_delta_c=0,
+                rapid_boost_reached=False,
+            )
+            if not isinstance(policy, PolicyFailure):
+                policy = replace(
+                    policy,
+                    governing_heating="manual_heating_return",
+                    limitations=(*policy.limitations, "manual_heating_return"),
+                )
+        else:
+            policy = build_manual_heating_fallback(
+                occupied_heating_c=ref.occupied_heating_c if ref else None,
+                neutral_c=ref.neutral_c if ref else None,
+                boost_mode=BoostMode(snapshot.boost_mode),
+                current_air_temperature_c=air_c,
+                maximum_heating_c=grid.user_max_c,
+                boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 1.0),
+                rapid_boost_reached=snapshot.rapid_boost_reached,
+            )
+        normalized = (
+            normalize_scalar_target(
+                requested_room_c=policy.heating_c,
+                direction=ActuationDirection.HEATING_ONLY,
+                snapshot=target.capability,
+                options=grid,
+            )
+            if not isinstance(policy, PolicyFailure) and policy.heating_c is not None
+            else None
+        )
+        failure = (
+            policy.reason
+            if isinstance(policy, PolicyFailure)
+            else (normalized.reason if isinstance(normalized, ClimateFailure) else None)
+        )
+        if (
+            snapshot.withdraw_manual_heating
+            and isinstance(normalized, NormalizedScalarTarget)
+            and target.capability.scalar_target_ha is not None
+            and normalized.normalized_actuator_c
+            > ha_to_celsius(target.capability.scalar_target_ha, target.capability.temperature_unit)
+            + 1e-9
+        ):
+            failure = "manual_heating_return_would_increase"
+        calculation = (
+            ZoneCalculationResult(None, None, policy, normalized, None, 0)
+            if not isinstance(policy, PolicyFailure)
+            and isinstance(normalized, NormalizedScalarTarget)
+            and failure is None
+            else None
+        )
+        targets.append(
+            TargetCalculation(
+                target.target_uuid,
+                target.registry_identity,
+                target.entity_id,
+                target.capability,
+                mapping,
+                calculation,
+                failure,
+                ref.observed_at.isoformat() if ref else None,
+            )
+        )
+    return tuple(targets)
 
 
 def _finite_option(options: dict[str, Any], name: str, default: float) -> float:
@@ -406,6 +565,41 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
     if mandatory_reason is not None or (speed_reason is not None and not fallback_for_speed):
         failure_reason = mandatory_reason or speed_reason
         assert failure_reason is not None
+        manual_targets = (
+            _manual_heating_targets(snapshot, air_c)
+            if failure_reason.startswith("primary_rh_")
+            and snapshot.declared_relative_humidity_pct is None
+            and air_c is not None
+            and not primary_stale
+            and not updated_states["primary"].recovering
+            and speed_reason is None
+            else None
+        )
+        if manual_targets is not None:
+            return RuntimeCalculation(
+                air_c,
+                rh_value,
+                rh_provenance,
+                outdoor_c,
+                snapshot.running_mean_c,
+                snapshot.history_quality,
+                manual_targets,
+                tuple(dict.fromkeys((*rh_reasons, "manual_heating_fallback"))),
+                next((t.suppression_reason for t in manual_targets if t.suppression_reason), None),
+                snapshot.explicit_transition,
+                source_states=tuple(sorted(updated_states.items())),
+                hold_condition=failure_reason,
+                provenance=base_provenance,
+                effective_occupancy_on=snapshot.effective_occupancy_on,
+                manual_heating_fallback=True,
+                manual_heating_intent=(
+                    snapshot.boost_mode
+                    if snapshot.boost_mode != "off"
+                    else "preheat"
+                    if snapshot.preheat_active
+                    else "withdraw"
+                ),
+            )
         targets = tuple(
             TargetCalculation(
                 item.target_uuid,
@@ -820,13 +1014,17 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         preview_only = calculation.diagnostic_preview is not None
         fallback = bool(calculation.policy and calculation.policy.fallback)
         effective_details[target.target_uuid] = {
-            "mode": "diagnostic_preview"
+            "mode": "manual_heating_fallback"
+            if result.manual_heating_fallback
+            else "diagnostic_preview"
             if preview_only
             else "fallback"
             if fallback
             else "adaptive",
             "preview_only": preview_only,
-            "reason": calculation.hold_condition or target.suppression_reason,
+            "reason": result.hold_condition
+            if result.manual_heating_fallback
+            else calculation.hold_condition or target.suppression_reason,
             "fallback": fallback,
             "boost_mode": calculation.policy.boost_mode.value if calculation.policy else "off",
             "boost_phase": calculation.policy.boost_phase if calculation.policy else "off",
@@ -851,6 +1049,16 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
                 else None
             ),
         }
+        if result.manual_heating_fallback:
+            effective_details[target.target_uuid].update(
+                {
+                    "reference": calculation.policy.governing_heating
+                    if calculation.policy
+                    else None,
+                    "reference_at": target.manual_reference_at,
+                    "limitations": calculation.policy.limitations if calculation.policy else (),
+                }
+            )
         if effective_details[target.target_uuid].get("scalar_selection") is None:
             effective_details[target.target_uuid].pop("scalar_selection")
         if isinstance(normalized, NormalizedScalarTarget):
@@ -932,4 +1140,5 @@ def result_values(result: RuntimeCalculation) -> dict[str, Any]:
         "surface_saturation": result.surface_saturation,
         "provenance": dict(result.provenance),
         "calculation": result,
+        "manual_heating_fallback": result.manual_heating_fallback,
     }

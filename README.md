@@ -20,6 +20,10 @@ environment is used only to generate and audit independent development goldens.
 - **Preheat** is a bounded temporary occupancy override. It selects the occupied comfort target
   without changing the configured occupancy source, and automatically expires after 60 minutes by
   default.
+- With missing/stale measured RH, timed **heating-only** Boost/Preheat can use a labelled manual
+  fallback: the last valid occupied comfort target, not a sent idle/setback target. Rapid may use
+  the configured maximum even without a cached comfort goal. Fresh valid room temperature and all
+  ownership/write guards remain required; normal automatic control and cooling do not bypass RH.
 - A configurable heating-demand buffer keeps downstream controllers at a grid-safe idle target
   until the unrounded heating shortfall is meaningful. Its default 0.5 °C start threshold uses
   the calculated target before grid rounding; the 0.1 °C stop threshold still uses the executable

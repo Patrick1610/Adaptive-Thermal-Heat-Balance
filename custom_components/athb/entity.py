@@ -114,6 +114,7 @@ class AthbEntity(Entity):
                 "setback": self.runtime.eco_intensity if options.get("occupancy_entity") else None,
                 "setback_active": values.get("setback_active", False),
                 "heating_demand": values.get("heating_demand_hysteresis", {}),
+                "manual_heating_fallback": values.get("manual_heating_fallback", False),
             },
             "related_values": {
                 "thermal_sensation": values.get("thermal_sensation"),

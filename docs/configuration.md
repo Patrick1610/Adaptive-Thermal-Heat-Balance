@@ -21,6 +21,15 @@ Preheat is a separate runtime switch. It temporarily treats the zone as occupied
 the natural occupancy-source state for explanation and diagnostics. Its default timeout is 60
 minutes and can be configured from 5–180 minutes. Restart restores only the remaining interval.
 
+For heating-only zones, missing/stale/recovering **measured** RH no longer blocks a timed manual
+Boost or Preheat request if room temperature is fresh and valid. Preheat uses the last valid
+**occupied** room-policy goal (never the idle/setback setpoint). Adaptive Boost adds the configured
+shift, capped by the cached neutral reference; without neutral it retains the occupied goal.
+Rapid uses the configured maximum until that Boost goal is reached, then holds it. Without any
+cached comfort goal, only Rapid is possible, bounded by its existing command limit and timer.
+No RH measurement or new comfort calculation is fabricated. See [operations](operations.md#manual-heating-with-unavailable-humidity)
+for fallback status and expiry behavior. Existing entries need no new option or migration.
+
 The normal setup explains each input. Its **Everyday control settings** page always shows command
 minimum/maximum, manual-override duration, Boost shift/duration and Preheat duration. Numerical comfort assumptions,
 fallback behaviour and specialist source settings remain behind **Configure advanced settings**.

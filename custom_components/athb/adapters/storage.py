@@ -88,6 +88,7 @@ class ControlStoreState:
     last_valid_at: str | None = None
     heat_guards_json: str | None = None
     heating_demand_states_json: str | None = None
+    manual_heating_fallback_pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +221,7 @@ def serialize_control_state(state: ControlStoreState) -> str:
         or not state.previous_non_boost_profile
         or state.boost_mode not in {"off", "adaptive", "rapid"}
         or not isinstance(state.rapid_boost_reached, bool)
+        or not isinstance(state.manual_heating_fallback_pending, bool)
     ):
         raise ValueError("invalid control state version or generation")
     if state.boost_expiry_utc is not None:
@@ -286,6 +288,7 @@ def load_control_state(serialized: str | None) -> ControlLoadResult:
             last_valid_at=raw.get("last_valid_at"),
             heat_guards_json=raw.get("heat_guards_json"),
             heating_demand_states_json=raw.get("heating_demand_states_json"),
+            manual_heating_fallback_pending=raw.get("manual_heating_fallback_pending", False),
         )
         serialize_control_state(state)
     except KeyError, TypeError, ValueError, json.JSONDecodeError:
@@ -508,6 +511,19 @@ class ZoneCommandPersistence:
             )
             return (await self._verified.async_write_critical(self.state)).verified
 
+    async def async_update_manual_heating_fallback(self, pending: bool) -> bool:
+        """Journal the need to withdraw a bounded manual request after expiry."""
+
+        async with self._lock:
+            if self.state is None:
+                return False
+            self.state = replace(
+                self.state,
+                storage_generation=self.state.storage_generation + 1,
+                manual_heating_fallback_pending=pending,
+            )
+            return (await self._verified.async_write_critical(self.state)).verified
+
     async def async_update_heat_guards(self, guards_json: str) -> bool:
         """Persist feedback-guard deadlines without altering command correlation."""
 
@@ -700,6 +716,7 @@ def prepare_startup_recovery(
         heating_demand_states_json=(
             None if configuration_changed or strategy_changed else prior.heating_demand_states_json
         ),
+        manual_heating_fallback_pending=prior.manual_heating_fallback_pending,
     )
     return StartupRecovery(state, requires_resume, reason, reasons)
 

@@ -228,6 +228,22 @@ restarts the configured duration. Restart never extends an existing expiry. Boos
 the selected comfort level, never changes HVAC mode, and remains subject to ownership,
 normalization, user/device bounds and the sole `CommandBroker` write path.
 
+### Timed manual heating while measured RH is unavailable
+
+This narrow exception to the mandatory-RH hold applies only to heating-only Boost/Preheat, never
+normal automatic control, cooling, bidirectional/ranged or mixed-direction zones. Require fresh,
+valid, non-recovering primary temperature and all other source/write/ownership guards. Do not feed
+invented or stale RH into the comfort solver. Use the stored occupied **room-policy** target,
+identity-bound to its configured actuator, and retain its original timestamp. Adaptive Boost
+shifts it toward cached neutral; without neutral retain occupied. Preheat retains demand buffering.
+Rapid may use the explicit maximum and existing expiry without a cached occupied reference.
+
+Persist a verified cleanup marker before manual fallback dispatch. On stop/expiry with RH still
+unavailable, permit only a downward return to the cached non-Boost scenario (or user minimum),
+subject to fresh primary input, current bounds, ownership and the broker. Retain that obligation
+across restart without replaying commands or extending timers. Cache values/timestamps are not
+updated by this path; disclose the actual RH failure, fallback mode, source and reference age.
+
 Config-entry version 1 migrates to version 2. Legacy `eco` Profile maps to the Eco comfort level;
 legacy `boost` maps to Adaptive Boost; other legacy Profiles preserve the selected comfort level
 and Boost Off. The obsolete Profile entity is removed.

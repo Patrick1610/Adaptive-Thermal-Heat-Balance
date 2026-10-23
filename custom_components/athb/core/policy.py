@@ -107,6 +107,74 @@ class PolicyFailure:
 type PolicyResult = PolicyTargets | PolicyFailure
 
 
+def build_manual_heating_fallback(
+    *,
+    occupied_heating_c: float | None,
+    neutral_c: float | None,
+    boost_mode: BoostMode,
+    current_air_temperature_c: float,
+    maximum_heating_c: float,
+    boost_delta_c: float,
+    rapid_boost_reached: bool,
+) -> PolicyResult:
+    """Bound a timed manual heat request without inventing an environmental input."""
+
+    values = (current_air_temperature_c, maximum_heating_c, boost_delta_c)
+    references = tuple(v for v in (occupied_heating_c, neutral_c) if v is not None)
+    if any(isinstance(v, bool) or not math.isfinite(v) for v in (*values, *references)):
+        return PolicyFailure("manual_heating_reference_invalid")
+    if boost_delta_c < 0:
+        return PolicyFailure("manual_heating_reference_invalid")
+    if occupied_heating_c is None and boost_mode is not BoostMode.RAPID:
+        return PolicyFailure("manual_heating_reference_unavailable")
+    limitations = ["manual_heating_fallback"]
+    reference = "last_valid_occupied"
+    goal = occupied_heating_c
+    if goal is None:
+        # No historical comfort goal exists: Rapid may use only the explicit
+        # user limit and its existing expiry, not a fabricated comfort result.
+        goal = maximum_heating_c
+        reference = "configured_heating_limit"
+        limitations.append("manual_heating_no_comfort_reference")
+    elif boost_mode is not BoostMode.OFF:
+        goal += boost_delta_c
+        if neutral_c is not None:
+            goal = min(goal, neutral_c)
+        else:
+            # Do not guess how far toward neutral an Adaptive shift may go.
+            goal = occupied_heating_c
+            limitations.append("boost_neutral_unavailable")
+    assert goal is not None
+    reached = boost_mode is BoostMode.RAPID and (
+        rapid_boost_reached or current_air_temperature_c >= goal
+    )
+    requested = maximum_heating_c if boost_mode is BoostMode.RAPID and not reached else goal
+    return PolicyTargets(
+        heating_c=requested,
+        cooling_c=None,
+        pre_profile_heating_c=occupied_heating_c,
+        pre_profile_cooling_c=None,
+        pre_slew_heating_c=requested,
+        pre_slew_cooling_c=None,
+        profile=ControlProfile.COMFORT,
+        fallback=True,
+        governing_heating=reference,
+        governing_cooling="none",
+        heating_contribution=None,
+        cooling_contribution=None,
+        limitations=tuple(limitations),
+        boost_mode=boost_mode,
+        boost_phase="hold"
+        if reached
+        else "rapid"
+        if boost_mode is BoostMode.RAPID
+        else boost_mode.value,
+        rapid_boost_reached=reached,
+        boost_target_heating_c=goal if boost_mode is not BoostMode.OFF else None,
+        occupied_heating_c=occupied_heating_c,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ActuatorBoundResult:
     requested_room_c: float

@@ -78,6 +78,7 @@ async def _start_delivery_runtime(
     control_enabled: bool = True,
     outside: str = "5",
     initial_target: float = 23.0,
+    measured_rh: bool = False,
 ) -> tuple[ZoneRuntime, list[ServiceCall]]:
     calls: list[ServiceCall] = []
     attributes = {
@@ -108,6 +109,8 @@ async def _start_delivery_runtime(
     hass.services.async_register("climate", "set_temperature", write)
     hass.states.async_set("sensor.room", "20", {"unit_of_measurement": "°C"})
     hass.states.async_set("sensor.outdoor", outside, {"unit_of_measurement": "°C"})
+    if measured_rh:
+        hass.states.async_set("sensor.humidity", "50", {"unit_of_measurement": "%"})
     hass.states.async_set("climate.target", mode, attributes)
     entry = MockConfigEntry(
         domain="athb",
@@ -117,8 +120,9 @@ async def _start_delivery_runtime(
             "zone_uuid": "delivery-test",
             "primary_temperature": "sensor.room",
             "outdoor_source": "sensor.outdoor",
-            "rh_mode": "declared",
+            "rh_mode": "measured" if measured_rh else "declared",
             "rh_declared": 50.0,
+            **({"rh_entity": "sensor.humidity"} if measured_rh else {}),
             "targets": [
                 {
                     "target_uuid": "target-1",
