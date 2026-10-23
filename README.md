@@ -15,8 +15,10 @@ environment is used only to generate and audit independent development goldens.
   sensation-space roots; targets are not interpolated between temperatures.
 - An optional occupancy or schedule entity applies **Setback** whenever it is off, at every
   comfort level. Setback is **Boundary limit**, **Eco — 4 °C**, **Comfort — 2 °C**, or **Custom**.
-- **Boost** is separate: Adaptive moves to a bounded calculated Boost target; Rapid uses the
-  command limit until that target is reached and then holds it. Expiry returns Boost to Off.
+- **Boost** is separate: Adaptive targets neutral plus the signed offset for heating, or neutral
+  minus the same offset for cooling. The offset defaults to zero. Rapid uses the command limit
+  until the configurable approach band (default 1 °C), then uses the real Boost goal. Its
+  one-way approach latch and original expiry survive restart.
 - **Preheat** is a bounded temporary occupancy override. It selects the occupied comfort target
   without changing the configured occupancy source, and automatically expires after 60 minutes by
   default.
@@ -78,6 +80,9 @@ through Settings → Devices & services. No live installation is part of the rep
 Each configured thermal zone appears as one Home Assistant device. The normal flow shows only the
 inputs required by the selected source mode; advanced numerical and radiant settings remain behind
 explicit progressive-disclosure choices.
+**Configure** opens a task-based settings menu. Each section retains a draft or can be discarded
+with **Back without changes**. Only **Save and close** applies all drafts and reloads once;
+closing the dialog discards unapplied changes. Existing devices and entity identities are retained.
 
 ## Documentation
 

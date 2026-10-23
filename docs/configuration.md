@@ -13,9 +13,11 @@ save with adaptive control disabled.
 The comfort-level select runs from Eco through Near neutral. An optional binary occupancy or
 schedule source applies the separately selected Setback whenever it is off; without that source,
 Setback is not shown or applied. Boost is a separate runtime select with Off, Adaptive and Rapid.
-Adaptive bypasses setback and targets extra comfort. Rapid temporarily drives a scalar heat-only
-target at the configured maximum (or cooling at the minimum) until the calculated Boost target is
-reached, then holds that target. It never changes HVAC mode.
+Adaptive bypasses setback and targets thermal neutral plus the signed Boost offset for heating,
+or neutral minus that offset for cooling. Default 0 °C means neutral; +1 means 1 °C further heating
+or cooling, and -1 stops 1 °C earlier. Rapid begins at the configured maximum (minimum for cooling)
+and changes to the actual bounded, rounded Boost goal when the room enters the configurable
+approach band (default 1 °C). It never returns to maximum drive within that Boost or changes HVAC mode.
 
 Preheat is a separate runtime switch. It temporarily treats the zone as occupied while retaining
 the natural occupancy-source state for explanation and diagnostics. Its default timeout is 60
@@ -23,19 +25,26 @@ minutes and can be configured from 5–180 minutes. Restart restores only the re
 
 For heating-only zones, missing/stale/recovering **measured** RH no longer blocks a timed manual
 Boost or Preheat request if room temperature is fresh and valid. Preheat uses the last valid
-**occupied** room-policy goal (never the idle/setback setpoint). Adaptive Boost adds the configured
-shift, capped by the cached neutral reference; without neutral it retains the occupied goal.
-Rapid uses the configured maximum until that Boost goal is reached, then holds it. Without any
+**occupied** room-policy goal (never the idle/setback setpoint). Adaptive Boost uses cached neutral
+plus the signed heating offset; without neutral it retains the occupied goal.
+Rapid uses the configured maximum until the approach band, then the Boost goal. Without any
 cached comfort goal, only Rapid is possible, bounded by its existing command limit and timer.
 No RH measurement or new comfort calculation is fabricated. See [operations](operations.md#manual-heating-with-unavailable-humidity)
-for fallback status and expiry behavior. Existing entries need no new option or migration.
+for fallback status and expiry behavior. A valid neutral Boost is not blocked solely because
+high humidity makes the unrelated low Eco root unsolvable. Heating-only Preheat may use the
+same labelled occupied reference in that situation; normal automatic control is unchanged.
 
 The normal setup explains each input. Its **Everyday control settings** page always shows command
-minimum/maximum, manual-override duration, Boost shift/duration and Preheat duration. Numerical comfort assumptions,
+minimum/maximum, manual-override duration, Boost offset/duration/approach and Preheat duration. Numerical comfort assumptions,
 fallback behaviour and specialist source settings remain behind **Configure advanced settings**.
 A final review page summarizes the zone before creation. The device's **Configure** action opens a
-short settings menu for room/measurement sources, climate targets, or comfort/control settings.
-It covers the same choices without forcing every technical page into one long form. Run
+a task-based settings menu, with direct access to sources, devices/calibration, comfort,
+occupancy/setback, Boost/Preheat, bounds, heating demand/assisted start, human/air assumptions,
+sensor reliability/heating safety, extra locations and advanced model/command behavior.
+Completing a section returns to this menu without applying changes. The page-action choice
+**Back without changes** discards the current section, including incomplete conditional pages,
+but retains earlier drafts. Only **Save and close** validates and applies the whole draft and
+reloads once; the dialog's close icon discards all unapplied changes. Run
 **Reconfigure** from the integration entry when a complete sequential setup walkthrough is
 preferred; both routes retain the same zone identity and device.
 

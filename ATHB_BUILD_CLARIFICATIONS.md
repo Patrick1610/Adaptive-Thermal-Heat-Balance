@@ -215,11 +215,15 @@ Comfort - 2 °C, and Custom.
 Boost is a separate temporary select with `off`, `adaptive`, and `rapid`:
 
 - `off`: comfort level and occupancy setback are authoritative;
-- `adaptive`: bypass occupancy setback and request the solved directional target shifted by
-  `boost_delta_c` toward, but not past, thermal neutral;
+- `adaptive`: bypass occupancy setback and use thermal neutral plus `boost_delta_c` for heating,
+  or neutral minus the same value for cooling. The signed offset defaults to 0 °C and accepts
+  -3 through +3 °C. Positive always means further conditioning; negative stops before neutral.
 - `rapid`: for a scalar heating target, request the configured maximum command temperature until
-  the adaptive Boost target is reached, then hold that Boost target; scalar cooling uses the
-  configured minimum analogously. For an atomic ranged target or a zone with separate heating
+  the approach band is entered, then use the actual bounded/grid-rounded Boost target. The
+  configurable `rapid_boost_approach_c` defaults to 1 °C (0.1–5 °C). Heating approaches from
+  below and cooling from above. The existing persisted `rapid_boost_reached` flag now latches
+  entry into approach, not merely attainment of the goal. It never re-arms within that Boost.
+  Scalar cooling uses the configured minimum analogously. For an atomic ranged target or a zone with separate heating
   and cooling scalar targets, Rapid explicitly falls back to Adaptive because opposing
   maximum-drive requests cannot be expressed safely.
 
@@ -228,6 +232,11 @@ restarts the configured duration. Restart never extends an existing expiry. Boos
 the selected comfort level, never changes HVAC mode, and remains subject to ownership,
 normalization, user/device bounds and the sole `CommandBroker` write path.
 
+Scalar Boost requires a valid current evaluation and a valid neutral root, not an unrelated
+Eco/directional control root. Original root failures remain visible. Normal automatic control
+retains its directional root requirements. Ranged Boost retains minimum separation around
+neutral instead of crossing heating and cooling endpoints for a positive offset.
+
 ### Timed manual heating while measured RH is unavailable
 
 This narrow exception to the mandatory-RH hold applies only to heating-only Boost/Preheat, never
@@ -235,8 +244,22 @@ normal automatic control, cooling, bidirectional/ranged or mixed-direction zones
 valid, non-recovering primary temperature and all other source/write/ownership guards. Do not feed
 invented or stale RH into the comfort solver. Use the stored occupied **room-policy** target,
 identity-bound to its configured actuator, and retain its original timestamp. Adaptive Boost
-shifts it toward cached neutral; without neutral retain occupied. Preheat retains demand buffering.
+uses cached neutral plus the signed heating offset; without neutral retain occupied. Preheat retains demand buffering.
 Rapid may use the explicit maximum and existing expiry without a cached occupied reference.
+Heating-only Preheat may use the same labelled occupied reference when fresh valid RH makes
+the low Eco root moisture-limited. It must not fabricate a root or refresh cache timestamps.
+
+### Transactional native settings
+
+Options exposes independent human-oriented sections for sources, devices/calibration, comfort,
+occupancy/setback, Boost/Preheat, bounds/manual control, heating demand/assisted start, human/air
+assumptions, source reliability/heating safety, local-air points and advanced model/command tuning.
+Section submission retains only a draft and returns to the menu when that section is complete.
+The native page-action selector can discard the whole current section, including incomplete
+conditional subpages, while retaining earlier drafts. Closing the flow discards all unapplied
+changes. Only Save and close validates the complete environment/options and target claims,
+updates data/options together and schedules one reload. IDs, unknown options and calibration for
+retained targets are preserved; no helper, custom frontend or second configuration store is added.
 
 Persist a verified cleanup marker before manual fallback dispatch. On stop/expiry with RH still
 unavailable, permit only a downward return to the cached non-Boost scenario (or user minimum),

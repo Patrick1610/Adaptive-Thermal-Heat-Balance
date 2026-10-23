@@ -88,7 +88,8 @@ class ZoneCalculationInput:
     eco_intensity: EcoIntensity = EcoIntensity.CUSTOM
     inactive_heating_c: float = 18.0
     inactive_cooling_c: float = 26.0
-    boost_delta_c: float = 1.0
+    boost_delta_c: float = 0.0
+    rapid_boost_approach_c: float = 1.0
     boost_mode: BoostMode = BoostMode.OFF
     rapid_boost_reached: bool = False
     previous_requested: tuple[float | None, float | None] = (None, None)
@@ -239,6 +240,25 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         direction=inputs.direction,
         minimum_range_gap_c=inputs.grid.minimum_range_gap_c,
     )
+    scalar_boost = inputs.boost_mode is not BoostMode.OFF and inputs.direction in {
+        ActuationDirection.HEATING_ONLY,
+        ActuationDirection.COOLING_ONLY,
+    }
+    if scalar_boost:
+        # Boost depends on neutral, not the lower Eco/higher cooling control
+        # root. Keep all original roots and their failures in diagnostics.
+        reasons: tuple[str, ...] = (
+            () if isinstance(current, AthbSuccess) else ("current_athb_unavailable",)
+        )
+        required_roots: tuple[RootName, ...] = (RootName.THERMAL_NEUTRAL,)
+        if inputs.direction is ActuationDirection.COOLING_ONLY:
+            # Cooling retains its directional validity/cleanup requirements;
+            # only the unrelated low heating/Eco root is dispensable.
+            reasons = eligibility.reasons
+            required_roots += (RootName.COOLING_CONTROL,)
+        if not isinstance(roots.thermal_neutral, RootSuccess):
+            reasons += ("missing_required_root:thermal_neutral",)
+        eligibility = DirectionalEligibility(not reasons, required_roots, reasons)
     if not eligibility.eligible:
         reason = eligibility.reasons[0]
         if inputs.failure_hold_elapsed:
@@ -363,6 +383,24 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         policy_roots = replace(
             roots, heating_control=roots.thermal_neutral, cooling_control=roots.thermal_neutral
         )
+    boost_goal_c = None
+    if scalar_boost and isinstance(roots.thermal_neutral, RootSuccess):
+        goal = normalize_scalar_target(
+            requested_room_c=roots.thermal_neutral.mapped_room_temperature_c
+            + (
+                inputs.boost_delta_c
+                if inputs.direction is ActuationDirection.HEATING_ONLY
+                else -inputs.boost_delta_c
+            ),
+            direction=inputs.direction,
+            snapshot=inputs.climate,
+            options=inputs.grid,
+        )
+        if isinstance(goal, ClimateFailure):
+            return ZoneCalculationResult(
+                current, roots, None, None, goal.reason, budget.used, votes, eligibility
+            )
+        boost_goal_c = goal.normalized_room_c
     policy = build_adaptive_policy(
         roots=policy_roots,
         critical_demands=critical_demands,
@@ -378,6 +416,8 @@ def calculate_zone(inputs: ZoneCalculationInput) -> ZoneCalculationResult:
         inactive_heating_c=inputs.inactive_heating_c,
         inactive_cooling_c=inputs.inactive_cooling_c,
         boost_delta_c=inputs.boost_delta_c,
+        rapid_boost_approach_c=inputs.rapid_boost_approach_c,
+        boost_goal_c=boost_goal_c,
         previous_requested=inputs.previous_requested,
         elapsed_since_previous_seconds=inputs.elapsed_since_previous_seconds,
         explicit_transition=inputs.explicit_transition,
@@ -509,7 +549,7 @@ def _normalize_policy(
             eligibility,
             critical_locations,
         )
-    if policy.fallback and inputs.direction in {
+    if (policy.fallback or policy.boost_mode is not BoostMode.OFF) and inputs.direction in {
         ActuationDirection.COOLING_ONLY,
         ActuationDirection.RANGED,
     }:

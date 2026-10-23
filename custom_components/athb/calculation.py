@@ -260,14 +260,31 @@ def _manual_heating_targets(
                     limitations=(*policy.limitations, "manual_heating_return"),
                 )
         else:
+            normalized_goal = (
+                normalize_scalar_target(
+                    requested_room_c=ref.neutral_c
+                    + _finite_option(snapshot.options, "boost_delta_c", 0.0),
+                    direction=ActuationDirection.HEATING_ONLY,
+                    snapshot=target.capability,
+                    options=grid,
+                )
+                if ref is not None and ref.neutral_c is not None and snapshot.boost_mode != "off"
+                else None
+            )
             policy = build_manual_heating_fallback(
                 occupied_heating_c=ref.occupied_heating_c if ref else None,
                 neutral_c=ref.neutral_c if ref else None,
                 boost_mode=BoostMode(snapshot.boost_mode),
                 current_air_temperature_c=air_c,
                 maximum_heating_c=grid.user_max_c,
-                boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 1.0),
+                boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 0.0),
+                rapid_boost_approach_c=_finite_option(
+                    snapshot.options, "rapid_boost_approach_c", 1.0
+                ),
                 rapid_boost_reached=snapshot.rapid_boost_reached,
+                boost_goal_c=normalized_goal.normalized_room_c
+                if isinstance(normalized_goal, NormalizedScalarTarget)
+                else None,
             )
         normalized = (
             normalize_scalar_target(
@@ -797,7 +814,10 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 eco_intensity=EcoIntensity(str(snapshot.options.get("eco_intensity", "custom"))),
                 inactive_heating_c=grid.user_min_c,
                 inactive_cooling_c=grid.user_max_c,
-                boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 1.0),
+                boost_delta_c=_finite_option(snapshot.options, "boost_delta_c", 0.0),
+                rapid_boost_approach_c=_finite_option(
+                    snapshot.options, "rapid_boost_approach_c", 1.0
+                ),
                 boost_mode=effective_boost_mode,
                 rapid_boost_reached=snapshot.rapid_boost_reached,
                 previous_requested=snapshot.previous_requested,
@@ -832,6 +852,54 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
                 capability_reason or result.suppression_reason,
             )
         )
+    root_fallback_reason = next(
+        (
+            "missing_required_root:heating_control"
+            for t in target_results
+            if t.result is not None
+            and (
+                t.result.suppression_reason == "missing_required_root:heating_control"
+                or (
+                    t.result.normalized is not None
+                    and t.mapping is not None
+                    and t.mapping.direction is ActuationDirection.HEATING_ONLY
+                    and t.result.roots is not None
+                    and not isinstance(t.result.roots.heating_control, RootSuccess)
+                )
+            )
+        ),
+        None,
+    )
+    manual_root_fallback = root_fallback_reason is not None and snapshot.boost_mode != "off"
+    if (
+        root_fallback_reason is not None
+        and (snapshot.preheat_active or snapshot.withdraw_manual_heating)
+        and snapshot.boost_mode == "off"
+    ):
+        cached_targets = _manual_heating_targets(snapshot, air_c)
+        if cached_targets is not None:
+            manual_root_fallback = True
+            by_id = {t.target_uuid: t for t in cached_targets}
+            recovered = []
+            for target_result in target_results:
+                cached = by_id[target_result.target_uuid]
+                original = target_result.result
+                cached_result = cached.result
+                if original is not None and cached_result is not None:
+                    recovered.append(
+                        replace(
+                            cached,
+                            result=replace(
+                                cached_result,
+                                current=original.current,
+                                roots=original.roots,
+                                evaluation_count=original.evaluation_count,
+                            ),
+                        )
+                    )
+                else:
+                    recovered.append(target_result)
+            target_results = recovered
     coordinated: list[TargetCalculation] = []
     for target_result in target_results:
         calculated = target_result.result
@@ -896,7 +964,11 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             for item in target_results
             if item.result is not None and item.result.hold_condition is not None
         ),
-        "air_speed_invalid" if fallback_for_speed else None,
+        root_fallback_reason
+        if manual_root_fallback
+        else "air_speed_invalid"
+        if fallback_for_speed
+        else None,
     )
     return RuntimeCalculation(
         air_c,
@@ -945,6 +1017,16 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
         ),
         primary_temperature_stale=primary_stale,
         effective_occupancy_on=snapshot.effective_occupancy_on,
+        manual_heating_fallback=manual_root_fallback,
+        manual_heating_intent=(
+            snapshot.boost_mode
+            if snapshot.boost_mode != "off"
+            else "preheat"
+            if snapshot.preheat_active
+            else "withdraw"
+        )
+        if manual_root_fallback
+        else None,
     )
 
 

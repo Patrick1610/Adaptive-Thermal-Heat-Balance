@@ -1024,7 +1024,11 @@ def test_entity_attributes_explain_sources_controls_settings_and_related_values(
     assert delta_sensor.extra_state_attributes["reference_kind"] == "neutral"
 
     boost = BoostModeSelect(runtime).extra_state_attributes
-    assert boost["settings"] == {"boost_delta_c": 1.5, "boost_duration_minutes": 45.0}
+    assert boost["settings"] == {
+        "boost_delta_c": 1.5,
+        "boost_duration_minutes": 45.0,
+        "rapid_boost_approach_c": 1.0,
+    }
     assert PreheatSwitch(runtime).extra_state_attributes["settings"] == {
         "preheat_duration_minutes": 75.0
     }

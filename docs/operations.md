@@ -63,7 +63,7 @@ the cache and its age are not refreshed by the manual request.
 
 The reference is `last_valid_occupied`, not a last sent idle goal. Preheat retains the ordinary
 heating-demand buffer and does not force heating in an already satisfied room. Adaptive Boost
-uses the configured shift toward cached neutral; `boost_neutral_unavailable` means no shift was
+uses cached neutral plus the signed heating offset; `boost_neutral_unavailable` means no shift was
 guessed. Rapid without a comfort reference uses only `configured_heating_limit` and its timer;
 `manual_heating_reference_unavailable` blocks Adaptive/Preheat without an occupied reference.
 
@@ -74,6 +74,19 @@ and timers are not extended. After restart a new trustworthy temperature report 
 if the persisted temperature evidence is stale. Existing HeatGuard remains authoritative when
 primary temperature is invalid/stale. A journal error reports `manual_heating_storage_fault` and
 prevents dispatch. Fresh eligible RH returns control to the ordinary calculation path.
+
+A fresh measured RH can also make a low Eco heating root moisture-limited without invalidating
+the higher neutral root. Scalar Boost then uses that valid neutral result and does not require
+the unrelated Eco root. Original roots/failures remain observable. Heating-only Preheat can use
+its original timestamped occupied reference with the same labelled manual fallback; this does
+not declare stale/bogus RH fresh or change ordinary automatic root requirements.
+
+Rapid exposes `boost_phase: rapid`, `approach`, or `hold`. The configurable approach margin is
+measured against the executable bounded/grid-rounded room goal, not a delayed TRV temperature.
+The persisted `rapid_boost_reached` boolean latches approach entry; it never re-arms until a new
+Boost selection. The selected Boost remains Rapid; the change is internal and preserves expiry.
+Stable SmartPI can modulate from the real goal, while Hysteresis rooms can still have binary
+valve output. A softer target is not a guarantee of measured heat flow or physical valve position.
 
 The exception never applies to normal automatic operation, invalid fixed declarations, cooling,
 bidirectional/ranged or mixed heating/cooling zones. Missing primary temperature, invalid measured

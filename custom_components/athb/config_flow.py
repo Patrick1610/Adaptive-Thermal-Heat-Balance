@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from typing import Any, override
+from collections.abc import Awaitable, Callable, Mapping
+from copy import deepcopy
+from functools import wraps
+from typing import Any, ClassVar, cast, override
 from uuid import uuid4
 
 import voluptuous as vol
@@ -51,6 +53,7 @@ from .const import (
     DEFAULT_MAXIMUM_CONTROL_TEMPERATURE,
     DEFAULT_MINIMUM_CONTROL_TEMPERATURE,
     DEFAULT_PREHEAT_DURATION_MINUTES,
+    DEFAULT_RAPID_BOOST_APPROACH_C,
     DEFAULT_STRATEGY,
     DOMAIN,
 )
@@ -120,6 +123,7 @@ OPTION_DEFAULTS: dict[str, object] = {
     "eco_cooling_setback_c": 2.0,
     "boost_delta_c": DEFAULT_BOOST_DELTA_C,
     "boost_duration_minutes": 60.0,
+    "rapid_boost_approach_c": DEFAULT_RAPID_BOOST_APPROACH_C,
     CONF_PREHEAT_DURATION_MINUTES: DEFAULT_PREHEAT_DURATION_MINUTES,
     "manual_override_minutes": 120.0,
     "minimum_control_temperature": DEFAULT_MINIMUM_CONTROL_TEMPERATURE,
@@ -173,6 +177,24 @@ def _primary_source_error(hass: HomeAssistant, entity_id: str) -> str | None:
     return None if valid_value(observation) is not None else "invalid_primary_source"
 
 
+def _settings_page[SettingsHandler: Callable[..., Awaitable[ConfigFlowResult]]](
+    handler: SettingsHandler,
+) -> SettingsHandler:
+    """Keep options navigation/drafts separate from the initial setup wizard."""
+
+    @wraps(handler)
+    async def guarded(self: Any, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        submitted = None if user_input is None else dict(user_input)
+        result: ConfigFlowResult | None = self._before_settings_page(
+            handler.__name__.removeprefix("async_step_"), submitted
+        )
+        if result is not None:
+            return result
+        return await handler(self, submitted)
+
+    return cast(SettingsHandler, guarded)
+
+
 class _OptionsWizardMixin:
     """Shared option steps used by setup, reconfigure, and Options."""
 
@@ -188,6 +210,11 @@ class _OptionsWizardMixin:
     _critical_index: int
     _calibration_index: int
     _wizard_environment: dict[str, Any]
+
+    def _before_settings_page(
+        self, step_id: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult | None:
+        return None
 
     def _is_last_wizard_step(self, step_id: str) -> bool:
         """Return whether this shared wizard step is the final visible form."""
@@ -387,6 +414,7 @@ class _OptionsWizardMixin:
         ] = ENTITY
         return self._show_wizard_form(step_id=step_id, data_schema=vol.Schema(fields))
 
+    @_settings_page
     async def async_step_setback(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -413,6 +441,7 @@ class _OptionsWizardMixin:
             ),
         )
 
+    @_settings_page
     async def async_step_setback_parameters(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -459,6 +488,7 @@ class _OptionsWizardMixin:
         for key in old_and_current_keys - retained:
             self._pending_options.pop(key, None)
 
+    @_settings_page
     async def async_step_radiant(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -479,6 +509,7 @@ class _OptionsWizardMixin:
     async def _after_radiant(self) -> ConfigFlowResult:
         return await self.async_step_control_limits()
 
+    @_settings_page
     async def async_step_advanced_model(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -511,6 +542,7 @@ class _OptionsWizardMixin:
             ),
         )
 
+    @_settings_page
     async def async_step_clothing(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -529,6 +561,7 @@ class _OptionsWizardMixin:
             ),
         )
 
+    @_settings_page
     async def async_step_air_speed(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -553,6 +586,7 @@ class _OptionsWizardMixin:
             )
         return self._show_wizard_form(step_id="air_speed", data_schema=schema)
 
+    @_settings_page
     async def async_step_comfort_parameters(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -595,6 +629,7 @@ class _OptionsWizardMixin:
             }
         )
 
+    @_settings_page
     async def async_step_control_limits(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -606,6 +641,7 @@ class _OptionsWizardMixin:
                 "manual_override_minutes",
                 "boost_delta_c",
                 "boost_duration_minutes",
+                "rapid_boost_approach_c",
                 CONF_PREHEAT_DURATION_MINUTES,
             } & errors.keys()
             if not control_errors:
@@ -657,7 +693,11 @@ class _OptionsWizardMixin:
                 ): _number(15.0, 1440.0, 15.0, "min"),
                 vol.Required(
                     "boost_delta_c", default=defaults.get("boost_delta_c", DEFAULT_BOOST_DELTA_C)
-                ): _number(0.0, 3.0, 0.1, "°C"),
+                ): _number(-3.0, 3.0, 0.1, "°C"),
+                vol.Required(
+                    "rapid_boost_approach_c",
+                    default=defaults.get("rapid_boost_approach_c", DEFAULT_RAPID_BOOST_APPROACH_C),
+                ): _number(0.1, 5.0, 0.1, "°C"),
                 vol.Required(
                     "boost_duration_minutes",
                     default=defaults.get("boost_duration_minutes", 60.0),
@@ -671,6 +711,7 @@ class _OptionsWizardMixin:
             }
         )
 
+    @_settings_page
     async def async_step_demand_hysteresis(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -761,6 +802,7 @@ class _OptionsWizardMixin:
             }
         )
 
+    @_settings_page
     async def async_step_command_behavior(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -796,6 +838,7 @@ class _OptionsWizardMixin:
             ),
         )
 
+    @_settings_page
     async def async_step_outdoor_history_hold(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -816,6 +859,7 @@ class _OptionsWizardMixin:
             ),
         )
 
+    @_settings_page
     async def async_step_fallback_temperatures(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -854,6 +898,7 @@ class _OptionsWizardMixin:
             }
         )
 
+    @_settings_page
     async def async_step_critical_locations(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -876,6 +921,7 @@ class _OptionsWizardMixin:
             ),
         )
 
+    @_settings_page
     async def async_step_critical_location(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -924,6 +970,7 @@ class _OptionsWizardMixin:
     def _critical_placeholders(self) -> dict[str, str]:
         return {"number": str(self._critical_index + 1), "total": str(self._critical_count)}
 
+    @_settings_page
     async def async_step_source_freshness(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -995,6 +1042,7 @@ class _OptionsWizardMixin:
             ] = _number(5.0, 360.0, 5.0, "min")
         return vol.Schema(fields)
 
+    @_settings_page
     async def async_step_stale_heat_safety(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -1051,6 +1099,7 @@ class _OptionsWizardMixin:
             return await self._async_complete_wizard()
         return await self.async_step_target_calibration()
 
+    @_settings_page
     async def async_step_target_calibration(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -1473,7 +1522,7 @@ class AthbConfigFlow(_OptionsWizardMixin, config_entries.ConfigFlow, domain=DOMA
         return False
 
 
-class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload):
+class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlow):
     """Present all zone settings behind the standard Configure action."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
@@ -1488,6 +1537,9 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         self._critical_index = 0
         self._calibration_index = 0
         self._wizard_environment = {}
+        self._settings_section: str | None = None
+        self._section_snapshot: tuple[dict[str, Any], dict[str, Any]] | None = None
+        self._current_form: dict[str, Any] = {}
         self._initialize_options_wizard(
             existing_options=config_entry.options,
             targets=self._wizard_targets,
@@ -1495,25 +1547,94 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
         )
 
     def _is_last_wizard_step(self, step_id: str) -> bool:
-        """Mark only the actual final form in the selected options route."""
+        return False
 
-        return (
-            (step_id == "demand_hysteresis" and not self._advanced)
-            or (step_id == "stale_heat_safety" and not self._wizard_targets)
-            or (
-                step_id == "target_calibration"
-                and self._calibration_index == len(self._wizard_targets) - 1
-            )
+    _SECTIONS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "sources": ("sources", "source_humidity", "source_device_activity"),
+        "target_entities": ("target_entities", "target_calibration"),
+        "comfort": ("comfort", "radiant"),
+        "occupancy": ("occupancy", "setback", "setback_parameters"),
+        "boost_settings": ("boost_settings",),
+        "control_limits": ("control_limits",),
+        "demand_hysteresis": ("demand_hysteresis",),
+        "advanced_model": ("advanced_model", "clothing", "air_speed"),
+        "source_freshness": ("source_freshness", "stale_heat_safety"),
+        "critical_locations": ("critical_locations", "critical_location"),
+        "comfort_parameters": ("comfort_parameters",),
+        "command_behavior": ("command_behavior", "outdoor_history_hold", "fallback_temperatures"),
+    }
+
+    def _settings_menu(self) -> ConfigFlowResult:
+        self._settings_section = None
+        self._section_snapshot = None
+        self._wizard_environment = dict(self._pending_data)
+        self._wizard_targets = list(self._pending_data.get(CONF_TARGETS, ()))
+        self._critical_existing = deepcopy(
+            list(self._pending_options.get("critical_locations", ()))
         )
+        self._critical_count = len(self._critical_existing)
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=(*self._SECTIONS, "finalize"),
+        )
+
+    @callback
+    @override
+    def async_show_form(self, **kwargs: Any) -> ConfigFlowResult:
+        """Offer native discard navigation, including on incomplete forms."""
+
+        self._current_form = dict(kwargs)
+        original = kwargs.get("data_schema", vol.Schema({}))
+        fields: dict[vol.Marker, Any] = {
+            vol.Optional("section_action", default="keep"): _select(
+                ("keep", "discard"), "section_action"
+            )
+        }
+        for marker, validator in original.schema.items():
+            fields[
+                vol.Optional(marker.schema, default=marker.default, description=marker.description)
+            ] = validator
+        kwargs["data_schema"] = vol.Schema(fields)
+        kwargs["last_step"] = False
+        return super().async_show_form(**kwargs)
+
+    def _before_settings_page(
+        self, step_id: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult | None:
+        if self._settings_section is None:
+            self._settings_section = next(
+                (root for root, steps in self._SECTIONS.items() if step_id in steps), None
+            )
+            self._section_snapshot = deepcopy((self._pending_data, self._pending_options))
+            self._advanced = self._settings_section == "source_freshness"
+        elif step_id not in self._SECTIONS[self._settings_section]:
+            return self._settings_menu()
+        if user_input is not None:
+            action = user_input.pop("section_action", "keep")
+            if action == "discard":
+                assert self._section_snapshot is not None
+                self._pending_data, self._pending_options = deepcopy(self._section_snapshot)
+                return self._settings_menu()
+            if self._current_form.get("step_id") == step_id:
+                schema = self._current_form["data_schema"].schema
+                for marker in schema:
+                    if marker.schema not in user_input and marker.default is not vol.UNDEFINED:
+                        user_input[str(marker.schema)] = marker.default()
+                missing = {
+                    str(k.schema): "required"
+                    for k in schema
+                    if isinstance(k, vol.Required) and k.schema not in user_input
+                }
+                if missing:
+                    return self.async_show_form(**{**self._current_form, "errors": missing})
+        return None
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Show a short settings menu instead of one long technical form."""
 
-        return self.async_show_menu(
-            step_id="init",
-            menu_options=("sources", "target_entities", "comfort"),
-        )
+        return self._settings_menu()
 
+    @_settings_page
     async def async_step_sources(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -1561,6 +1682,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             }
         )
 
+    @_settings_page
     async def async_step_source_humidity(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -1601,6 +1723,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             last_step=False,
         )
 
+    @_settings_page
     async def async_step_source_device_activity(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -1614,6 +1737,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
             step_id="source_device_activity", data_schema=schema, last_step=True
         )
 
+    @_settings_page
     async def async_step_target_entities(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -1630,7 +1754,7 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
                 for key in tuple(self._pending_options):
                     if key.startswith("calibration_") and key not in valid_calibrations:
                         self._pending_options.pop(key)
-                return self._save_data_settings(options=self._pending_options)
+                return await self._begin_target_calibrations()
         defaults = [
             target["entity_id"]
             for target in self._pending_data.get(CONF_TARGETS, ())
@@ -1692,35 +1816,143 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlowWithReload)
                 return True
         return False
 
+    @_settings_page
     async def async_step_comfort(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Edit comfort, occupancy, limits, and optionally expert settings."""
+        """Keep comfort and the optional surface model together, without a long wizard."""
 
-        return await self._async_preferences("comfort", user_input)
+        if user_input is not None:
+            self._pending_options.update(user_input)
+            self._clean_radiant_options(str(self._pending_options["radiant_model"]))
+            if self._pending_options["radiant_model"] == "mold_indicator":
+                return await self.async_step_radiant()
+            return self._settings_menu()
+        return self._show_wizard_form(
+            step_id="comfort",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_COMFORT_STRATEGY, default=self._pending_options[CONF_COMFORT_STRATEGY]
+                    ): _select(
+                        ("eco", "efficient", "balanced", "comfort", "near_neutral"),
+                        "comfort_strategy",
+                    ),
+                    vol.Required(
+                        "radiant_model", default=self._pending_options["radiant_model"]
+                    ): _select(("uniform", "mold_indicator"), "radiant_model"),
+                }
+            ),
+        )
+
+    @_settings_page
+    async def async_step_occupancy(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            self._pending_options.pop("occupancy_entity", None)
+            occupancy = str(user_input.get("occupancy_entity", "")).strip()
+            if occupancy:
+                self._pending_options["occupancy_entity"] = occupancy
+                return await self.async_step_setback()
+            return self._settings_menu()
+        return self._show_wizard_form(
+            step_id="occupancy",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        "occupancy_entity",
+                        description={
+                            "suggested_value": self._pending_options.get("occupancy_entity")
+                        },
+                    ): ENTITY,
+                }
+            ),
+        )
+
+    async def _after_setback(self) -> ConfigFlowResult:
+        return self._settings_menu()
+
+    async def _after_radiant(self) -> ConfigFlowResult:
+        return self._settings_menu()
+
+    def _control_limits_schema(self) -> vol.Schema:
+        return vol.Schema(
+            {
+                k: v
+                for k, v in super()._control_limits_schema().schema.items()
+                if k.schema
+                in {
+                    "minimum_control_temperature",
+                    "maximum_control_temperature",
+                    "manual_override_minutes",
+                }
+            }
+        )
+
+    @_settings_page
+    async def async_step_boost_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            pending = {**self._pending_options, **user_input}
+            errors = {k: v for k, v in validate_options(pending).items() if k in user_input}
+            if not errors:
+                self._pending_options = pending
+                return self._settings_menu()
+        else:
+            errors = {}
+        schema = super()._control_limits_schema()
+        fields = {
+            k: v
+            for k, v in schema.schema.items()
+            if k.schema
+            in {
+                "boost_delta_c",
+                "boost_duration_minutes",
+                "rapid_boost_approach_c",
+                CONF_PREHEAT_DURATION_MINUTES,
+            }
+        }
+        return self._show_wizard_form(
+            step_id="boost_settings", data_schema=vol.Schema(fields), errors=errors
+        )
 
     def _save_data_settings(self, *, options: Mapping[str, Any] | None = None) -> ConfigFlowResult:
-        """Persist data edited from Options and reload once after completion."""
+        """Retain a draft; only Finalize is allowed to persist or reload."""
+        if options is not None:
+            self._pending_options = dict(options)
+        return self._settings_menu()
 
+    async def _async_complete_wizard(self) -> ConfigFlowResult:
+        return self._settings_menu()
+
+    async def async_step_finalize(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Validate the complete draft and perform one bounded final save."""
+        errors = validate_options(self._pending_options) | validate_environment(self._pending_data)
+        error, targets = self._resolve_targets(
+            [t["entity_id"] for t in self._pending_data.get(CONF_TARGETS, ())]
+        )
+        errors.update(error)
+        primary_error = _primary_source_error(
+            self.hass, str(self._pending_data.get(CONF_PRIMARY_TEMPERATURE, ""))
+        )
+        if primary_error:
+            errors[CONF_PRIMARY_TEMPERATURE] = primary_error
+        if errors:
+            return self.async_show_menu(
+                step_id="save_errors",
+                menu_options=("init",),
+                description_placeholders={"errors": ", ".join(sorted(errors))},
+            )
         updated = dict(self._pending_data)
         title = str(updated.pop(CONF_NAME))
+        updated[CONF_TARGETS] = targets
         changed = self.hass.config_entries.async_update_entry(
-            self._entry,
-            title=title,
-            data=updated,
+            self._entry, title=title, data=updated, options=dict(self._pending_options)
         )
         if changed:
             self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
-        return self.async_create_entry(
-            data=dict(self._entry.options if options is None else options)
-        )
-
-    async def _async_complete_wizard(self) -> ConfigFlowResult:
-        if validate_options(self._pending_options):
-            return self.async_show_form(
-                step_id="comfort",
-                data_schema=vol.Schema({}),
-                errors={"base": "invalid_option"},
-                last_step=True,
-            )
-        return self.async_create_entry(data=self._pending_options)
+        return self.async_create_entry(data=dict(self._pending_options))

@@ -517,7 +517,7 @@ def test_eco_and_boost_transform_after_critical_policy_without_changing_roots() 
         explicit_transition=True,
     )
     assert isinstance(scalar_boost, PolicyTargets)
-    assert scalar_boost.heating_c == 20.0
+    assert scalar_boost.heating_c == 21.0
     assert scalar_boost.cooling_c is None
 
 
@@ -574,7 +574,7 @@ def test_rapid_boost_range_and_cooling_semantics_are_directionally_safe() -> Non
     )
     assert isinstance(rapid, PolicyTargets)
     assert rapid.cooling_c == 16.0
-    assert rapid.boost_target_cooling_c == 22.0
+    assert rapid.boost_target_cooling_c == 21.0
     assert rapid.boost_phase == "rapid"
 
     reached = build_adaptive_policy(
@@ -589,12 +589,12 @@ def test_rapid_boost_range_and_cooling_semantics_are_directionally_safe() -> Non
         explicit_transition=True,
     )
     assert isinstance(reached, PolicyTargets)
-    assert reached.cooling_c == 22.0
-    assert reached.boost_phase == "hold"
+    assert reached.cooling_c == 21.0
+    assert reached.boost_phase == "approach"
     assert reached.rapid_boost_reached
 
 
-def test_scalar_adaptive_boost_caps_at_neutral_and_reports_missing_neutral() -> None:
+def test_scalar_adaptive_boost_offsets_from_neutral_and_reports_missing_neutral() -> None:
     capped_heating = build_adaptive_policy(
         roots=_roots(),
         critical_demands=(),
@@ -605,8 +605,8 @@ def test_scalar_adaptive_boost_caps_at_neutral_and_reports_missing_neutral() -> 
         explicit_transition=True,
     )
     assert isinstance(capped_heating, PolicyTargets)
-    assert capped_heating.heating_c == 21.0
-    assert "boost_limited" in capped_heating.limitations
+    assert capped_heating.heating_c == 24.0
+    assert "boost_limited" not in capped_heating.limitations
 
     capped_cooling = build_adaptive_policy(
         roots=_roots(),
@@ -618,8 +618,8 @@ def test_scalar_adaptive_boost_caps_at_neutral_and_reports_missing_neutral() -> 
         explicit_transition=True,
     )
     assert isinstance(capped_cooling, PolicyTargets)
-    assert capped_cooling.cooling_c == 21.0
-    assert "boost_limited" in capped_cooling.limitations
+    assert capped_cooling.cooling_c == 18.0
+    assert "boost_limited" not in capped_cooling.limitations
 
     missing_neutral = replace(
         _roots(),
@@ -640,7 +640,7 @@ def test_scalar_adaptive_boost_caps_at_neutral_and_reports_missing_neutral() -> 
         explicit_transition=True,
     )
     assert isinstance(without_neutral, PolicyTargets)
-    assert without_neutral.heating_c == 20.0
+    assert without_neutral.heating_c == 19.0
     assert "boost_neutral_unavailable" in without_neutral.limitations
 
 

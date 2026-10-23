@@ -64,7 +64,7 @@ async def test_max_setback_uses_command_minimum_through_full_broker_path() -> No
 
 @pytest.mark.parametrize(
     ("boost_mode", "expected_temperature", "expected_phase"),
-    [("adaptive", 20.5, "adaptive"), ("rapid", 26.0, "rapid")],
+    [("adaptive", 21.5, "adaptive"), ("rapid", 26.0, "rapid")],
 )
 async def test_boost_modes_use_full_numerical_policy_and_broker_path(
     boost_mode: str, expected_temperature: float, expected_phase: str

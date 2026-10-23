@@ -223,7 +223,8 @@ def _settings_for_entity(key: str, options: Any) -> dict[str, Any]:
         }
     if key == "boost_mode":
         return {
-            "boost_delta_c": options.get("boost_delta_c", 1.0),
+            "boost_delta_c": options.get("boost_delta_c", 0.0),
+            "rapid_boost_approach_c": options.get("rapid_boost_approach_c", 1.0),
             "boost_duration_minutes": options.get("boost_duration_minutes", 60.0),
         }
     if key == "preheat":

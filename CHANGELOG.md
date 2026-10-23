@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0
+
+- Base Boost on thermal neutral. The signed offset defaults to 0 °C: +1 means neutral +1 for
+  heating and neutral -1 for cooling; negative offsets stop before neutral. Existing configured
+  offsets are retained, but their meaning changes from a comfort-target shift to a neutral offset.
+- Add a configurable Rapid approach margin (default 1 °C). Rapid hands off to the executable,
+  bounded and rounded Boost goal before reaching it; the existing persisted one-way latch and
+  expiry prevent maximum-drive re-entry or timer extension after restart. Mixed/ranged climates
+  retain adaptive coordination and minimum separation, never opposing maximum requests.
+- Permit scalar Boost from a valid neutral root when an unrelated directional Eco root is
+  moisture-limited. Preheat may use its timestamped occupied reference in that heating-only case;
+  real source validity, cooling dewpoint rules, bounds, ownership and the broker remain intact.
+- Replace the three-route Options wizard with task-based settings sections, per-section discard,
+  draft-only navigation and one final validated save/reload. Native HA uses a page-action choice
+  for Back without changes; closing the dialog discards the unapplied draft. Existing identities,
+  runtime state and third-party integrations are not recreated or changed.
+- Keep the default maximum command at 30 °C. A 35 °C maximum is an explicit installation choice,
+  bounded by each device, not a global migration or a boiler-water temperature setting.
+
 ## 0.2.34
 
 - Allow timed heating-only Boost and Preheat with unavailable/stale/recovering measured RH,

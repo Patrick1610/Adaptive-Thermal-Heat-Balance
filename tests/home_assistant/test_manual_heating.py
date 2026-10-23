@@ -65,7 +65,7 @@ def _snapshot(*, boost="off", preheat=False, cache=True, **changes):
 
 @pytest.mark.parametrize(
     ("boost", "preheat", "expected"),
-    [("rapid", False, 26), ("adaptive", False, 22), ("off", True, 21)],
+    [("rapid", False, 26), ("adaptive", False, 23), ("off", True, 21)],
 )
 @pytest.mark.parametrize("rh", [None, "unavailable", "nan", "999", "stale"])
 def test_manual_heating_uses_occupied_reference_not_idle_or_fake_rh(boost, preheat, expected, rh):
@@ -168,12 +168,12 @@ def test_manual_heating_reapplies_current_user_device_calibration_and_grid_bound
 def test_rapid_holds_cached_boost_goal_once_reached_and_does_not_stack_boost():
     for _repeated in range(3):
         result = calculate_runtime_snapshot(
-            _snapshot(boost="rapid", primary=_state("sensor.room", "22.1", "°C"))
+            _snapshot(boost="rapid", primary=_state("sensor.room", "23.1", "°C"))
         )
         p = result.targets[0].result.policy
         assert p.boost_phase == "hold"
         assert p.rapid_boost_reached
-        assert p.heating_c == 22
+        assert p.heating_c == 23
         assert p.occupied_heating_c == 21
 
 
@@ -227,7 +227,7 @@ def test_untrusted_cache_cannot_drive_preheat(cache_change):
     [
         {"occupied_heating_c": float("inf")},
         {"neutral_c": float("nan")},
-        {"boost_delta_c": -1},
+        {"boost_delta_c": -4},
         {"boost_delta_c": True},
     ],
 )
@@ -346,6 +346,46 @@ async def test_live_rapid_expiry_with_missing_rh_withdraws_high_target(
             == "manual_heating_return"
         )
         assert runtime.manual_heating_fallback_pending  # until valid RH resumes
+    finally:
+        await runtime.async_unload()
+
+
+async def test_valid_neutral_boost_with_missing_eco_root_journals_and_withdraws_on_stop(
+    hass, monkeypatch, manual_clock
+):
+    runtime, calls = await _live(hass, monkeypatch, manual_clock)
+    try:
+        # Recovery needs distinct report timestamps; do not replace an invalid
+        # report by a different value at the exact same timestamp.
+        for rh in ("86.33", "86.32", "86.31", "86.30"):
+            manual_clock.tick(timedelta(seconds=61))
+            hass.states.async_set("sensor.room", "21.19", {"unit_of_measurement": "°C"})
+            hass.states.async_set("sensor.humidity", rh, {"unit_of_measurement": "%"})
+            await _settle(hass, runtime)
+        await runtime.async_set_strategy("eco")
+        await _settle(hass, runtime)
+        assert runtime.values["input_status"] == "missing_required_root:heating_control"
+        cache = deepcopy(runtime.last_valid_values)
+        hass.config_entries.async_update_entry(
+            runtime.entry, options={**runtime.entry.options, "boost_delta_c": 1.0}
+        )
+        await runtime.async_set_boost_mode("rapid")
+        await _settle(hass, runtime)
+        assert runtime.values["manual_heating_fallback"]
+        assert runtime.values["control_eligible"]
+        assert runtime.manual_heating_fallback_pending
+        assert runtime.persistence.state.manual_heating_fallback_pending
+        active = calls[-1].data["temperature"]
+        assert active > 21.19  # Already in approach: the real goal, not a needless maximum spike.
+        assert runtime.last_valid_values == cache
+        manual_clock.tick(timedelta(seconds=61))
+        await runtime.async_set_boost_mode("off")
+        await _settle(hass, runtime)
+        assert calls[-1].data["temperature"] < active
+        assert (
+            runtime.values["effective_target_details"]["target-1"]["reference"]
+            == "manual_heating_return"
+        )
     finally:
         await runtime.async_unload()
 

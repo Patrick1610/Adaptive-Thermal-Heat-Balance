@@ -348,14 +348,14 @@ def test_rapid_boost_uses_command_limit_then_holds_adaptive_boost_target() -> No
     )
     assert active.policy is not None
     assert active.policy.boost_phase == "rapid"
-    assert active.policy.boost_target_heating_c == pytest.approx(20.3627, abs=0.005)
+    assert active.policy.boost_target_heating_c == 22.5
     assert isinstance(active.normalized, NormalizedScalarTarget)
     assert active.normalized.normalized_room_c == 26.0
 
     reached = calculate_zone(
         replace(
             _input(),
-            air_temperature_c=21.0,
+            air_temperature_c=22.5,
             boost_mode=BoostMode.RAPID,
             boost_delta_c=1.0,
             inactive_cooling_c=26.0,

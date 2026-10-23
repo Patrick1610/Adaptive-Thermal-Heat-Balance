@@ -16,7 +16,7 @@ from custom_components.athb.const import DOMAIN, PLATFORMS
 
 
 def _schema_keys(result: config_entries.ConfigFlowResult) -> set[str]:
-    return {str(marker.schema) for marker in result["data_schema"].schema}
+    return {str(marker.schema) for marker in result["data_schema"].schema} - {"section_action"}
 
 
 def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
@@ -59,7 +59,7 @@ async def test_stale_heat_wizard_rejects_out_of_range_advanced_settings() -> Non
         "stale_heat_ramp_minutes_per_c",
         "stale_heat_ramp_max_minutes",
     }
-    assert result["last_step"] is True
+    assert result["last_step"] is False
 
 
 async def test_target_calibration_uses_next_until_the_actual_final_form() -> None:
@@ -82,7 +82,7 @@ async def test_target_calibration_uses_next_until_the_actual_final_form() -> Non
     first = await options_flow.async_step_target_calibration()
     assert first["last_step"] is False
     second = await options_flow.async_step_target_calibration({"calibration_offset_c": 0.0})
-    assert second["last_step"] is True
+    assert second["last_step"] is False
 
     config_flow = AthbConfigFlow()
     config_flow._wizard_targets = targets[:1]
@@ -158,7 +158,7 @@ async def _open_options_section(
     section: str,
 ) -> config_entries.ConfigFlowResult:
     assert result["type"] is FlowResultType.MENU
-    assert tuple(result["menu_options"]) == ("sources", "target_entities", "comfort")
+    assert tuple(result["menu_options"]) == (*AthbOptionsFlow._SECTIONS, "finalize")
     return await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": section}
     )
@@ -227,6 +227,7 @@ async def _submit_everyday_controls(
         "manual_override_minutes",
         "boost_delta_c",
         "boost_duration_minutes",
+        "rapid_boost_approach_c",
         "preheat_duration_minutes",
     }
     manager = hass.config_entries.options if options else hass.config_entries.flow
@@ -383,45 +384,15 @@ async def test_options_reject_demand_stop_threshold_at_or_above_start(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"zone_uuid": "zone-demand", "targets": []},
-        options={"comfort_strategy": "balanced"},
-    )
+    entry = MockConfigEntry(domain=DOMAIN, data={"zone_uuid": "zone-demand", "targets": []})
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await _open_options_section(hass, result, "comfort")
+    result = await _open_options_section(hass, result, "demand_hysteresis")
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "radiant_model": "uniform",
-            "advanced_settings": False,
-        },
+        {"heating_demand_activation_delta_c": 0.5, "heating_demand_deactivation_delta_c": 0.5},
     )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "minimum_control_temperature": 18.0,
-            "maximum_control_temperature": 26.0,
-            "manual_override_minutes": 120.0,
-            "boost_delta_c": 1.0,
-            "boost_duration_minutes": 60.0,
-            "preheat_duration_minutes": 60.0,
-        },
-    )
-    assert result["step_id"] == "demand_hysteresis"
-
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "heating_demand_activation_delta_c": 0.5,
-            "heating_demand_deactivation_delta_c": 0.5,
-        },
-    )
-
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "demand_hysteresis"
     assert result["errors"] == {"base": "invalid_demand_hysteresis"}
 
 
@@ -451,67 +422,82 @@ async def test_setup_forwards_five_native_platforms_and_unloads_cleanly(
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+def _settings_entry(hass: HomeAssistant, **changes: Any) -> MockConfigEntry:
+    target = er.async_get(hass).async_get_or_create(
+        "climate", "test", "settings-target", suggested_object_id="settings_target"
+    )
+    data = {
+        "zone_uuid": "settings-zone",
+        "primary_temperature": "sensor.room",
+        "outdoor_source": "sensor.outdoor",
+        "rh_mode": "declared",
+        "rh_declared": 50.0,
+        "targets": [
+            {
+                "target_uuid": "target-stable",
+                "entity_id": target.entity_id,
+                "registry_identity": target.id,
+            }
+        ],
+    }
+    data.update(changes.pop("data", {}))
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=data,
+        options=changes.pop("options", {"comfort_strategy": "balanced", "control_enabled": False}),
+        **changes,
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+async def _finish_settings(
+    hass: HomeAssistant, result: config_entries.ConfigFlowResult
+) -> config_entries.ConfigFlowResult:
+    assert result["type"] is FlowResultType.MENU
+    result = await _open_options_section(hass, result, "finalize")
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    return result
+
+
 async def test_options_use_uniform_default_and_progressively_disclose_selected_radiant_source(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"zone_uuid": "zone-1", "targets": []},
-        options={"comfort_strategy": "balanced"},
-    )
-    entry.add_to_hass(hass)
+    entry = _settings_entry(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await _open_options_section(hass, result, "comfort")
-    assert result["type"] is FlowResultType.FORM
-    assert result["last_step"] is False
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "comfort",
-            "radiant_model": "uniform",
-            "advanced_settings": False,
-        },
+        result["flow_id"], {"comfort_strategy": "comfort", "radiant_model": "uniform"}
     )
-    result = await _submit_everyday_controls(hass, result, options=True, last_step=True)
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"]["radiant_model"] == "uniform"
+    assert entry.options["comfort_strategy"] == "balanced"
+    await _finish_settings(hass, result)
     await hass.async_block_till_done()
-
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await _open_options_section(hass, result, "comfort")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "radiant_model": "mold_indicator",
-            "advanced_settings": False,
-        },
+        result["flow_id"], {"comfort_strategy": "balanced", "radiant_model": "mold_indicator"}
     )
-    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "radiant"
-    assert result["last_step"] is False
     assert _schema_keys(result) == {"mold_indicator_entity"}
-    mold_marker = next(
-        marker
-        for marker in result["data_schema"].schema
-        if str(marker.schema) == "mold_indicator_entity"
-    )
-    assert result["data_schema"].schema[mold_marker].config["integration"] == "mold_indicator"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"mold_indicator_entity": "sensor.mold_indicator"}
     )
-    result = await _submit_everyday_controls(hass, result, options=True, last_step=True)
-    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert "mold_indicator_entity" not in entry.options
+    result = await _finish_settings(hass, result)
     assert result["data"]["mold_indicator_entity"] == "sensor.mold_indicator"
     await hass.async_block_till_done()
-    await hass.config_entries.async_unload(entry.entry_id)
+    if entry.state is config_entries.ConfigEntryState.LOADED:
+        await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_configure_menu_edits_name_and_all_environment_sources(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
+    climate = er.async_get(hass).async_get_or_create(
+        "climate", "test", "source-edit", suggested_object_id="source_edit"
+    )
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Old room",
@@ -521,7 +507,13 @@ async def test_configure_menu_edits_name_and_all_environment_sources(
             "outdoor_source": "sensor.old_outdoor",
             "rh_mode": "measured",
             "rh_entity": "sensor.old_humidity",
-            "targets": [],
+            "targets": [
+                {
+                    "target_uuid": "source-target",
+                    "entity_id": climate.entity_id,
+                    "registry_identity": climate.id,
+                }
+            ],
         },
         options={"comfort_strategy": "balanced", "control_enabled": False},
     )
@@ -553,10 +545,12 @@ async def test_configure_menu_edits_name_and_all_environment_sources(
         result["flow_id"], {"rh_declared": 48.0}
     )
     assert result["step_id"] == "source_device_activity"
-    assert result["last_step"] is True
+    assert result["last_step"] is False
     assert _schema_keys(result) == set()
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
 
+    assert entry.title == "Old room"
+    result = await _finish_settings(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.title == "Bedroom"
     assert entry.data["primary_temperature"] == "sensor.bedroom_temperature"
@@ -584,6 +578,10 @@ async def test_configure_menu_edits_targets_and_preserves_existing_target_identi
         domain=DOMAIN,
         data={
             "zone_uuid": "zone-target-settings",
+            "primary_temperature": "sensor.room",
+            "outdoor_source": "sensor.outdoor",
+            "rh_mode": "declared",
+            "rh_declared": 50.0,
             "targets": [
                 {
                     "target_uuid": "stable-target-uuid",
@@ -605,7 +603,7 @@ async def test_configure_menu_edits_targets_and_preserves_existing_target_identi
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await _open_options_section(hass, result, "target_entities")
     assert result["step_id"] == "target_entities"
-    assert result["last_step"] is True
+    assert result["last_step"] is False
     assert _schema_keys(result) == {"targets", "target_rounding_mode"}
     assert _default_value(result, "target_rounding_mode") == "ceiling"
     result = await hass.config_entries.options.async_configure(
@@ -616,6 +614,15 @@ async def test_configure_menu_edits_targets_and_preserves_existing_target_identi
         },
     )
 
+    assert result["step_id"] == "target_calibration"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"calibration_offset_c": 0.5}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"calibration_offset_c": 0.0}
+    )
+    assert len(entry.data["targets"]) == 1
+    result = await _finish_settings(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.data["targets"][0] == {
         "target_uuid": "stable-target-uuid",
@@ -857,141 +864,94 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            "zone_uuid": "zone-advanced",
-            "targets": [
+    entry = _settings_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    sections = [
+        (
+            "comfort",
+            [
+                {"comfort_strategy": "balanced", "radiant_model": "mold_indicator"},
+                {"mold_indicator_entity": "sensor.mold_indicator"},
+            ],
+        ),
+        (
+            "advanced_model",
+            [
+                {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
+                {"air_speed_m_s": 0.1},
+            ],
+        ),
+        (
+            "comfort_parameters",
+            [
                 {
-                    "target_uuid": "target-stable",
-                    "entity_id": "climate.target",
-                    "registry_identity": "registry-target",
+                    "lower_comfort_vote": -0.5,
+                    "upper_comfort_vote": 0.5,
+                    "running_mean_alpha": 0.8,
+                    "reject_extrapolation": False,
                 }
             ],
-        },
-        options={"comfort_strategy": "balanced"},
-    )
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await _open_options_section(hass, result, "comfort")
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "radiant_model": "mold_indicator",
-            "advanced_settings": True,
-        },
-    )
-    assert result["step_id"] == "radiant"
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"mold_indicator_entity": "sensor.mold_indicator"},
-    )
-    result = await _submit_everyday_controls(hass, result, options=True, last_step=False)
-    assert result["step_id"] == "advanced_model"
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
-    )
-    assert result["step_id"] == "air_speed"
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"air_speed_m_s": 0.1}
-    )
-    assert result["step_id"] == "comfort_parameters"
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "lower_comfort_vote": -0.5,
-            "upper_comfort_vote": 0.5,
-            "running_mean_alpha": 0.8,
-            "reject_extrapolation": False,
-        },
-    )
-    assert result["step_id"] == "command_behavior"
-    assert result["last_step"] is False
-    assert _schema_keys(result) == {
-        "minimum_range_gap",
-        "minimum_meaningful_change",
-        "feedback_resolution",
-        "fallback_mode",
-        "outdoor_hold_mode",
-    }
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "minimum_range_gap": 1.0,
-            "minimum_meaningful_change": 0.1,
-            "feedback_resolution": 0.01,
-            "fallback_mode": "fixed",
-            "outdoor_hold_mode": "automatic",
-        },
-    )
-    assert result["step_id"] == "fallback_temperatures"
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"fallback_heating_c": 18.0, "fallback_cooling_c": 26.0}
-    )
-    assert result["step_id"] == "critical_locations"
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"critical_location_count": 1}
-    )
-    assert result["step_id"] == "critical_location"
-    assert result["last_step"] is False
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "location_id": "seat",
-            "location_mode": "heating",
-            "location_entity": "sensor.seat",
-        },
-    )
-    assert result["step_id"] == "source_freshness"
-    assert result["last_step"] is False
-    assert _schema_keys(result) == {
-        "primary_temperature_freshness_minutes",
-        "local_temperature_freshness_minutes",
-        "radiant_freshness_minutes",
-        "indoor_temperature_jump_protection",
-    }
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "primary_temperature_freshness_minutes": 120.0,
-            "local_temperature_freshness_minutes": 60.0,
-            "radiant_freshness_minutes": 90.0,
-        },
-    )
-    assert result["step_id"] == "stale_heat_safety"
-    assert result["last_step"] is False
-    assert _schema_keys(result) == {
-        "stale_heat_demand_margin_c",
-        "stale_heat_active_minutes",
-        "stale_heat_start_minutes",
-        "stale_heat_ramp_minutes_per_c",
-        "stale_heat_ramp_max_minutes",
-    }
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "stale_heat_demand_margin_c": 0.5,
-            "stale_heat_active_minutes": 30.0,
-            "stale_heat_start_minutes": 60.0,
-            "stale_heat_ramp_minutes_per_c": 10.0,
-            "stale_heat_ramp_max_minutes": 30.0,
-        },
-    )
-    assert result["step_id"] == "target_calibration"
-    assert result["last_step"] is True
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"calibration_offset_c": 0.5}
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
+        ),
+        (
+            "command_behavior",
+            [
+                {
+                    "minimum_range_gap": 1.0,
+                    "minimum_meaningful_change": 0.1,
+                    "feedback_resolution": 0.01,
+                    "fallback_mode": "fixed",
+                    "outdoor_hold_mode": "automatic",
+                },
+                {"fallback_heating_c": 18.0, "fallback_cooling_c": 26.0},
+            ],
+        ),
+        (
+            "critical_locations",
+            [
+                {"critical_location_count": 1},
+                {
+                    "location_id": "seat",
+                    "location_mode": "heating",
+                    "location_entity": "sensor.seat",
+                },
+            ],
+        ),
+        (
+            "source_freshness",
+            [
+                {
+                    "primary_temperature_freshness_minutes": 120.0,
+                    "local_temperature_freshness_minutes": 60.0,
+                    "radiant_freshness_minutes": 90.0,
+                    "indoor_temperature_jump_protection": True,
+                },
+                {
+                    "stale_heat_demand_margin_c": 0.5,
+                    "stale_heat_active_minutes": 30.0,
+                    "stale_heat_start_minutes": 60.0,
+                    "stale_heat_ramp_minutes_per_c": 10.0,
+                    "stale_heat_ramp_max_minutes": 30.0,
+                },
+            ],
+        ),
+        (
+            "target_entities",
+            [
+                {
+                    "targets": [entry.data["targets"][0]["entity_id"]],
+                    "target_rounding_mode": "floor",
+                },
+                {"calibration_offset_c": 0.5},
+            ],
+        ),
+    ]
+    for section, submissions in sections:
+        result = await _open_options_section(hass, result, section)
+        for submitted in submissions:
+            result = await hass.config_entries.options.async_configure(result["flow_id"], submitted)
+        assert result["type"] is FlowResultType.MENU
+        assert "mold_indicator_entity" not in entry.options
+    result = await _finish_settings(hass, result)
     assert result["data"]["mold_indicator_entity"] == "sensor.mold_indicator"
     assert result["data"]["critical_locations"][0]["location_id"] == "seat"
     assert result["data"]["primary_temperature_freshness_minutes"] == 120.0
@@ -1119,35 +1079,18 @@ async def test_advanced_options_only_show_fields_required_by_selected_modes(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"zone_uuid": "zone-invalid-advanced", "targets": []},
-        options={"comfort_strategy": "balanced"},
-    )
+    entry = MockConfigEntry(domain=DOMAIN, data={"zone_uuid": "mode-options", "targets": []})
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await _open_options_section(hass, result, "comfort")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "radiant_model": "uniform",
-            "advanced_settings": True,
-        },
-    )
-    result = await _submit_everyday_controls(hass, result, options=True, last_step=False)
-    assert result["step_id"] == "advanced_model"
+    result = await _open_options_section(hass, result, "advanced_model")
     assert _schema_keys(result) == {"met", "clothing_mode", "air_speed_mode"}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"met": 1.1, "clothing_mode": "fixed", "air_speed_mode": "measured"},
+        result["flow_id"], {"met": 1.1, "clothing_mode": "fixed", "air_speed_mode": "measured"}
     )
-    assert result["step_id"] == "clothing"
     assert _schema_keys(result) == {"fixed_clothing_clo"}
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"fixed_clothing_clo": 0.8}
     )
-    assert result["step_id"] == "air_speed"
     assert _schema_keys(result) == {"air_speed_entity"}
 
 
@@ -1179,85 +1122,44 @@ async def test_max_setback_uses_command_limits_without_duplicate_fields(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"zone_uuid": "zone-deep", "targets": []},
-        options={
-            "comfort_strategy": "balanced",
-            "eco_intensity": "deep",
-            "occupancy_entity": "binary_sensor.occupancy",
-        },
-    )
-    entry.add_to_hass(hass)
+    entry = _settings_entry(hass, options={"occupancy_entity": "binary_sensor.occupancy"})
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await _open_options_section(hass, result, "comfort")
+    result = await _open_options_section(hass, result, "occupancy")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "radiant_model": "uniform",
-            "advanced_settings": True,
-            "occupancy_entity": "binary_sensor.occupancy",
-        },
+        result["flow_id"], {"occupancy_entity": "binary_sensor.occupancy"}
     )
     assert result["step_id"] == "setback"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"eco_intensity": "deep"}
     )
-    assert result["step_id"] == "control_limits"
+    result = await _open_options_section(hass, result, "control_limits")
     assert _schema_keys(result) == {
         "minimum_control_temperature",
         "maximum_control_temperature",
         "manual_override_minutes",
-        "boost_delta_c",
-        "boost_duration_minutes",
-        "preheat_duration_minutes",
     }
-    result = await _submit_everyday_controls(hass, result, options=True, last_step=False)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"met": 1.1, "clothing_mode": "automatic", "air_speed_mode": "fixed"},
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"air_speed_m_s": 0.1}
-    )
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
-
-    assert result["step_id"] == "command_behavior"
 
 
 async def test_custom_setback_is_conditionally_collected_before_everyday_controls(
     hass: HomeAssistant, enable_custom_integrations: Any
 ) -> None:
     del enable_custom_integrations
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"zone_uuid": "zone-custom-setback", "targets": []},
-        options={
-            "comfort_strategy": "balanced",
-            "eco_intensity": "custom",
-            "occupancy_entity": "schedule.office",
-        },
-    )
-    entry.add_to_hass(hass)
+    entry = _settings_entry(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await _open_options_section(hass, result, "comfort")
+    result = await _open_options_section(hass, result, "occupancy")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "comfort_strategy": "balanced",
-            "radiant_model": "uniform",
-            "advanced_settings": False,
-            "occupancy_entity": "schedule.office",
-        },
+        result["flow_id"], {"occupancy_entity": "schedule.office"}
     )
-    assert result["step_id"] == "setback"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"eco_intensity": "custom"}
     )
     assert result["step_id"] == "setback_parameters"
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"eco_heating_setback_c": 3.5, "eco_cooling_setback_c": 4.0},
+        result["flow_id"], {"eco_heating_setback_c": 3.5, "eco_cooling_setback_c": 4.0}
     )
-    assert result["step_id"] == "control_limits"
+    result = await _finish_settings(hass, result)
+    assert result["data"]["eco_heating_setback_c"] == 3.5
+    assert result["data"]["eco_cooling_setback_c"] == 4.0
+    await hass.async_block_till_done()
+    if entry.state is config_entries.ConfigEntryState.LOADED:
+        await hass.config_entries.async_unload(entry.entry_id)

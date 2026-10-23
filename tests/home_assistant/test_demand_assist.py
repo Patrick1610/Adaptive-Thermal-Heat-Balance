@@ -86,10 +86,10 @@ async def test_assist_form_requires_threshold_and_can_clear_existing_pair(
     invalid = await flow.async_step_demand_hysteresis({SOURCE: "sensor.new_demand"})
     assert invalid["errors"] == {THRESHOLD: "required"}
     valid = await flow.async_step_demand_hysteresis({SOURCE: "sensor.new_demand", THRESHOLD: 0.5})
-    assert valid["step_id"] == "advanced_model"
+    assert valid["step_id"] == "init"
     assert flow._pending_options[THRESHOLD] == 0.5
     cleared = await flow.async_step_demand_hysteresis({})
-    assert cleared["step_id"] == "advanced_model"
+    assert cleared["step_id"] == "init"
     assert SOURCE not in flow._pending_options
     assert THRESHOLD not in flow._pending_options
 

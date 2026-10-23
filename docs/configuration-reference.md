@@ -115,9 +115,11 @@ becomes unavailable while calculation explicitly assumes occupied/no setback wit
 is configured; its attributes show the source state and whether the resolution is held.
 
 Boost is an independent runtime select. **Off** follows comfort level and occupancy. **Adaptive**
-bypasses setback and shifts the directional target by `boost_delta_c` toward, but not past,
-thermal neutral. **Rapid** requests the maximum command temperature for scalar heating (minimum
-for scalar cooling) until the calculated Adaptive Boost target is reached, then holds that target.
+bypasses setback and uses neutral + `boost_delta_c` for heating, neutral - `boost_delta_c` for
+cooling. The offset defaults to zero and accepts negative values to stop before neutral.
+**Rapid** requests the maximum command temperature for scalar heating (minimum for scalar
+cooling) until the room enters the configurable approach band before the executable Boost goal.
+It then uses that goal and never re-arms maximum drive within the same Boost.
 Rapid falls back explicitly to Adaptive for an atomic range or a zone with separate heating and
 cooling targets. Boost expires to Off. Comfort-level, Setback and Boost changes are lightweight
 and do not reload the config entry.
@@ -339,11 +341,17 @@ source is configured.
 and must be ordered. They are intersected with each climate entity's own limits. They also directly
 form the heating and cooling requests for Boundary limit setback. `manual_override_minutes` is 15–1440 minutes.
 
-`boost_delta_c` (0–3 °C) defines the calculated Boost target in the comfort-seeking direction,
-capped at thermal neutral. Boost lasts 5–180 minutes according to `boost_duration_minutes`, then
+`boost_delta_c` (-3–+3 °C, default 0) is relative to neutral, not the selected comfort target.
+Positive means further conditioning: neutral + offset for heating, neutral - offset for cooling.
+Negative stops before neutral. Existing stored values are retained but adopt this new meaning
+in 0.3.0. User/device bounds and configured grid rounding remain authoritative.
+Boost lasts 5–180 minutes according to `boost_duration_minutes`, then
 returns to Off. Adaptive requests that target. Rapid first uses the heating maximum or cooling
-minimum command bound to create a larger control delta, then holds the same calculated Boost
-target after the room reaches it.
+minimum command bound to create a larger control delta. `rapid_boost_approach_c` (0.1–5 °C,
+default 1) switches to the bounded/grid-rounded room-coordinate Boost goal this far before it
+is reached. Starting inside the band skips the maximum-drive phase. The persisted one-way latch
+prevents re-entry, including after restart, and the timer never gains extra time. Atomic ranges
+retain minimum separation around neutral; a positive offset cannot cross the two endpoints.
 
 The **Preheat** switch temporarily resolves effective occupancy to occupied without changing the
 configured occupancy source. Its 5–180 minute `preheat_duration_minutes` setting defaults to 60
@@ -353,9 +361,9 @@ effective occupancy, override reason and expiry remain separately visible in ent
 diagnostics. Preheat does not enable Adaptive control, bypass input validity or manual ownership,
 shift the comfort target like Boost, or override the heating-demand buffer.
 
-These six everyday values are shown in normal Setup,
+These everyday values are shown in normal Setup,
 Reconfigure and Options, not hidden behind Advanced. Boost operations occur before final actuator
-bounds and grid normalization.
+bounds and grid normalization; the Rapid transition compares against the executable goal.
 
 ATHB never changes HVAC mode. For a target already in `auto`, it derives the mapping from public
 Home Assistant capabilities:

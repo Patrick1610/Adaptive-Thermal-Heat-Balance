@@ -60,7 +60,8 @@ def test_living_room_fixture_preserves_delivered_baseline_and_new_defaults() -> 
 def test_new_wizard_defaults_match_the_approved_safe_baseline() -> None:
     assert OPTION_DEFAULTS["minimum_control_temperature"] == 15.0
     assert OPTION_DEFAULTS["maximum_control_temperature"] == 30.0
-    assert OPTION_DEFAULTS["boost_delta_c"] == 2.0
+    assert OPTION_DEFAULTS["boost_delta_c"] == 0.0
+    assert OPTION_DEFAULTS["rapid_boost_approach_c"] == 1.0
     assert OPTION_DEFAULTS["fallback_heating_c"] == 18.0
     assert OPTION_DEFAULTS["fallback_cooling_c"] == 27.0
 

@@ -22,7 +22,8 @@ MAX_CRITICAL_INFLUENCE_C = 2.0
 DEFAULT_MINIMUM_RANGE_GAP_C = 1.0
 DEFAULT_ECO_SETBACK_C = 2.0
 WORKDAY_ECO_SETBACK_C = 4.0
-DEFAULT_BOOST_DELTA_C = 1.0
+DEFAULT_BOOST_DELTA_C = 0.0
+DEFAULT_RAPID_BOOST_APPROACH_C = 1.0
 DEFAULT_BOOST_DURATION = timedelta(minutes=60)
 OCCUPANCY_UNKNOWN_HOLD = timedelta(minutes=30)
 SLEW_RATE_C_PER_SECOND = 0.5 / 600.0
@@ -116,14 +117,16 @@ def build_manual_heating_fallback(
     maximum_heating_c: float,
     boost_delta_c: float,
     rapid_boost_reached: bool,
+    rapid_boost_approach_c: float = DEFAULT_RAPID_BOOST_APPROACH_C,
+    boost_goal_c: float | None = None,
 ) -> PolicyResult:
     """Bound a timed manual heat request without inventing an environmental input."""
 
-    values = (current_air_temperature_c, maximum_heating_c, boost_delta_c)
+    values = (current_air_temperature_c, maximum_heating_c, boost_delta_c, rapid_boost_approach_c)
     references = tuple(v for v in (occupied_heating_c, neutral_c) if v is not None)
     if any(isinstance(v, bool) or not math.isfinite(v) for v in (*values, *references)):
         return PolicyFailure("manual_heating_reference_invalid")
-    if boost_delta_c < 0:
+    if not -3 <= boost_delta_c <= 3 or not 0.1 <= rapid_boost_approach_c <= 5:
         return PolicyFailure("manual_heating_reference_invalid")
     if occupied_heating_c is None and boost_mode is not BoostMode.RAPID:
         return PolicyFailure("manual_heating_reference_unavailable")
@@ -137,16 +140,20 @@ def build_manual_heating_fallback(
         reference = "configured_heating_limit"
         limitations.append("manual_heating_no_comfort_reference")
     elif boost_mode is not BoostMode.OFF:
-        goal += boost_delta_c
         if neutral_c is not None:
-            goal = min(goal, neutral_c)
+            goal = neutral_c + boost_delta_c
         else:
             # Do not guess how far toward neutral an Adaptive shift may go.
             goal = occupied_heating_c
             limitations.append("boost_neutral_unavailable")
     assert goal is not None
+    if boost_goal_c is not None:
+        if isinstance(boost_goal_c, bool) or not math.isfinite(boost_goal_c):
+            return PolicyFailure("manual_heating_reference_invalid")
+        goal = boost_goal_c
+    goal = min(goal, maximum_heating_c)
     reached = boost_mode is BoostMode.RAPID and (
-        rapid_boost_reached or current_air_temperature_c >= goal
+        rapid_boost_reached or current_air_temperature_c >= goal - rapid_boost_approach_c
     )
     requested = maximum_heating_c if boost_mode is BoostMode.RAPID and not reached else goal
     return PolicyTargets(
@@ -164,7 +171,7 @@ def build_manual_heating_fallback(
         cooling_contribution=None,
         limitations=tuple(limitations),
         boost_mode=boost_mode,
-        boost_phase="hold"
+        boost_phase=("hold" if current_air_temperature_c >= goal else "approach")
         if reached
         else "rapid"
         if boost_mode is BoostMode.RAPID
@@ -479,6 +486,8 @@ def _policy_transform(
     rapid_heating_c: float,
     rapid_cooling_c: float,
     boost_delta_c: float,
+    rapid_boost_approach_c: float,
+    boost_goal_c: float | None,
 ) -> _PolicyTransform:
     limitations: list[str] = []
     if boost_mode is BoostMode.OFF and profile is ControlProfile.ECO:
@@ -520,30 +529,32 @@ def _policy_transform(
 
     boost_heating = heating
     boost_cooling = cooling
-    if heating is not None and cooling is not None:
-        available = max(0.0, (cooling - heating - minimum_range_gap_c) / 2.0)
-        applied = min(max(0.0, boost_delta_c), available)
-        if applied < boost_delta_c:
+    if direction in {ActuationDirection.HEATING_ONLY, ActuationDirection.RANGED}:
+        if neutral_heating_c is not None:
+            boost_heating = min(neutral_heating_c + boost_delta_c, rapid_heating_c)
+        else:
+            limitations.append("boost_neutral_unavailable")
+    if direction in {ActuationDirection.COOLING_ONLY, ActuationDirection.RANGED}:
+        if neutral_cooling_c is not None:
+            boost_cooling = max(neutral_cooling_c - boost_delta_c, rapid_cooling_c)
+        else:
+            limitations.append("boost_neutral_unavailable")
+    if direction is ActuationDirection.RANGED and neutral_heating_c is not None:
+        # A range must not request simultaneous opposing conditioning. Retain
+        # the existing separation around neutral even for a positive offset.
+        half_gap = minimum_range_gap_c / 2
+        assert boost_heating is not None
+        assert boost_cooling is not None
+        safe_heating = min(boost_heating, neutral_heating_c - half_gap)
+        safe_cooling = max(boost_cooling, neutral_heating_c + half_gap)
+        if (safe_heating, safe_cooling) != (boost_heating, boost_cooling):
             limitations.append("boost_limited")
-        boost_heating = heating + applied
-        boost_cooling = cooling - applied
-    else:
-        if heating is not None:
-            boost_heating = heating + boost_delta_c
-            if neutral_heating_c is not None:
-                boost_heating = min(boost_heating, neutral_heating_c)
-            else:
-                limitations.append("boost_neutral_unavailable")
-            if boost_heating < heating + boost_delta_c:
-                limitations.append("boost_limited")
-        if cooling is not None:
-            boost_cooling = cooling - boost_delta_c
-            if neutral_cooling_c is not None:
-                boost_cooling = max(boost_cooling, neutral_cooling_c)
-            else:
-                limitations.append("boost_neutral_unavailable")
-            if boost_cooling > cooling - boost_delta_c:
-                limitations.append("boost_limited")
+        boost_heating, boost_cooling = safe_heating, safe_cooling
+    if boost_goal_c is not None:
+        if direction is ActuationDirection.HEATING_ONLY:
+            boost_heating = boost_goal_c
+        elif direction is ActuationDirection.COOLING_ONLY:
+            boost_cooling = boost_goal_c
 
     if boost_mode is BoostMode.ADAPTIVE:
         return _PolicyTransform(
@@ -569,23 +580,27 @@ def _policy_transform(
 
     reached = rapid_boost_reached
     if direction is ActuationDirection.HEATING_ONLY and boost_heating is not None:
-        reached = reached or current_air_temperature_c >= boost_heating
+        reached = reached or current_air_temperature_c >= boost_heating - rapid_boost_approach_c
         return _PolicyTransform(
             boost_heating if reached else rapid_heating_c,
             None,
             tuple(dict.fromkeys(limitations)),
-            "hold" if reached else "rapid",
+            ("hold" if current_air_temperature_c >= boost_heating else "approach")
+            if reached
+            else "rapid",
             reached,
             boost_heating,
             None,
         )
     if direction is ActuationDirection.COOLING_ONLY and boost_cooling is not None:
-        reached = reached or current_air_temperature_c <= boost_cooling
+        reached = reached or current_air_temperature_c <= boost_cooling + rapid_boost_approach_c
         return _PolicyTransform(
             None,
             boost_cooling if reached else rapid_cooling_c,
             tuple(dict.fromkeys(limitations)),
-            "hold" if reached else "rapid",
+            ("hold" if current_air_temperature_c <= boost_cooling else "approach")
+            if reached
+            else "rapid",
             reached,
             None,
             boost_cooling,
@@ -624,6 +639,8 @@ def build_adaptive_policy(
     inactive_heating_c: float = DEFAULT_USER_MIN_C,
     inactive_cooling_c: float = DEFAULT_USER_MAX_C,
     boost_delta_c: float = DEFAULT_BOOST_DELTA_C,
+    rapid_boost_approach_c: float = DEFAULT_RAPID_BOOST_APPROACH_C,
+    boost_goal_c: float | None = None,
     previous_requested: tuple[float | None, float | None] = (None, None),
     elapsed_since_previous_seconds: float = 0.0,
     explicit_transition: bool = False,
@@ -637,8 +654,10 @@ def build_adaptive_policy(
         inactive_heating_c,
         inactive_cooling_c,
         boost_delta_c,
+        rapid_boost_approach_c,
         current_air_temperature_c,
         elapsed_since_previous_seconds,
+        *((boost_goal_c,) if boost_goal_c is not None else ()),
     )
     if any(isinstance(value, bool) or not math.isfinite(float(value)) for value in numeric):
         return PolicyFailure("invalid_policy_configuration")
@@ -646,7 +665,8 @@ def build_adaptive_policy(
         minimum_range_gap_c < 1.0
         or eco_heating_setback_c < 0.0
         or eco_cooling_setback_c < 0.0
-        or boost_delta_c < 0.0
+        or not -3.0 <= boost_delta_c <= 3.0
+        or not 0.1 <= rapid_boost_approach_c <= 5.0
         or inactive_heating_c >= inactive_cooling_c
     ):
         return PolicyFailure("invalid_policy_configuration")
@@ -656,9 +676,16 @@ def build_adaptive_policy(
         direction=direction,
         minimum_range_gap_c=minimum_range_gap_c,
     )
-    if isinstance(critical, PolicyFailure):
-        return critical
     neutral = _success(roots.thermal_neutral)
+    if isinstance(critical, PolicyFailure):
+        if (
+            boost_mode is not BoostMode.OFF
+            and neutral is not None
+            and direction is ActuationDirection.HEATING_ONLY
+        ):
+            critical = CriticalTargets(None, None, None, None, ("boost_control_root_not_required",))
+        else:
+            return critical
     transformed = _policy_transform(
         heating=critical.heating_c,
         cooling=critical.cooling_c,
@@ -688,6 +715,8 @@ def build_adaptive_policy(
         rapid_heating_c=inactive_cooling_c,
         rapid_cooling_c=inactive_heating_c,
         boost_delta_c=boost_delta_c,
+        rapid_boost_approach_c=rapid_boost_approach_c,
+        boost_goal_c=boost_goal_c,
     )
 
     def occupancy_reference(reference_profile: ControlProfile) -> _PolicyTransform:
@@ -720,6 +749,8 @@ def build_adaptive_policy(
             rapid_heating_c=inactive_cooling_c,
             rapid_cooling_c=inactive_heating_c,
             boost_delta_c=boost_delta_c,
+            rapid_boost_approach_c=rapid_boost_approach_c,
+            boost_goal_c=None,
         )
 
     occupied = occupancy_reference(ControlProfile.COMFORT)
