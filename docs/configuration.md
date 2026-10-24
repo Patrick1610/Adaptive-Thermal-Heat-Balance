@@ -41,10 +41,9 @@ A final review page summarizes the zone before creation. The device's **Configur
 a task-based settings menu, with direct access to sources, devices/calibration, comfort,
 occupancy/setback, Boost/Preheat, bounds, heating demand/assisted start, human/air assumptions,
 sensor reliability/heating safety, extra locations and advanced model/command behavior.
-Completing a section returns to this menu without applying changes. The page-action choice
-**Back without changes** discards the current section, including incomplete conditional pages,
-but retains earlier drafts. Only **Save and close** validates and applies the whole draft and
-reloads once; the dialog's close icon discards all unapplied changes. Run
+Completing a section returns to this menu and retains its changes as a draft, without applying
+them. There is no separate page-action field. Only **Save and close** validates and applies the
+whole draft and reloads once; the dialog's close icon discards all unapplied changes. Run
 **Reconfigure** from the integration entry when a complete sequential setup walkthrough is
 preferred; both routes retain the same zone identity and device.
 

@@ -1538,8 +1538,6 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlow):
         self._calibration_index = 0
         self._wizard_environment = {}
         self._settings_section: str | None = None
-        self._section_snapshot: tuple[dict[str, Any], dict[str, Any]] | None = None
-        self._current_form: dict[str, Any] = {}
         self._initialize_options_wizard(
             existing_options=config_entry.options,
             targets=self._wizard_targets,
@@ -1566,7 +1564,6 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlow):
 
     def _settings_menu(self) -> ConfigFlowResult:
         self._settings_section = None
-        self._section_snapshot = None
         self._wizard_environment = dict(self._pending_data)
         self._wizard_targets = list(self._pending_data.get(CONF_TARGETS, ()))
         self._critical_existing = deepcopy(
@@ -1581,20 +1578,8 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlow):
     @callback
     @override
     def async_show_form(self, **kwargs: Any) -> ConfigFlowResult:
-        """Offer native discard navigation, including on incomplete forms."""
+        """Keep section forms non-final; only the main menu applies drafts."""
 
-        self._current_form = dict(kwargs)
-        original = kwargs.get("data_schema", vol.Schema({}))
-        fields: dict[vol.Marker, Any] = {
-            vol.Optional("section_action", default="keep"): _select(
-                ("keep", "discard"), "section_action"
-            )
-        }
-        for marker, validator in original.schema.items():
-            fields[
-                vol.Optional(marker.schema, default=marker.default, description=marker.description)
-            ] = validator
-        kwargs["data_schema"] = vol.Schema(fields)
         kwargs["last_step"] = False
         return super().async_show_form(**kwargs)
 
@@ -1605,28 +1590,9 @@ class AthbOptionsFlow(_OptionsWizardMixin, config_entries.OptionsFlow):
             self._settings_section = next(
                 (root for root, steps in self._SECTIONS.items() if step_id in steps), None
             )
-            self._section_snapshot = deepcopy((self._pending_data, self._pending_options))
             self._advanced = self._settings_section == "source_freshness"
         elif step_id not in self._SECTIONS[self._settings_section]:
             return self._settings_menu()
-        if user_input is not None:
-            action = user_input.pop("section_action", "keep")
-            if action == "discard":
-                assert self._section_snapshot is not None
-                self._pending_data, self._pending_options = deepcopy(self._section_snapshot)
-                return self._settings_menu()
-            if self._current_form.get("step_id") == step_id:
-                schema = self._current_form["data_schema"].schema
-                for marker in schema:
-                    if marker.schema not in user_input and marker.default is not vol.UNDEFINED:
-                        user_input[str(marker.schema)] = marker.default()
-                missing = {
-                    str(k.schema): "required"
-                    for k in schema
-                    if isinstance(k, vol.Required) and k.schema not in user_input
-                }
-                if missing:
-                    return self.async_show_form(**{**self._current_form, "errors": missing})
         return None
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

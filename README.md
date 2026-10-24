@@ -80,8 +80,8 @@ through Settings → Devices & services. No live installation is part of the rep
 Each configured thermal zone appears as one Home Assistant device. The normal flow shows only the
 inputs required by the selected source mode; advanced numerical and radiant settings remain behind
 explicit progressive-disclosure choices.
-**Configure** opens a task-based settings menu. Each section retains a draft or can be discarded
-with **Back without changes**. Only **Save and close** applies all drafts and reloads once;
+**Configure** opens a task-based settings menu. Completing a section returns to the main menu
+and retains its changes as a draft. Only **Save and close** applies all drafts and reloads once;
 closing the dialog discards unapplied changes. Existing devices and entity identities are retained.
 
 ## Documentation

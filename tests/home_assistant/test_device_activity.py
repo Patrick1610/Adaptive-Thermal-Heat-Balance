@@ -314,7 +314,7 @@ async def test_options_activity_step_displays_and_confirms_even_without_candidat
     final_form = await flow.async_step_source_device_activity()
     assert final_form["step_id"] == "source_device_activity"
     assert final_form["last_step"] is False
-    assert {str(k.schema) for k in final_form["data_schema"].schema} == {"section_action"}
+    assert not final_form["data_schema"].schema
     saved = await flow.async_step_source_device_activity({})
     assert saved == {"type": "create_entry"}
     assert save.call_count == 2

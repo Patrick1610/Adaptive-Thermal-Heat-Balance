@@ -4,6 +4,7 @@ from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
+import voluptuous as vol
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -149,23 +150,42 @@ def test_new_boost_fields_are_bounded_finite_and_not_boolean(key, value):
     assert key in validate_options({key: value})
 
 
-async def test_section_discard_rolls_back_multistep_changes_but_keeps_prior_drafts(
+async def test_multistep_settings_keep_drafts_without_page_actions(
     hass: HomeAssistant,
 ):
     entry = _settings_entry(hass)
     flow = AthbOptionsFlow(entry)
     flow.hass = hass
     await flow.async_step_boost_settings({"boost_delta_c": 1, "rapid_boost_approach_c": 0.7})
-    await flow.async_step_comfort(
+    result = await flow.async_step_comfort(
         {"comfort_strategy": "comfort", "radiant_model": "mold_indicator"}
     )
-    # Discard before a required Mold Indicator was selected must still work.
-    result = await flow.async_step_radiant({"section_action": "discard"})
+    assert result["step_id"] == "radiant"
+    assert result["last_step"] is False
+    schema = result["data_schema"]
+    assert {str(marker.schema) for marker in schema.schema} == {"mold_indicator_entity"}
+    with pytest.raises(vol.MultipleInvalid) as error:
+        schema({})
+    assert len(error.value.errors) == 1
+    assert isinstance(error.value.errors[0], vol.RequiredFieldInvalid)
+    result = await flow.async_step_radiant({"mold_indicator_entity": "sensor.mold_indicator"})
     assert result["type"] is FlowResultType.MENU
-    assert flow._pending_options["comfort_strategy"] == "balanced"
-    assert flow._pending_options["radiant_model"] == "uniform"
+    assert flow._pending_options["comfort_strategy"] == "comfort"
+    assert flow._pending_options["radiant_model"] == "mold_indicator"
     assert flow._pending_options["boost_delta_c"] == 1
+    assert flow._pending_options["mold_indicator_entity"] == "sensor.mold_indicator"
     assert "boost_delta_c" not in entry.options
+    assert "mold_indicator_entity" not in entry.options
+
+
+@pytest.mark.parametrize("section", tuple(AthbOptionsFlow._SECTIONS))
+async def test_settings_sections_have_no_page_action(hass: HomeAssistant, section: str):
+    flow = AthbOptionsFlow(_settings_entry(hass))
+    flow.hass = hass
+    result = await getattr(flow, f"async_step_{section}")()
+    assert result["type"] is FlowResultType.FORM
+    assert result["last_step"] is False
+    assert "section_action" not in {str(marker.schema) for marker in result["data_schema"].schema}
 
 
 async def test_final_save_applies_all_drafts_once_and_keeps_identities(hass: HomeAssistant):

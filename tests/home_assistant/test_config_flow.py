@@ -16,7 +16,7 @@ from custom_components.athb.const import DOMAIN, PLATFORMS
 
 
 def _schema_keys(result: config_entries.ConfigFlowResult) -> set[str]:
-    return {str(marker.schema) for marker in result["data_schema"].schema} - {"section_action"}
+    return {str(marker.schema) for marker in result["data_schema"].schema}
 
 
 def _suggested_value(result: config_entries.ConfigFlowResult, key: str) -> Any:
@@ -948,6 +948,7 @@ async def test_advanced_options_store_mold_indicator_and_target_calibration(
     for section, submissions in sections:
         result = await _open_options_section(hass, result, section)
         for submitted in submissions:
+            assert "section_action" not in _schema_keys(result)
             result = await hass.config_entries.options.async_configure(result["flow_id"], submitted)
         assert result["type"] is FlowResultType.MENU
         assert "mold_indicator_entity" not in entry.options

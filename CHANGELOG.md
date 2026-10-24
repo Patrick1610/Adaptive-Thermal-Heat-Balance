@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1
+
+- Remove the Page action selector and per-section discard machinery from all Configure pages.
+  Completing a section retains a draft and returns to the settings menu; only Save and close
+  applies the complete draft. Closing the dialog still abandons all unapplied changes.
+- Preserve required-field validation, existing instance identities, configuration and runtime
+  behavior. No migration or change to heating calculations, Boost or learning is introduced.
+
 ## 0.3.0
 
 - Base Boost on thermal neutral. The signed offset defaults to 0 °C: +1 means neutral +1 for
