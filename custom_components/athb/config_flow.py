@@ -1091,9 +1091,13 @@ class _OptionsWizardMixin:
 
     async def _begin_target_calibrations(self) -> ConfigFlowResult:
         self._calibration_index = 0
-        valid_keys = {f"calibration_{target['target_uuid']}" for target in self._wizard_targets}
+        valid_keys = {
+            f"{prefix}{target['target_uuid']}"
+            for target in self._wizard_targets
+            for prefix in ("calibration_", "target_step_")
+        }
         for key in tuple(self._pending_options):
-            if key.startswith("calibration_") and key not in valid_keys:
+            if key.startswith(("calibration_", "target_step_")) and key not in valid_keys:
                 self._pending_options.pop(key)
         if not self._wizard_targets:
             return await self._async_complete_wizard()
@@ -1105,21 +1109,35 @@ class _OptionsWizardMixin:
     ) -> ConfigFlowResult:
         target = self._wizard_targets[self._calibration_index]
         key = f"calibration_{target['target_uuid']}"
+        step_key = f"target_step_{target['target_uuid']}"
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._pending_options[key] = user_input["calibration_offset_c"]
-            self._calibration_index += 1
-            if self._calibration_index >= len(self._wizard_targets):
-                return await self._async_complete_wizard()
-            return await self.async_step_target_calibration()
+            step = user_input.get("target_step_override", self._pending_options.get(step_key, 0.0))
+            if isinstance(step, bool) or (step != 0 and validate_options({step_key: step})):
+                errors["target_step_override"] = "invalid_option"
+            else:
+                self._pending_options[key] = user_input["calibration_offset_c"]
+                if step == 0:
+                    self._pending_options.pop(step_key, None)
+                else:
+                    self._pending_options[step_key] = step
+                self._calibration_index += 1
+                if self._calibration_index >= len(self._wizard_targets):
+                    return await self._async_complete_wizard()
+                return await self.async_step_target_calibration()
         return self._show_wizard_form(
             step_id="target_calibration",
             data_schema=vol.Schema(
                 {
                     vol.Required(
                         "calibration_offset_c", default=self._pending_options.get(key, 0.0)
-                    ): _number(-3.0, 3.0, 0.1, "°C")
+                    ): _number(-3.0, 3.0, 0.1, "°C"),
+                    vol.Required(
+                        "target_step_override", default=self._pending_options.get(step_key, 0.0)
+                    ): _number(0.0, 5.0, 0.01),
                 }
             ),
+            errors=errors,
             description_placeholders={
                 "target": target["entity_id"],
                 "number": str(self._calibration_index + 1),

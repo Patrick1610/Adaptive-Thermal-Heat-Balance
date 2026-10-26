@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+- Add an optional per-target temperature-step override to device calibration settings.
+  Existing instances keep automatic device precision; compatible virtual targets can use 0.1.
+- Apply the selected grid consistently to normal, Boost/preheat, fallback and safety commands,
+  and expose configured and effective precision in current-target diagnostics.
+
+
 ## 0.3.1
 
 - Remove the Page action selector and per-section discard machinery from all Configure pages.

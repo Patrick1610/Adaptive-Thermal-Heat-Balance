@@ -145,6 +145,8 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
     for name, value in data.items():
         if name.startswith("calibration_") and not _finite_in_range(value, -3.0, 3.0):
             errors[name] = "invalid_option"
+        if name.startswith("target_step_") and not _finite_in_range(value, 0.01, 5.0):
+            errors[name] = "invalid_option"
     if data.get("eco_intensity", "custom") not in {"mild", "workday", "deep", "custom"}:
         errors["eco_intensity"] = "invalid_option"
     if data.get("radiant_model") == "mold_indicator" and not data.get("mold_indicator_entity"):

@@ -750,6 +750,8 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
         "minimum_temperature": None,
         "maximum_temperature": None,
         "temperature_step": None,
+        "temperature_step_override": None,
+        "effective_temperature_step": 0.5,
         "athb_current_target": {"temperature": 19.5},
         "athb_occupied_target": {"temperature": 21.5},
         "athb_unoccupied_target": {"temperature": 19.5},

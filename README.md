@@ -94,6 +94,10 @@ closing the dialog discards unapplied changes. Existing devices and entity ident
 - [Normative architecture](ATHB_ARCHITECTURE_PLAN.md)
 - [Normative build clarifications](ATHB_BUILD_CLARIFICATIONS.md)
 
+Per-device target precision can be overridden in **Devices, rounding and calibration**;
+0 keeps automatic behavior, while 0.1 allows tenths for a compatible virtual RoomMind target.
+See [per-target temperature steps](docs/configuration-reference.md#per-target-temperature-step).
+
 ## Development validation
 
 ```bash

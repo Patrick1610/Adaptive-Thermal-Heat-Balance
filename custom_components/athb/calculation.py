@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from math import isfinite
@@ -84,6 +85,13 @@ def _grid_rounding_mode(value: object) -> GridRoundingMode | None:
     """Return a configured mode while preserving legacy directional rounding."""
 
     return None if value is None else GridRoundingMode(str(value))
+
+
+def target_step_override(options: Mapping[str, Any], target_uuid: str) -> float | None:
+    """Read a per-target override in the destination's advertised temperature unit."""
+
+    value = options.get(f"target_step_{target_uuid}")
+    return None if value is None else float(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +232,7 @@ def _manual_heating_targets(
             _finite_option(snapshot.options, "minimum_control_temperature", 18.0),
             _finite_option(snapshot.options, "maximum_control_temperature", 26.0),
             _finite_option(snapshot.options, f"calibration_{target.target_uuid}", 0.0),
+            step_override=target_step_override(snapshot.options, target.target_uuid),
             rounding_mode=_grid_rounding_mode(snapshot.options.get("target_rounding_mode")),
         )
         if snapshot.withdraw_manual_heating:
@@ -780,6 +789,7 @@ def calculate_runtime_snapshot(snapshot: CapturedZoneSnapshot) -> RuntimeCalcula
             _finite_option(snapshot.options, "minimum_control_temperature", 18.0),
             _finite_option(snapshot.options, "maximum_control_temperature", 26.0),
             _finite_option(snapshot.options, f"calibration_{target.target_uuid}", 0.0),
+            step_override=target_step_override(snapshot.options, target.target_uuid),
             minimum_range_gap_c=_finite_option(snapshot.options, "minimum_range_gap", 1.0),
             rounding_mode=_grid_rounding_mode(snapshot.options.get("target_rounding_mode")),
         )

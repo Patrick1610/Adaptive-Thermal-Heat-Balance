@@ -504,3 +504,23 @@ wizard. The accepted range is -3 to +3 °C. The mapping is:
 
 This corrects a known actuator/setpoint relationship. It does not alter the primary room sensor
 and does not merge air, surface, or radiant temperatures.
+
+
+### Per-target temperature step
+
+Each target can optionally set `target_step_<target UUID>` in its calibration page.
+The setting **Target temperature step (0 = automatic)** uses the destination's temperature
+unit. Zero removes the override and keeps the existing advertised-step/default behavior;
+a stored override must be finite and between 0.01 and 5.0.
+
+Use an override only for a destination known to accept that resolution. For example,
+RoomMind's virtual override climate advertises 0.5 °C but can accept 0.1 °C targets through
+`climate.set_temperature`. Selecting 0.1 lets ATHB preserve tenths for that destination.
+It does not change RoomMind, physical device capabilities, temperature bounds, calibration,
+command intervals, manual ownership or heating demand thresholds. A destination that ignores
+or rounds a requested target still has to acknowledge it through the existing feedback checks.
+
+The per-target grid is used for normal, Boost/preheat, fallback and safety calculations.
+Current-target `per_climate` attributes expose the advertised `temperature_step`, configured
+`temperature_step_override` and `effective_temperature_step`. Settings remain drafts until
+**Save and close** on the main settings menu. Existing instances retain automatic behavior.

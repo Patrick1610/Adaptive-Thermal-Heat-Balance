@@ -596,6 +596,17 @@ def _per_climate_context(runtime: ZoneRuntime) -> dict[str, dict[str, Any]]:
             "minimum_temperature": capability.min_temp_ha,
             "maximum_temperature": capability.max_temp_ha,
             "temperature_step": capability.target_temp_step_ha,
+            "temperature_step_override": runtime.entry.options.get(
+                f"target_step_{target['target_uuid']}"
+            ),
+            "effective_temperature_step": runtime.entry.options.get(
+                f"target_step_{target['target_uuid']}",
+                capability.target_temp_step_ha
+                if capability.target_temp_step_ha is not None
+                else 0.5
+                if capability.temperature_unit.value == "°C"
+                else 1.0,
+            ),
             "athb_current_target": details.get("current", {}).get("actuator", {}),
             "athb_occupied_target": details.get("occupied", {}).get("actuator", {}),
             "athb_unoccupied_target": details.get("unoccupied", {}).get("actuator", {}),

@@ -66,6 +66,7 @@ from .calculation import (
     _grid_rounding_mode,
     calculate_runtime_snapshot,
     result_values,
+    target_step_override,
 )
 from .const import (
     CONF_BOOST_MODE,
@@ -1826,6 +1827,7 @@ class ZoneRuntime:
             float(self.entry.options.get("minimum_control_temperature", 18.0)),
             float(self.entry.options.get("maximum_control_temperature", 26.0)),
             calibration,
+            step_override=target_step_override(self.entry.options, target.target_uuid),
             minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
             rounding_mode=GridRoundingMode.FLOOR,
         )
@@ -2347,6 +2349,7 @@ class ZoneRuntime:
             float(self.entry.options.get("minimum_control_temperature", 18.0)),
             float(self.entry.options.get("maximum_control_temperature", 26.0)),
             calibration,
+            step_override=target_step_override(self.entry.options, target_uuid),
             minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
             rounding_mode=_grid_rounding_mode(self.entry.options.get("target_rounding_mode")),
         )
@@ -2961,6 +2964,7 @@ class ZoneRuntime:
             float(self.entry.options.get("minimum_control_temperature", 18.0)),
             float(self.entry.options.get("maximum_control_temperature", 26.0)),
             calibration,
+            step_override=target_step_override(self.entry.options, target.target_uuid),
             minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
             rounding_mode=_grid_rounding_mode(self.entry.options.get("target_rounding_mode")),
         )
@@ -3108,6 +3112,7 @@ class ZoneRuntime:
                     float(self.entry.options.get("minimum_control_temperature", 18.0)),
                     float(self.entry.options.get("maximum_control_temperature", 26.0)),
                     calibration,
+                    step_override=target_step_override(self.entry.options, target.target_uuid),
                     minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
                     rounding_mode=_grid_rounding_mode(
                         self.entry.options.get("target_rounding_mode")
@@ -3126,6 +3131,7 @@ class ZoneRuntime:
             float(self.entry.options.get("minimum_control_temperature", 18.0)),
             float(self.entry.options.get("maximum_control_temperature", 26.0)),
             calibration,
+            step_override=target_step_override(self.entry.options, target.target_uuid),
             minimum_range_gap_c=float(self.entry.options.get("minimum_range_gap", 1.0)),
             rounding_mode=_grid_rounding_mode(self.entry.options.get("target_rounding_mode")),
         )
