@@ -30,7 +30,7 @@ def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None
         "issue_tracker": ("https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance/issues"),
         "name": "Adaptive Thermal Heat Balance",
         "requirements": [],
-        "version": "0.3.2",
+        "version": "0.3.3",
     }
     assert manifest["domain"] == DOMAIN
 
@@ -121,6 +121,7 @@ def test_pure_core_contains_only_implemented_standard_library_modules() -> None:
         "repairs.py",
         "select.py",
         "sensor.py",
+        "target_sensor_layout.py",
         "strings.json",
         "switch.py",
         "translations/en.json",

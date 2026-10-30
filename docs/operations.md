@@ -1,5 +1,20 @@
 # Operations and troubleshooting
 
+## Stable target sensor identities
+
+The target/deviation sensor layout is saved in the config entry as
+`target_sensor_layout`, keyed by the configured target UUIDs. Restarts, reloads,
+temporary unavailability and HVAC mode changes reuse that layout. On the first
+upgrade, registered room-wide or per-device target identities are retained;
+presentation changes never alter comfort calculations or commands. A changed
+configured target selection permits a new layout and removal of superseded
+managed entities. Existing custom entity IDs and names remain registered.
+
+A new installation without known target capabilities waits for a target state
+event rather than creating a guessed scalar layout. The existing Input status
+sensor exposes `target_sensor_layout_status` (`waiting_for_capabilities` or
+`fixed`) and the saved layout. Unloading cancels the temporary listener.
+
 ATHB is push-only. Source, target, option and expiry events trigger a debounced calculation; there
 is no periodic ten-minute control loop. One calculation runs per zone, at most two run globally,
 and only the newest queued snapshot survives an event burst.

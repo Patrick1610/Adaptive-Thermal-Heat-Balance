@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.climate.const import ATTR_CURRENT_TEMPERATURE, ClimateEntityFeature
 from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory, UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 
 from .adapters.climate import capability_from_state
 from .core.climate import (
@@ -21,6 +23,7 @@ from .core.climate import (
 )
 from .entity import AthbEntity
 from .runtime import AthbConfigEntry, ZoneRuntime
+from .target_sensor_layout import LAYOUT_KEY, resolve_target_sensor_layout
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +148,12 @@ class AthbSensor(AthbEntity, RestoreSensor):
             "command_outcomes": self.runtime.values.get("command_outcomes", {}),
             "command_delivery": self.runtime.values.get("command_delivery", {}),
         }
+        if self.description.key == "input_status":
+            layout = self.runtime.entry.data.get(LAYOUT_KEY)
+            attributes["target_sensor_layout"] = layout
+            attributes["target_sensor_layout_status"] = (
+                "fixed" if layout is not None else "waiting_for_capabilities"
+            )
         if context := ROOT_SENSOR_CONTEXT.get(self.description.key):
             root_name, range_role = context
             votes = self.runtime.values.get("root_sensation_votes", {})
@@ -440,33 +449,80 @@ async def async_setup_entry(
     entities: list[SensorEntity] = [AthbSensor(runtime, item) for item in descriptions]
     desired_unique_ids = {entity.unique_id for entity in entities}
     targets = list(entry.data.get("targets", ()))
-    target_directions = _target_control_directions(hass, targets)
-    for direction in target_directions:
-        deviation = TargetDeviationSensor(
-            runtime,
-            direction,
-            show_direction=len(target_directions) > 1,
-        )
-        entities.append(deviation)
-        desired_unique_ids.add(deviation.unique_id)
-    if _supports_zone_target_sensors(hass, targets):
-        for scenario in TARGET_SCENARIOS:
-            zone_entity = ZoneTargetSensor(runtime, scenario)
-            entities.append(zone_entity)
-            desired_unique_ids.add(zone_entity.unique_id)
-    else:
-        for target in targets:
-            for endpoint in _target_endpoints(hass, target["entity_id"]):
-                target_entity = TargetSensor(
-                    runtime,
-                    target,
-                    endpoint,
-                    _target_display_name(hass, target["entity_id"]),
-                )
-                entities.append(target_entity)
-                desired_unique_ids.add(target_entity.unique_id)
-    _remove_stale_sensor_entities(hass, entry, desired_unique_ids)
     async_add_entities(entities)
+    completed = False
+    unsubscribe: Callable[[], None] | None = None
+
+    @callback
+    def cancel_waiting() -> None:
+        nonlocal unsubscribe
+        if unsubscribe is not None:
+            remove_listener, unsubscribe = unsubscribe, None
+            remove_listener()
+
+    @callback
+    def add_target_entities(_event: Any = None) -> None:
+        nonlocal completed, unsubscribe
+        if completed:
+            return
+        layout = resolve_target_sensor_layout(
+            hass, entry, _candidate_target_sensor_layout(hass, targets)
+        )
+        if layout is None:
+            # Never remove registered identities while waiting for capabilities.
+            return
+        completed = True
+        cancel_waiting()
+        additions: list[SensorEntity] = []
+        directions = layout["directions"]
+        for direction in directions:
+            additions.append(
+                TargetDeviationSensor(runtime, direction, show_direction=len(directions) > 1)
+            )
+        if layout["compact"]:
+            additions.extend(ZoneTargetSensor(runtime, scenario) for scenario in TARGET_SCENARIOS)
+        else:
+            for target in targets:
+                for endpoint in layout["endpoints"][target["target_uuid"]]:
+                    additions.append(
+                        TargetSensor(
+                            runtime,
+                            target,
+                            endpoint,
+                            _target_display_name(hass, target["entity_id"]),
+                        )
+                    )
+        desired_unique_ids.update(entity.unique_id for entity in additions)
+        _remove_stale_sensor_entities(hass, entry, desired_unique_ids)
+        async_add_entities(additions)
+
+    add_target_entities()
+    if not completed:
+        unsubscribe = async_track_state_change_event(
+            hass, [target["entity_id"] for target in targets], add_target_entities
+        )
+        entry.async_on_unload(cancel_waiting)
+
+
+def _candidate_target_sensor_layout(
+    hass: HomeAssistant, targets: list[dict[str, str]]
+) -> dict[str, Any] | None:
+    """Describe known capabilities without persisting an unavailable fallback."""
+    for target in targets:
+        capability = capability_from_state(hass.states.get(target["entity_id"]))
+        if not capability.supported_features & (TARGET_TEMPERATURE | TARGET_TEMPERATURE_RANGE):
+            return None
+    directions = _target_control_directions(hass, targets)
+    if targets and not directions:
+        return None
+    return {
+        "compact": _supports_zone_target_sensors(hass, targets),
+        "directions": list(directions),
+        "endpoints": {
+            target["target_uuid"]: list(_target_endpoints(hass, target["entity_id"]))
+            for target in targets
+        },
+    }
 
 
 def _target_display_name(hass: HomeAssistant, entity_id: str) -> str:
@@ -518,6 +574,9 @@ def _supports_zone_target_sensors(hass: HomeAssistant, targets: list[dict[str, s
         ranged = bool(capability.supported_features & TARGET_TEMPERATURE_RANGE)
         if not scalar or ranged:
             return False
+        advertised = set(capability.advertised_hvac_modes)
+        if {"heat", "cool"} <= advertised:
+            return False
         if capability.hvac_mode in {"heat", "cool"}:
             directions.add("heating" if capability.hvac_mode == "heat" else "cooling")
             continue
@@ -525,7 +584,6 @@ def _supports_zone_target_sensors(hass: HomeAssistant, targets: list[dict[str, s
         if inferred in {AutoMapping.HEATING, AutoMapping.COOLING}:
             directions.add(inferred.value)
             continue
-        advertised = set(capability.advertised_hvac_modes)
         if "heat" in advertised and "cool" not in advertised:
             directions.add("heating")
         elif "cool" in advertised and "heat" not in advertised:
@@ -548,6 +606,10 @@ def _target_control_directions(
             continue
         if not capability.supported_features & TARGET_TEMPERATURE:
             continue
+        advertised = set(capability.advertised_hvac_modes)
+        if {"heat", "cool"} <= advertised:
+            directions.update(("heating", "cooling"))
+            continue
         if capability.hvac_mode in {"heat", "cool"}:
             directions.add("heating" if capability.hvac_mode == "heat" else "cooling")
             continue
@@ -555,7 +617,6 @@ def _target_control_directions(
         if inferred in {AutoMapping.HEATING, AutoMapping.COOLING}:
             directions.add(inferred.value)
             continue
-        advertised = set(capability.advertised_hvac_modes)
         if "heat" in advertised and "cool" not in advertised:
             directions.add("heating")
         elif "cool" in advertised and "heat" not in advertised:

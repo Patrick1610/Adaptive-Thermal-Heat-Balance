@@ -589,6 +589,10 @@ async def test_sensor_setup_exposes_only_supported_endpoints_and_removes_obsolet
         {"supported_features": int(ClimateEntityFeature.TARGET_TEMPERATURE)},
     )
     registry = er.async_get(hass)
+    registry.async_get_or_create("sensor", "athb", "zone-1_target_current", config_entry=entry)
+    registry.async_get_or_create(
+        "sensor", "athb", "zone-1_target_heating_deviation", config_entry=entry
+    )
     obsolete_range = registry.async_get_or_create(
         "sensor",
         "athb",

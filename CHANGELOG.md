@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3
+
+- Persist target/deviation sensor layout independently of startup ordering,
+  temporary climate unavailability and HVAC mode changes. Adopt existing
+  registered target identities on upgrade and migrate only after a changed
+  configured target UUID selection.
+- Defer first-time capability discovery when a target is missing, with an
+  unload-safe state listener and readiness diagnostics on the existing Input
+  status sensor. Comfort/Boost calculations, commands and settings are unchanged.
+
 ## 0.3.2
 
 - Add an optional per-target temperature-step override to device calibration settings.
