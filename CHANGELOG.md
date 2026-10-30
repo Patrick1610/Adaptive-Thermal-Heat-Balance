@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4
+
+- Retain a legacy per-device target sensor even when its climate is offline and
+  no directional deviation sensor was previously registered. Known endpoint
+  identities are sufficient to restore that presentation; no control settings,
+  calculations or unknown heating/cooling references are invented.
+
 ## 0.3.3
 
 - Persist target/deviation sensor layout independently of startup ordering,

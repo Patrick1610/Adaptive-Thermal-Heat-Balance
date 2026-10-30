@@ -101,6 +101,6 @@ def _registered_layout(
             "directions": directions,
             "endpoints": {target: ["temperature"] for target in targets},
         }
-    if targets and all(endpoints.values()) and directions:
+    if targets and all(endpoints.values()):
         return {"compact": False, "directions": directions, "endpoints": endpoints}
     return None

@@ -110,6 +110,20 @@ async def test_first_upgrade_preserves_registered_layout_without_climate(
     assert registry.async_get(original.entity_id) is not None
 
 
+async def test_registered_endpoint_survives_missing_direction_and_climate(hass: Any) -> None:
+    """An offline legacy target may never have had a deviation sensor."""
+    entry = _entry(hass)
+    registry = er.async_get(hass)
+    original = registry.async_get_or_create(
+        "sensor", "athb", "zone-layout_target-one_temperature", config_entry=entry
+    )
+    added: list[Any] = []
+    await async_setup_entry(hass, entry, added.extend)
+    assert original.unique_id in {item.unique_id for item in added}
+    assert entry.data[LAYOUT_KEY]["directions"] == []
+    assert registry.async_get(original.entity_id) is not None
+
+
 async def test_new_missing_target_waits_then_adds_once(hass: Any) -> None:
     entry = _entry(hass)
     added: list[Any] = []
