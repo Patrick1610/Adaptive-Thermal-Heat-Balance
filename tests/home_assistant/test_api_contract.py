@@ -739,8 +739,10 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
     )
 
     sensor = ZoneTargetSensor(runtime, "current")
-    assert sensor.native_value == 19.5
-    assert sensor.extra_state_attributes["target_basis"] == "normalized_actuator_request"
+    assert sensor.native_value == 19.37
+    assert (
+        sensor.extra_state_attributes["target_basis"] == "room_policy_before_actuator_adjustments"
+    )
     attributes = sensor.extra_state_attributes
     climate = attributes["per_climate"]["climate.roommind_override"]
     assert climate == {
@@ -757,6 +759,7 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
         "temperature_step_override": None,
         "effective_temperature_step": 0.5,
         "athb_current_target": {"temperature": 19.5},
+        "athb_calculated_target": {"temperature": 19.37},
         "athb_occupied_target": {"temperature": 21.5},
         "athb_unoccupied_target": {"temperature": 19.5},
         "heating_demand": {},
@@ -800,25 +803,28 @@ def test_current_zone_target_exposes_per_climate_observation_and_requests(hass: 
     assert "per_climate" not in occupied.extra_state_attributes
 
 
-def test_current_zone_target_requires_one_common_normalized_actuator_value() -> None:
+def test_room_target_ignores_divergent_actuator_goals_and_never_restores_over_fresh_data():
     runtime = _runtime()
     sensor = ZoneTargetSensor(runtime, "current")
-    assert sensor.native_value is None
-    assert not sensor.available
-
+    sensor._restored_native_value = 18.5
+    assert sensor.native_value == 18.5  # Labelled startup hold only.
     runtime.publish(
         {
-            "effective_targets": {
-                "one": {"temperature": 19.0},
-                "two": {"temperature": 20.0},
-                "invalid": {"temperature": True},
-            }
+            "data_quality": "current",
+            "effective_targets": {"one": {"temperature": 20.4}, "two": {"temperature": 20.2}},
+            "target_scenarios": {
+                "one": {"current": {"room": {"temperature": 20.334}}},
+                "two": {"current": {"room": {"temperature": 20.334}}},
+            },
         }
     )
+    assert sensor.native_value == 20.334
+    assert sensor.extra_state_attributes["data_quality"] == "current"
+    runtime.values["target_scenarios"]["two"]["current"]["room"]["temperature"] = 21.0
+    assert sensor.native_value is None  # No shared policy target, not old 18.5.
+    assert not sensor.available
+    runtime.values["target_scenarios"] = {}
     assert sensor.native_value is None
-    sensor._restored_native_value = 18.5
-    assert sensor.native_value == 18.5
-    assert sensor.available
 
 
 def test_compact_target_capability_gate_and_endpoint_projection(hass: Any) -> None:

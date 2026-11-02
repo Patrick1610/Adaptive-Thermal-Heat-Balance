@@ -184,15 +184,10 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
 
     def _live_value(self) -> float | None:
         values: list[float] = []
-        if self.scenario == "current":
-            targets = self.runtime.values.get("effective_targets", {}).values()
-            target_values = (target.get("temperature") for target in targets)
-        else:
-            targets = self.runtime.values.get("target_scenarios", {}).values()
-            target_values = (
-                target.get(self.scenario, {}).get("room", {}).get("temperature")
-                for target in targets
-            )
+        targets = self.runtime.values.get("target_scenarios", {}).values()
+        target_values = (
+            target.get(self.scenario, {}).get("room", {}).get("temperature") for target in targets
+        )
         for value in target_values:
             if isinstance(value, int | float) and not isinstance(value, bool):
                 values.append(float(value))
@@ -203,7 +198,16 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
     @property
     def native_value(self) -> Any:
         live_value = self._live_value()
-        return live_value if live_value is not None else self._restored_native_value
+        if live_value is not None:
+            return live_value
+        # Fresh differing requests do not turn an old startup cache into a
+        # calculated room target. Restore is only a labelled startup/data hold.
+        if self.scenario == "current" and (
+            self.runtime.values.get("target_scenarios")
+            or self.runtime.values.get("data_quality") in {"current", "diagnostic_estimate"}
+        ):
+            return None
+        return self._restored_native_value
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -220,15 +224,11 @@ class ZoneTargetSensor(AthbEntity, RestoreSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         live_value = self._live_value()
         data_quality = self.runtime.values.get("data_quality")
-        if live_value is None and self._restored_native_value is not None:
+        if live_value is None and self.native_value is not None:
             data_quality = "restored_stale"
         attributes = {
             **super().extra_state_attributes,
-            "target_basis": (
-                "normalized_actuator_request"
-                if self.scenario == "current"
-                else "room_policy_before_actuator_adjustments"
-            ),
+            "target_basis": "room_policy_before_actuator_adjustments",
             "scenario": self.scenario,
             "data_quality": data_quality,
             "last_valid_at": self.runtime.values.get("last_valid_at"),
@@ -669,6 +669,7 @@ def _per_climate_context(runtime: ZoneRuntime) -> dict[str, dict[str, Any]]:
                 else 1.0,
             ),
             "athb_current_target": details.get("current", {}).get("actuator", {}),
+            "athb_calculated_target": details.get("current", {}).get("room", {}),
             "athb_occupied_target": details.get("occupied", {}).get("actuator", {}),
             "athb_unoccupied_target": details.get("unoccupied", {}).get("actuator", {}),
             "heating_demand": runtime.values.get("heating_demand_hysteresis", {}).get(

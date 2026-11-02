@@ -68,6 +68,30 @@ def _finite_in_range(value: object, minimum: float, maximum: float) -> bool:
     )
 
 
+DEMAND_TARGET_PREFIXES = ("demand_buffer_", "demand_start_", "demand_stop_")
+
+
+def target_demand_settings(
+    options: Mapping[str, Any], target_uuid: str
+) -> tuple[bool, float, float]:
+    """Keep existing room thresholds unless a destination explicitly overrides them."""
+
+    zone_start = options.get("heating_demand_activation_delta_c", 0.5)
+    zone_start = float(zone_start) if _finite_in_range(zone_start, 0.1, 2.0) else 0.5
+    zone_stop = options.get("heating_demand_deactivation_delta_c", 0.1)
+    zone_stop = float(zone_stop) if _finite_in_range(zone_stop, 0.0, 1.9) else 0.1
+    if zone_stop >= zone_start:
+        zone_stop = 0.0
+    start = options.get(f"demand_start_{target_uuid}", zone_start)
+    stop = options.get(f"demand_stop_{target_uuid}", zone_stop)
+    start = float(start) if _finite_in_range(start, 0.1, 2.0) else zone_start
+    stop = float(stop) if _finite_in_range(stop, 0.0, 1.9) else zone_stop
+    if stop >= start:
+        start, stop = zone_start, zone_stop
+    # Malformed stored values must never disable a buffer or abort a zone publish.
+    return options.get(f"demand_buffer_{target_uuid}", True) is not False, start, stop
+
+
 def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
     """Validate complete runtime tuning without exposing numerical-kernel constants."""
 
@@ -143,10 +167,33 @@ def validate_options(data: Mapping[str, Any]) -> dict[str, str]:
         ):
             errors[CONF_DEMAND_ASSIST_THRESHOLD] = "invalid_assist_threshold"
     for name, value in data.items():
+        if name.startswith("demand_buffer_") and not isinstance(value, bool):
+            errors[name] = "invalid_option"
+        if name.startswith("demand_start_") and not _finite_in_range(value, 0.1, 2.0):
+            errors[name] = "invalid_option"
+        if name.startswith("demand_stop_") and not _finite_in_range(value, 0.0, 1.9):
+            errors[name] = "invalid_option"
         if name.startswith("calibration_") and not _finite_in_range(value, -3.0, 3.0):
             errors[name] = "invalid_option"
         if name.startswith("target_step_") and not _finite_in_range(value, 0.01, 5.0):
             errors[name] = "invalid_option"
+    destinations = {
+        name.removeprefix(prefix)
+        for name in data
+        for prefix in DEMAND_TARGET_PREFIXES
+        if name.startswith(prefix)
+    }
+    for destination in destinations:
+        start_key, stop_key = f"demand_start_{destination}", f"demand_stop_{destination}"
+        if start_key not in errors and stop_key not in errors:
+            start = data.get(start_key, data.get("heating_demand_activation_delta_c", 0.5))
+            stop = data.get(stop_key, data.get("heating_demand_deactivation_delta_c", 0.1))
+            if (
+                _finite_in_range(start, 0.1, 2.0)
+                and _finite_in_range(stop, 0.0, 1.9)
+                and stop >= start
+            ):
+                errors[stop_key] = "invalid_option"
     if data.get("eco_intensity", "custom") not in {"mild", "workday", "deep", "custom"}:
         errors["eco_intensity"] = "invalid_option"
     if data.get("radiant_model") == "mold_indicator" and not data.get("mold_indicator_entity"):

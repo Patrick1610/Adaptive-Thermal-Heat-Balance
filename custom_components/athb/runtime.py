@@ -68,6 +68,7 @@ from .calculation import (
     result_values,
     target_step_override,
 )
+from .config_schema import target_demand_settings
 from .const import (
     CONF_BOOST_MODE,
     CONF_COMFORT_STRATEGY,
@@ -121,8 +122,6 @@ from .core.ownership import (
     reduce_ownership,
 )
 from .core.policy import (
-    DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
-    DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
     OccupancyState,
     OpposingTarget,
     ProfileResolution,
@@ -1651,18 +1650,6 @@ class ZoneRuntime:
     ) -> tuple[RuntimeCalculation, dict[str, bool | None]]:
         """Replace small heating requests with a grid-safe idle target."""
 
-        activation_delta = float(
-            self.entry.options.get(
-                "heating_demand_activation_delta_c",
-                DEFAULT_HEATING_DEMAND_ACTIVATION_DELTA_C,
-            )
-        )
-        deactivation_delta = float(
-            self.entry.options.get(
-                "heating_demand_deactivation_delta_c",
-                DEFAULT_HEATING_DEMAND_DEACTIVATION_DELTA_C,
-            )
-        )
         primary = dict(result.source_states).get("primary")
         primary_fresh = (
             result.primary_value_c is not None
@@ -1675,6 +1662,9 @@ class ZoneRuntime:
         details: dict[str, dict[str, Any]] = {}
         transitions: dict[str, bool | None] = {}
         for target in result.targets:
+            buffer_enabled, activation_delta, deactivation_delta = target_demand_settings(
+                self.entry.options, target.target_uuid
+            )
             calculation = target.result
             normalized = calculation.normalized if calculation is not None else None
             mapping = target.mapping
@@ -1701,8 +1691,9 @@ class ZoneRuntime:
                 heating.calibrated_c - heating.requested_room_c
             )
             base_detail: dict[str, Any] = {
-                "active": previous_active,
-                "state": "active" if previous_active else "idle",
+                "buffer_enabled": buffer_enabled,
+                "active": previous_active if buffer_enabled else None,
+                "state": ("active" if previous_active else "idle") if buffer_enabled else "blocked",
                 "activation_delta_c": activation_delta,
                 "deactivation_delta_c": deactivation_delta,
                 "desired_target_c": heating.normalized_room_c,
@@ -1728,6 +1719,25 @@ class ZoneRuntime:
                     **base_detail,
                     "reason": "primary_temperature_not_fresh",
                     "demand_delta_c": None,
+                    "actuator_target_c": heating.normalized_actuator_c,
+                }
+                updated_targets.append(target)
+                continue
+            if not buffer_enabled:
+                # Leave the calculated setpoint intact. Downstream PI owns demand,
+                # including feedforward above target; do not synthesize an idle goal
+                # or mutate the persisted buffer latch. All write/safety gates remain.
+                details[target.target_uuid] = {
+                    **base_detail,
+                    "active": None,
+                    "state": "bypassed",
+                    "reason": "buffer_disabled",
+                    "demand_delta_c": (
+                        heating.normalized_room_c - result.primary_value_c
+                        if result.primary_value_c is not None
+                        else None
+                    ),
+                    "idle_target_c": None,
                     "actuator_target_c": heating.normalized_actuator_c,
                 }
                 updated_targets.append(target)

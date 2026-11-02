@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping
 from copy import deepcopy
 from functools import wraps
+from math import isclose
 from typing import Any, ClassVar, cast, override
 from uuid import uuid4
 
@@ -26,7 +27,13 @@ from .adapters.sources import (
     valid_value,
     validate_state_value,
 )
-from .config_schema import validate_environment, validate_options, validate_targets
+from .config_schema import (
+    DEMAND_TARGET_PREFIXES,
+    target_demand_settings,
+    validate_environment,
+    validate_options,
+    validate_targets,
+)
 from .const import (
     CONF_BOOST_MODE,
     CONF_COMFORT_STRATEGY,
@@ -1094,10 +1101,13 @@ class _OptionsWizardMixin:
         valid_keys = {
             f"{prefix}{target['target_uuid']}"
             for target in self._wizard_targets
-            for prefix in ("calibration_", "target_step_")
+            for prefix in ("calibration_", "target_step_", *DEMAND_TARGET_PREFIXES)
         }
         for key in tuple(self._pending_options):
-            if key.startswith(("calibration_", "target_step_")) and key not in valid_keys:
+            if (
+                key.startswith(("calibration_", "target_step_", *DEMAND_TARGET_PREFIXES))
+                and key not in valid_keys
+            ):
                 self._pending_options.pop(key)
         if not self._wizard_targets:
             return await self._async_complete_wizard()
@@ -1110,12 +1120,49 @@ class _OptionsWizardMixin:
         target = self._wizard_targets[self._calibration_index]
         key = f"calibration_{target['target_uuid']}"
         step_key = f"target_step_{target['target_uuid']}"
+        buffer_key, start_key, stop_key = (
+            f"{prefix}{target['target_uuid']}" for prefix in DEMAND_TARGET_PREFIXES
+        )
+        enabled, start, stop = target_demand_settings(self._pending_options, target["target_uuid"])
         errors: dict[str, str] = {}
         if user_input is not None:
+            demand_options = {
+                buffer_key: user_input.get("heating_demand_buffer", enabled),
+                start_key: user_input.get("heating_demand_start", start),
+                stop_key: user_input.get("heating_demand_stop", stop),
+            }
+            validation = validate_options({**self._pending_options, **demand_options})
+            for field_name, option_key in (
+                ("heating_demand_buffer", buffer_key),
+                ("heating_demand_start", start_key),
+                ("heating_demand_stop", stop_key),
+            ):
+                if option_key in validation:
+                    errors[field_name] = validation[option_key]
             step = user_input.get("target_step_override", self._pending_options.get(step_key, 0.0))
             if isinstance(step, bool) or (step != 0 and validate_options({step_key: step})):
                 errors["target_step_override"] = "invalid_option"
-            else:
+            if not errors:
+                inherited = {
+                    option: value
+                    for option, value in self._pending_options.items()
+                    if option not in {buffer_key, start_key, stop_key}
+                }
+                _, inherited_start, inherited_stop = target_demand_settings(
+                    inherited, target["target_uuid"]
+                )
+                # Unchanged pages retain inheritance. Custom pairs are atomic so
+                # a later zone edit cannot invert a partially inherited pair.
+                for option in (buffer_key, start_key, stop_key):
+                    self._pending_options.pop(option, None)
+                if demand_options[buffer_key] is False:
+                    self._pending_options[buffer_key] = False
+                if not (
+                    isclose(demand_options[start_key], inherited_start, rel_tol=0, abs_tol=1e-9)
+                    and isclose(demand_options[stop_key], inherited_stop, rel_tol=0, abs_tol=1e-9)
+                ):
+                    self._pending_options[start_key] = demand_options[start_key]
+                    self._pending_options[stop_key] = demand_options[stop_key]
                 self._pending_options[key] = user_input["calibration_offset_c"]
                 if step == 0:
                     self._pending_options.pop(step_key, None)
@@ -1130,11 +1177,29 @@ class _OptionsWizardMixin:
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        "calibration_offset_c", default=self._pending_options.get(key, 0.0)
+                        "calibration_offset_c",
+                        default=(user_input or {}).get(
+                            "calibration_offset_c", self._pending_options.get(key, 0.0)
+                        ),
                     ): _number(-3.0, 3.0, 0.1, "°C"),
                     vol.Required(
-                        "target_step_override", default=self._pending_options.get(step_key, 0.0)
+                        "target_step_override",
+                        default=(user_input or {}).get(
+                            "target_step_override", self._pending_options.get(step_key, 0.0)
+                        ),
                     ): _number(0.0, 5.0, 0.01),
+                    vol.Required(
+                        "heating_demand_buffer",
+                        default=(user_input or {}).get("heating_demand_buffer", enabled),
+                    ): bool,
+                    vol.Required(
+                        "heating_demand_start",
+                        default=(user_input or {}).get("heating_demand_start", start),
+                    ): _number(0.1, 2.0, 0.1, "°C"),
+                    vol.Required(
+                        "heating_demand_stop",
+                        default=(user_input or {}).get("heating_demand_stop", stop),
+                    ): _number(0.0, 1.9, 0.1, "°C"),
                 }
             ),
             errors=errors,

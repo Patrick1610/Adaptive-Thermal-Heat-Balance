@@ -64,20 +64,22 @@ automations that referenced an old scalar target must select the new Current tar
 updating.
 
 For a normal scalar heat-only or cool-only zone, **Target — current**, **Target — occupied** and
-**Target — unoccupied** avoid repeating climate names. Current shows the common normalized
-setpoint ATHB offers to the climate after calibration, limits and configured grid rounding;
-Occupied and Unoccupied retain the unrounded room-policy values. Open **Target — current** to
+**Target — unoccupied** avoid repeating climate names. All three show unrounded room-policy
+goals; Current includes the active occupancy/setback and Boost choice. It does not follow an
+idle actuator target, device rounding or a held command. Open **Target — current** to
 inspect the decision chain, actual temperature, reported setpoint, limits, grid and exact
 normalized ATHB request for every controlled climate. Other ATHB entities also expose relevant
 source, provenance, setting and related-value attributes so a displayed result can be traced
 without adding more entities to the device page.
 
 The normal comfort flow also configures the heating-demand buffer. Its default 0.5 °C start and
-0.1 °C stop thresholds keep **Target — current** at a downward-rounded idle target until a real
+0.1 °C stop thresholds keep the destination at a downward-rounded idle target until a real
 heating shortfall exists. Start uses the unrounded calculated target after bounds; stop still uses
 the rounded executable target. This buffer acts before downstream controllers; it is distinct from the
 advanced minimum-meaningful-change setting, which only suppresses redundant writes. Boost
-temporarily bypasses the buffer.
+temporarily bypasses the buffer. Each destination page in **Devices, rounding and calibration**
+also offers independent buffer enable/start/stop settings. Disable it for VTherm/SmartPI to
+deliver the calculated goal continuously; an electric destination can retain its own buffer.
 
 Configure user command bounds in Celsius. They are intersected with device bounds before grid
 normalization. Advanced settings offer Ceiling, Floor and Mathematical nearest-value rounding;

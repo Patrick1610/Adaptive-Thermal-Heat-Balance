@@ -26,14 +26,16 @@ environment is used only to generate and audit independent development goldens.
   fallback: the last valid occupied comfort target, not a sent idle/setback target. Rapid may use
   the configured maximum even without a cached comfort goal. Fresh valid room temperature and all
   ownership/write guards remain required; normal automatic control and cooling do not bypass RH.
-- A configurable heating-demand buffer keeps downstream controllers at a grid-safe idle target
+- A per-destination heating-demand buffer (enabled by default) keeps downstream controllers at a grid-safe idle target
   until the unrounded heating shortfall is meaningful. Its default 0.5 °C start threshold uses
   the calculated target before grid rounding; the 0.1 °C stop threshold still uses the executable
   rounded target. Command/device bounds and calibration remain effective. Boost bypasses the buffer.
   Effective occupancy with a fresh
-  temperature below the calculated comfort lower limit also bypasses small-demand suppression,
-  retaining the normal rounded comfort target until the lower limit plus the stop margin is
-  reached. This does not raise targets to satisfy downstream controllers' thresholds.
+  temperature below the calculated comfort lower limit also bypasses small-demand suppression.
+  Disable the buffer for a downstream VTherm/SmartPI controller to continuously deliver the
+  calculated comfort/setback goal. Other write and safety guards remain active.
+  Comfort protection retains the normal rounded comfort target until the lower limit plus the
+  stop margin is reached. This does not raise targets to satisfy downstream controllers' thresholds.
 - An optional numeric central-demand source can let an effectively occupied/preheated room join
   an existing heating cycle below its normal start threshold. The explicitly configured positive
   source threshold is inclusive; the ordinary room stop threshold and all write guards remain.

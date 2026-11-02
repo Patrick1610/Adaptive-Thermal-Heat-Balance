@@ -144,18 +144,19 @@ actuator result explicit:
   with Boost off.
 - **Target — unoccupied** is the corresponding target with the configured occupancy setback and
   with Boost off.
-- **Target — current** is the common normalized actuator setpoint ATHB offers now, including
-  occupancy, Boost, ordinary environmental slew limiting, calibration, limits and configured grid
-  rounding.
+- **Target — current** is the current calculated room-policy goal, including occupancy, Boost
+  and ordinary environmental slew limiting, before the heating-demand buffer, actuator
+  calibration, device limits, grid rounding and broker holds.
 
-Occupied and Unoccupied remain room-coordinate policy values before per-actuator calibration,
-device limits and grid rounding. When multiple controlled climates normalize Current differently,
-the single Current state is unavailable and its `per_climate` attribute remains authoritative.
+All three retain room-coordinate policy values. Different actuator goals do not change the
+room goal. If the calculated room policies themselves differ, Current is unavailable; it never
+substitutes an old startup value for fresh conflicting calculations. Restored values are only
+labelled startup/data holds. Its `per_climate` attribute remains authoritative for device goals.
 **Target — current** exposes a structured `decision` attribute with scenario,
 comfort, occupancy/setback, Boost phase, governing control point, pre-slew/requested values,
 transition, quality, suppression and recovery state. Its `per_climate` attribute includes current
 temperature, reported setpoint, calibration, bounds, grid, HVAC mode/action, availability,
-normalized ATHB requests, ownership/readiness and command outcome.
+normalized ATHB requests, `athb_calculated_target`, ownership/readiness and command outcome.
 
 Room-deviation sensors are created automatically from the target climate capabilities. A zone
 with only one control direction exposes **Room — deviation from target**. A zone with both
@@ -405,6 +406,31 @@ source is therefore not a guarantee against small request-state changes around t
 The existing heating-demand diagnostics include the selected source, value, threshold, and source
 eligibility, with `central_demand_assist` as the reason for an assisted start; no entities are added.
 
+### Per-destination buffer
+
+**Devices, rounding and calibration** offers **Use ATHB heating-demand buffer**, **Start at
+shortfall** and **Stop at shortfall** on each destination page. A destination without overrides
+continues to use the room thresholds and an enabled buffer. Saving an unchanged page preserves inheritance. A disabled buffer stores
+`demand_buffer_<target_uuid>: false`; different thresholds store an atomic
+`demand_start_<target_uuid>` / `demand_stop_<target_uuid>` pair. Returning both values to the
+room defaults restores inheritance.
+Settings follow stable target UUIDs, not entity names; start remains 0.1–2.0 °C and stop
+0–1.9 °C, strictly below start, even while disabled.
+
+Disable the buffer for VTherm/SmartPI to continuously deliver the calculated comfort or setback
+goal, including Boost. Keep it enabled for an on/off electric thermostat if a wider room-start
+band is desired. This does not change the latter thermostat's own switching tolerances.
+`buffer_enabled: false`, `state: bypassed` and `reason: buffer_disabled` identify the route in
+existing demand diagnostics; `active: null` does not claim downstream heat or physical flow.
+A disabled buffer reports `state: blocked` with the actual guard reason (such as
+`manual_override` or `primary_temperature_not_fresh`) while a guard blocks the route;
+`bypassed` / `buffer_disabled` applies only after those guards permit pass-through.
+The unused buffer latch is retained; re-enabling resumes its hysteresis and withdraws it at
+the normal stop threshold before any new start requires the start threshold. Invalid stored
+values fail safely to a valid enabled/default buffer. Input freshness, target suppression, ownership,
+command/device bounds, stale-heat safeguards and the sole broker command path still apply.
+No other integration, learned model, sample or actuator calibration is changed.
+
 ### Normal start and stop
 
 ATHB applies a stateful heating-demand buffer after final target normalization and before any
@@ -430,8 +456,8 @@ this decision; activation does not always use the occupied scenario when setback
 While inactive, ATHB writes a **rustdoel / idle target** at or below the current room temperature,
 rounded downward on the target's actual grid. This removes the logical heating request before a
 downstream controller such as RoomMind or a TRV sees it. The calculated comfort result is retained
-on **Target — occupied** and **Target — unoccupied**; **Target — current** shows the actual idle or
-active actuator target. For an atomic heat/cool range only the heating endpoint changes, while the
+on **Target — occupied** and **Target — unoccupied**; **Target — current** retains the calculated room-policy goal. Actual idle or active actuator
+targets are available in its `per_climate` attribute. For an atomic heat/cool range only the heating endpoint changes, while the
 cooling endpoint is preserved exactly.
 
 Adaptive and Rapid Boost bypass the buffer and expose their calculated heating request directly.

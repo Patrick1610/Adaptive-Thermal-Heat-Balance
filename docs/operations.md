@@ -21,28 +21,27 @@ and only the newest queued snapshot survives an event burst.
 
 ## Status and “Why this temperature?”
 
-Entity state stays compact. **Target — current** shows the common normalized setpoint ATHB offers
-to the climate and exposes the active scenario, comfort/setback/Boost policy, pre-slew and
-requested values, quality/recovery state, and per-climate temperature,
-setpoint, bounds, grid, normalized command and outcome as native attributes. Downloaded diagnostics contain the latest coherent decision and at
-most 20 material traces: source provenance and validity, history quality, radiant assumptions,
-comfort-level votes, attempted roots, occupancy/Boost and critical transforms, normalized target, ownership and
-the command or exact suppression reason. Household identifiers are consistently pseudonymized;
-user/context identity, coordinates, URLs, arbitrary attributes and raw occupancy history are
-removed.
+Entity state stays compact. **Target — current** shows the active calculated room-policy goal,
+including occupancy/setback/Boost, before device normalization or small-demand suppression.
+Its existing `decision` and `per_climate` attributes separate that goal from the reported device
+setpoint and the command ATHB currently offers. Different device goals do not produce an old
+restored value as a new room calculation; if actual room-policy goals differ, the shared state
+is unavailable. Startup/data holds remain explicitly labelled stale.
 
-When quantization hysteresis or minimum change retains an acknowledged setpoint, **Target —
-current** retains that same setpoint, with `mode: broker_hold` and the broker's reason in its
-per-target details. The lower/higher calculation candidate remains internal and is recalculated
-normally; when the guard releases it, the existing command path can write it and Current shows
-the released target. Occupied/unoccupied comfort scenarios remain calculation values. This does
-not turn Current into a delivery acknowledgement: queued commands and write failures retain
-their separate existing command diagnostics.
+A broker hold remains visible on each destination's `athb_current_target`, with the held reason,
+while `athb_calculated_target` and the shared room goal retain the calculation. Neither the room
+goal nor an offered command is a delivery acknowledgement; queued commands, manual overrides
+and write failures retain their separate diagnostics. Downloaded diagnostics contain the latest
+coherent decision and at most 20 material traces, with household identifiers pseudonymized.
 
 The `heating_demand` decision on **Target — current** explains whether the calculated heating
 request is active or replaced by an idle target, the room shortfall, configured start/stop
 thresholds, Boost override and both desired and final actuator targets. The demand latch is
-persisted before a transition command and restored on restart.
+persisted before a transition command and restored on restart. With a disabled per-destination
+buffer, `buffer_disabled` / `bypassed` explains why the calculated goal is passed through; it
+does not mean that downstream PI demand or physical heating is zero.
+If a guard precedes that pass-through, a disabled buffer reports `state: blocked` and the
+actual reason, such as `manual_override` or `primary_temperature_not_fresh`.
 
 ## Common suppression reasons
 

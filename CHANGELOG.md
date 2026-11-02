@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.5
+
+- Configure the heating-demand buffer independently per destination, with its own enable,
+  start and stop settings. Existing destinations retain the zone defaults until explicitly
+  configured. Disabling it preserves the calculated setpoint for downstream PI control while
+  all freshness, ownership, bounds, stale-safety and command guards remain in force.
+- Make Target — current show the current room-policy goal, including occupancy/setback and
+  Boost, independently of per-device idle targets, grids and broker holds. Different current
+  requests never masquerade as an old restored room goal. Keep entity identities and expose
+  both calculated room goals and actual per-device requests in the existing attributes.
+
 ## 0.3.4
 
 - Retain a legacy per-device target sensor even when its climate is offline and
