@@ -150,14 +150,19 @@ async def test_first_explicit_user_target_is_not_a_startup_baseline(
         _cancel_timers(runtime)
 
 
+@pytest.mark.parametrize("invalid", [None, float("nan"), float("inf")])
 async def test_user_mode_only_change_does_not_invent_a_temperature_override(
     hass: HomeAssistant,
+    invalid: Any,
 ) -> None:
     initial = State("climate.target", "off", _attributes())
     runtime = _feedback_runtime(hass, initial)
     try:
         mode_only = State(
-            "climate.target", "heat", _attributes(), context=Context(user_id="real-user")
+            "climate.target",
+            "heat",
+            _attributes(temperature=invalid),
+            context=Context(user_id="real-user"),
         )
         await _observe(runtime, initial, mode_only)
         assert IDENTITY in runtime.initial_target_baselines
@@ -252,15 +257,16 @@ async def test_saved_manual_override_survives_first_automatic_target(
 
 @pytest.mark.parametrize("unit", ["°C", "°F"])
 @pytest.mark.parametrize("ranged", [False, True])
+@pytest.mark.parametrize("auto_mode", [False, True])
 async def test_first_complete_scalar_or_range_is_consumed_only_once(
-    hass: HomeAssistant, unit: str, ranged: bool
+    hass: HomeAssistant, unit: str, ranged: bool, auto_mode: bool
 ) -> None:
     scalar = 68.0 if unit == "°F" else 20.0
     low, high = (66.0, 75.0) if unit == "°F" else (19.0, 23.0)
     initial_targets = {"target_temp_low": low} if ranged else {}
     initial = State(
         "climate.target",
-        "heat_cool" if ranged else "heat",
+        "auto" if auto_mode else "heat_cool" if ranged else "heat",
         _attributes(unit=unit, ranged=ranged, **initial_targets),
     )
     runtime = _feedback_runtime(hass, initial)
