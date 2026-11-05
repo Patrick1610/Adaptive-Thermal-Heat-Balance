@@ -4609,11 +4609,30 @@ async def test_runtime_apply_schedules_deadlines_and_marks_unknown(
         cancel()
 
 
-def test_runtime_marks_startup_and_data_recovery_for_live_target_reassertion() -> None:
+def test_runtime_marks_startup_and_data_recovery_for_live_target_reassertion(
+    hass: HomeAssistant,
+) -> None:
     scenario = load_scenarios()[0]
     calculation = calculate_runtime_snapshot(_captured(scenario))
     identity = "registry-climate-living-room"
     runtime = _runtime(target_identity=identity)
+    runtime.hass = hass
+    target = calculation.targets[0]
+    hass.states.async_set(
+        target.entity_id,
+        target.capability.hvac_mode or "heat",
+        {
+            "temperature": target.capability.scalar_target_ha,
+            "target_temp_low": target.capability.target_temp_low_ha,
+            "target_temp_high": target.capability.target_temp_high_ha,
+            "hvac_modes": target.capability.advertised_hvac_modes,
+            "supported_features": target.capability.supported_features,
+            "min_temp": target.capability.min_temp_ha,
+            "max_temp": target.capability.max_temp_ha,
+            "target_temp_step": target.capability.target_temp_step_ha,
+            "unit_of_measurement": target.capability.temperature_unit.value,
+        },
+    )
     runtime.control_enabled = True
     runtime.ownership[identity] = OwnershipState(
         identity,

@@ -187,6 +187,7 @@ class ZoneRuntime:
     ownership: dict[str, OwnershipState] = field(default_factory=dict)
     capability_generations: dict[str, int] = field(default_factory=dict)
     last_target_fingerprints: dict[str, TargetFingerprint] = field(default_factory=dict)
+    initial_target_baselines: set[str] = field(default_factory=set)
     critical_delta_states: dict[str, CriticalDeltaState] = field(default_factory=dict)
     history_collector: OutdoorHistoryCollector | None = None
     history_source_identity: str | None = None
@@ -400,6 +401,7 @@ class ZoneRuntime:
             global_semaphore=get_global_semaphore(self.hass),
         )
 
+        self._initialize_target_fingerprints()
         tracked = self._tracked_entity_ids()
         if tracked:
             self.listeners.append(
@@ -431,7 +433,6 @@ class ZoneRuntime:
         )
         if self.repair_manager is not None and REMOVED_ENTITY_REPAIR in self.repair_manager.active:
             self._schedule_removed_entity_repair_reconciliation()
-        self._initialize_target_fingerprints()
         primary_state = self.hass.states.get(str(self.entry.data.get("primary_temperature", "")))
         if (
             primary_state is not None
@@ -1008,6 +1009,7 @@ class ZoneRuntime:
                 )
             ):
                 continue
+            self.initial_target_baselines.discard(identity)
             self._transition(identity, OwnershipEvent.EXTERNAL_TARGET)
 
     @callback
@@ -1169,8 +1171,16 @@ class ZoneRuntime:
         self, target: dict[str, str], old: State | None, new: State | None
     ) -> None:
         identity = str(target["registry_identity"])
-        old_capability = capability_from_state(old)
         capability = capability_from_state(new)
+        startup_user_change = (
+            identity in self.initial_target_baselines
+            and new is not None
+            and new.context.user_id is not None
+            and self._has_observed_target(capability)
+            and self._fingerprint(capability) != self.last_target_fingerprints.get(identity)
+        )
+        initial_observation = self._observe_initial_target_baseline(identity, new)
+        old_capability = capability_from_state(old)
         availability_changed = old_capability.available != capability.available
         if availability_changed:
             self.capability_generations[identity] += 1
@@ -1199,9 +1209,13 @@ class ZoneRuntime:
         fingerprint = self._fingerprint(capability)
         prior = self.last_target_fingerprints.get(identity)
         self.last_target_fingerprints[identity] = fingerprint
-        if prior == fingerprint or self.broker is None:
+        if (
+            initial_observation
+            or (prior == fingerprint and not startup_user_change)
+            or self.broker is None
+        ):
             return
-        if availability_changed or not capability.available:
+        if (availability_changed or not capability.available) and not startup_user_change:
             return
         await self._async_process_target_feedback(
             identity,
@@ -1909,6 +1923,7 @@ class ZoneRuntime:
         values["target_readiness"] = {
             identity: state.target_readiness.value for identity, state in self.ownership.items()
         }
+        values["startup_target_baselines_pending"] = len(self.initial_target_baselines)
         values["control_status"] = self._control_status()
         values["transition_reasons"] = transition_reasons
         values["resume_required"] = any(state.resume_required for state in self.ownership.values())
@@ -2458,10 +2473,13 @@ class ZoneRuntime:
         for ownership in (
             Ownership.COMMAND_FAULT,
             Ownership.MANUAL_OVERRIDE,
-            Ownership.RECONCILING,
         ):
             if ownership in ownerships:
                 return ownership.value
+        if self.initial_target_baselines:
+            return "awaiting_initial_target"
+        if Ownership.RECONCILING in ownerships:
+            return Ownership.RECONCILING.value
         readiness = {state.target_readiness for state in self.ownership.values()}
         for target_state in (
             TargetReadiness.UNAVAILABLE,
@@ -2682,6 +2700,9 @@ class ZoneRuntime:
                 self.control_enabled
                 and state.ownership is Ownership.RECONCILING
                 and not state.resume_required
+                and self._target_observation_classified(target.registry_identity, target.capability)
+                and target.capability
+                == capability_from_state(self.hass.states.get(target.entity_id))
                 and readiness is TargetReadiness.AVAILABLE_SUPPORTED
                 and data is not DataReadiness.INVALID
             ):
@@ -2712,6 +2733,15 @@ class ZoneRuntime:
                 data_recovered or target_recovered or ownership_recovered
             ):
                 recovery_reassertions.add(target.registry_identity)
+        self.transition_logger.update(
+            "initial_target_baseline",
+            bool(self.initial_target_baselines),
+            active_message=(
+                "ATHB is waiting for a complete finite initial climate target; "
+                "affected destinations cannot receive commands until it is observed."
+            ),
+            recovery_message="ATHB received the initial climate targets; reconciliation can resume.",
+        )
         if self.repair_manager is not None:
             self.repair_manager.update("incompatible_auto_mapping", incompatible)
         return frozenset(recovery_reassertions)
@@ -3412,7 +3442,8 @@ class ZoneRuntime:
             state.ownership,
             state.target_readiness is TargetReadiness.AVAILABLE_SUPPORTED
             and capability is not None
-            and capability.available,
+            and capability.available
+            and self._target_observation_classified(identity, capability),
             state.data_readiness
             in {DataReadiness.READY, DataReadiness.DEGRADED_READY, DataReadiness.FALLBACK_READY},
             get_lease_registry(self.hass).owner(identity),
@@ -3439,11 +3470,65 @@ class ZoneRuntime:
             capability.target_temp_high_ha,
         )
 
+    def _target_observation_classified(self, identity: str, capability: Any) -> bool:
+        """Never dispatch against a newer live value whose event is still queued."""
+
+        fingerprint = self._fingerprint(capability)
+        return (
+            identity not in self.initial_target_baselines
+            and self.last_target_fingerprints.get(identity, fingerprint) == fingerprint
+        )
+
+    @staticmethod
+    def _has_observed_target(capability: Any) -> bool:
+        """A baseline is a complete live observation, independent of ATHB's grid."""
+
+        if (
+            not capability.available
+            or capability.restored
+            or capability.hvac_mode in {None, "unknown", "unavailable"}
+        ):
+            return False
+        mapping = resolve_capability(capability)
+        values = (
+            (capability.target_temp_low_ha, capability.target_temp_high_ha)
+            if (isinstance(mapping, CapabilityMapping) and mapping.shape is TargetShape.RANGE)
+            or capability.target_temp_low_ha is not None
+            or capability.target_temp_high_ha is not None
+            else (capability.scalar_target_ha,)
+        )
+        return all(value is not None and isfinite(value) for value in values)
+
     def _initialize_target_fingerprints(self) -> None:
+        self.initial_target_baselines.clear()
         for target in self.entry.data.get("targets", ()):
-            self.last_target_fingerprints[str(target["registry_identity"])] = self._fingerprint(
-                capability_from_state(self.hass.states.get(str(target["entity_id"])))
-            )
+            identity = str(target["registry_identity"])
+            capability = capability_from_state(self.hass.states.get(str(target["entity_id"])))
+            self.last_target_fingerprints[identity] = self._fingerprint(capability)
+            if not self._has_observed_target(capability):
+                self.initial_target_baselines.add(identity)
+
+    def _observe_initial_target_baseline(self, identity: str, state: State | None) -> bool:
+        """Ignore only automatic startup observations until the first live target.
+
+        No timeout or later availability/mode change rearms this exception. A
+        user context, observed external service or active command keeps normal
+        override/acknowledgement handling. Saved manual overrides are untouched.
+        """
+
+        if identity not in self.initial_target_baselines:
+            return False
+        capability = capability_from_state(state)
+        has_target = self._has_observed_target(capability)
+        if (state is not None and state.context.user_id is not None and has_target) or (
+            self.broker is not None and any(self.broker.state_counts(identity))
+        ):
+            self.initial_target_baselines.discard(identity)
+            return False
+        if has_target:
+            self.initial_target_baselines.discard(identity)
+            self.last_target_fingerprints[identity] = self._fingerprint(capability)
+        return True
 
     @staticmethod
     def _target_readiness(
@@ -3503,6 +3588,7 @@ class ZoneRuntime:
         values["target_readiness"] = {
             identity: state.target_readiness.value for identity, state in self.ownership.items()
         }
+        values["startup_target_baselines_pending"] = len(self.initial_target_baselines)
         values["control_status"] = self._control_status()
         if isinstance(self.broker, CommandBroker):
             values["command_delivery"] = {

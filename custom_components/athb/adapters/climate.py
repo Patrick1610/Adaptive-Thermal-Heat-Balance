@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from math import isfinite
+
 from homeassistant.components.climate.const import (
     ATTR_HVAC_MODES,
     ATTR_MAX_TEMP,
@@ -41,9 +43,10 @@ def capability_from_state(state: State | None) -> ClimateCapabilitySnapshot:
         if value is None or isinstance(value, bool):
             return None
         try:
-            return float(value)
+            numeric_value = float(value)
         except TypeError, ValueError, OverflowError:
             return None
+        return numeric_value if isfinite(numeric_value) else None
 
     modes = attributes.get(ATTR_HVAC_MODES, ())
     return ClimateCapabilitySnapshot(

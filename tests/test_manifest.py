@@ -30,7 +30,7 @@ def test_manifest_has_integration_identity_and_no_runtime_requirements() -> None
         "issue_tracker": ("https://github.com/Patrick1610/Adaptive-Thermal-Heat-Balance/issues"),
         "name": "Adaptive Thermal Heat Balance",
         "requirements": [],
-        "version": "0.3.6",
+        "version": "0.3.7",
     }
     assert manifest["domain"] == DOMAIN
 
@@ -67,7 +67,7 @@ def test_only_command_broker_uses_climate_service_adapter() -> None:
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if ".services.async_call(" in line:
                 call_sites.append((path.relative_to(PRODUCTION_ROOT).as_posix(), number))
-    assert call_sites == [("adapters/climate.py", 79)]
+    assert call_sites == [("adapters/climate.py", 82)]
     broker = (PRODUCTION_ROOT / "adapters/broker.py").read_text(encoding="utf-8")
     assert "self._service.async_set_temperature(service_payload(intent), context)" in broker
 

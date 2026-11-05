@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.7
+
+- Treat the first complete live target after an incomplete startup state as a one-time
+  baseline, rather than a manual intervention. Keep reconciliation gated until the
+  state event has been classified. Explicit user/service changes, subsequent target
+  changes and pending command acknowledgements retain their existing protection.
+  Preserve saved manual-override expiries and require fresh policy calculation before
+  control resumes; no stored commands, thermal samples or valve settings are changed.
+
 ## 0.3.6
 
 - Anchor quantization release hysteresis to the last acknowledged target's grid cell.

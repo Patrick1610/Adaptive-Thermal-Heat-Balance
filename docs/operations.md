@@ -149,6 +149,20 @@ is an inferred correlation, not proof of who changed the target. `unavailable`, 
 or restored target states do not create a manual override. They suspend delivery; existing manual
 overrides remain intact. The original expiry is retained across restart and unavailability.
 
+When a destination starts without a complete, finite live setpoint, ATHB accepts its first
+complete automatic state event as a one-time observation baseline. This includes controllers
+that initially report `off` with no target and restore their real target later. An `off` climate
+with an already readable target has no exemption. Reconciliation waits for the state event;
+a calculation snapshot cannot substitute for classifying an external change. Explicit user
+contexts, external service calls and active command feedback retain normal protection, as do
+all later setpoint changes. Saved overrides keep their original expiry. A physical knob action
+indistinguishable from that first context-free restore cannot be identified as a separate user
+action; there is no general startup grace period. A missing or non-finite target keeps the
+affected destination blocked, including safety writes: it is not a trustworthy command baseline.
+**Status — control** reports `awaiting_initial_target`; the first calculation logs one warning,
+with a recovery message when the target becomes usable. No timeout invents a target or grants
+ownership to a destination that has never reported one.
+
 Clean and unclean restarts, reloads, upgrades and ordinary configuration or comfort-policy changes
 reconcile live target state automatically before any new command; persisted commands are never
 replayed. An unresolved journal alone no longer requires Resume. Ordinary legacy command faults
