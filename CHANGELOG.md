@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.6
+
+- Anchor quantization release hysteresis to the last acknowledged target's grid cell.
+  Large heating reductions and cooling increases now reach the device instead of remaining
+  latched to an old target. Preserve the 0.1 K release margin for small fluctuations,
+  rounding-policy boundaries, atomic ranges, command intervals and ownership checks.
+  Include the exact Sophie 18.4 → 16.5 °C regression and tenth-degree noise/boundary tests.
+
 ## 0.3.5
 
 - Configure the heating-demand buffer independently per destination, with its own enable,

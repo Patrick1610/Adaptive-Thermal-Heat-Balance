@@ -41,6 +41,7 @@ from custom_components.athb.core.climate import (
     NormalizedRangeTarget,
     NormalizedScalarTarget,
     TemperatureUnit,
+    celsius_to_ha,
     normalize_scalar_target,
 )
 from custom_components.athb.core.contracts import (
@@ -521,6 +522,68 @@ def _runtime(*, entry_id: str = "entry-1", target_identity: str = "registry-1") 
     )
     hass = SimpleNamespace(data={}, config_entries=SimpleNamespace(async_update_entry=MagicMock()))
     return ZoneRuntime(cast(Any, hass), cast(Any, entry), "zone-1", "balanced", "off", False)
+
+
+@pytest.mark.parametrize("rounding", [None, "floor", "ceiling", "mathematical"])
+@pytest.mark.parametrize("unit", [TemperatureUnit.CELSIUS, TemperatureUnit.FAHRENHEIT])
+@pytest.mark.parametrize("mode", ["heat", "cool", "heat_cool"])
+def test_normalizer_and_broker_intent_share_rounding_step_and_continuous_metadata(
+    rounding: str | None, unit: TemperatureUnit, mode: str
+) -> None:
+    snapshot = _captured(load_scenarios()[0])
+    options = dict(snapshot.options)
+    if rounding is None:
+        options.pop("target_rounding_mode", None)
+    else:
+        options["target_rounding_mode"] = rounding
+    original = snapshot.targets[0]
+    capability = replace(
+        original.capability,
+        hvac_mode=mode,
+        advertised_hvac_modes=("off", "heat", "cool", "heat_cool"),
+        supported_features=2 if mode == "heat_cool" else 1,
+        min_temp_ha=celsius_to_ha(16.0, unit),
+        max_temp_ha=celsius_to_ha(30.0, unit),
+        target_temp_step_ha=0.9 if unit is TemperatureUnit.FAHRENHEIT else 0.5,
+        temperature_unit=unit,
+    )
+    calculation = calculate_runtime_snapshot(
+        replace(snapshot, options=options, targets=(replace(original, capability=capability),))
+    )
+    target = calculation.targets[0]
+    assert target.result is not None
+    assert target.mapping is not None
+    normalized = target.result.normalized
+    assert isinstance(normalized, NormalizedScalarTarget | NormalizedRangeTarget)
+    runtime = _runtime(target_identity=target.registry_identity)
+    runtime.entry.options.update(options)
+    runtime.capability_generations[target.registry_identity] = 1
+    runtime.ownership[target.registry_identity] = OwnershipState(
+        target.registry_identity, Ownership.OWNED
+    )
+    intent = runtime._intent_from_result(
+        target, normalized, target.mapping, dt_util.utcnow(), explicit_transition=False
+    )
+    assert intent.rounding_mode == rounding
+    assert intent.step_room_c == pytest.approx(0.5)
+    assert intent.step_ha == pytest.approx(capability.target_temp_step_ha)
+    if isinstance(normalized, NormalizedRangeTarget):
+        endpoints = (normalized.heating, normalized.cooling)
+        assert intent.continuous_bounded_low_room_c == normalized.heating.bounded_c
+        assert intent.continuous_bounded_high_room_c == normalized.cooling.bounded_c
+        assert intent.continuous_bounded_low_room_c is not None
+        assert intent.continuous_bounded_high_room_c is not None
+    else:
+        endpoints = (normalized,)
+        assert intent.continuous_bounded_room_c == normalized.bounded_c
+        assert intent.continuous_bounded_room_c is not None
+    if rounding is None:
+        # The real normalizer, not a broker fixture, pins the legacy inward policy.
+        for endpoint in endpoints:
+            if endpoint.direction is ActuationDirection.HEATING_ONLY:
+                assert endpoint.normalized_actuator_c >= endpoint.bounded_c - 1e-9
+            else:
+                assert endpoint.normalized_actuator_c <= endpoint.bounded_c + 1e-9
 
 
 async def test_runtime_keeps_diagnostic_history_in_the_calculation_snapshot(

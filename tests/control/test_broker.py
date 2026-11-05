@@ -842,7 +842,7 @@ def test_anti_chatter_reason_order_and_directional_release_hysteresis() -> None:
         == "below_minimum_change"
     )
     heating_release = replace(
-        _intent(value=19.5), continuous_bounded_room_c=19.45, meaningful_delta_ha=0.5
+        _intent(value=19.5), continuous_bounded_room_c=19.95, meaningful_delta_ha=0.5
     )
     assert (
         anti_chatter_reason(
@@ -852,7 +852,7 @@ def test_anti_chatter_reason_order_and_directional_release_hysteresis() -> None:
     )
     assert (
         anti_chatter_reason(
-            replace(heating_release, continuous_bounded_room_c=19.4),
+            replace(heating_release, continuous_bounded_room_c=19.9),
             acknowledged=acknowledged,
             last_dispatch_at=NOW,
             now=NOW + timedelta(seconds=59),
@@ -942,6 +942,221 @@ def test_explicit_rounding_release_hysteresis_respects_policy_boundaries() -> No
             now=NOW,
         )
         is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("rounding", "heating_candidate", "cooling_candidate"),
+    [
+        (None, 16.5, 23.9),
+        ("floor", 16.4, 23.9),
+        ("ceiling", 16.5, 24.0),
+        ("mathematical", 16.5, 23.9),
+    ],
+)
+@pytest.mark.parametrize(
+    ("direction", "previous", "continuous"),
+    [
+        (ActuationDirection.HEATING_ONLY, 18.4, 16.493115043442693),
+        (ActuationDirection.COOLING_ONLY, 22.0, 23.906884956557307),
+    ],
+)
+def test_large_release_is_not_latched_to_new_candidate(
+    rounding: str | None,
+    heating_candidate: float,
+    cooling_candidate: float,
+    direction: ActuationDirection,
+    previous: float,
+    continuous: float,
+) -> None:
+    candidate = (
+        heating_candidate if direction is ActuationDirection.HEATING_ONLY else cooling_candidate
+    )
+    intent = replace(
+        _intent(value=candidate, direction=direction),
+        continuous_bounded_room_c=continuous,
+        step_ha=0.1,
+        step_room_c=0.1,
+        meaningful_delta_ha=0.1,
+        rounding_mode=rounding,
+    )
+    assert (
+        anti_chatter_reason(intent, acknowledged=_ack(previous), last_dispatch_at=None, now=NOW)
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("rounding", "direction", "previous", "candidate", "held", "released"),
+    [
+        ("floor", ActuationDirection.HEATING_ONLY, 20.5, 20.0, 20.41, 20.4),
+        ("ceiling", ActuationDirection.HEATING_ONLY, 20.5, 20.0, 19.91, 19.9),
+        ("mathematical", ActuationDirection.HEATING_ONLY, 20.5, 20.0, 20.16, 20.15),
+        (None, ActuationDirection.HEATING_ONLY, 20.5, 20.0, 19.91, 19.9),
+        ("floor", ActuationDirection.COOLING_ONLY, 20.0, 20.5, 20.59, 20.6),
+        ("ceiling", ActuationDirection.COOLING_ONLY, 20.0, 20.5, 20.09, 20.1),
+        ("mathematical", ActuationDirection.COOLING_ONLY, 20.0, 20.5, 20.34, 20.35),
+        (None, ActuationDirection.COOLING_ONLY, 20.0, 20.5, 20.59, 20.6),
+    ],
+)
+def test_small_release_stays_damped_until_old_grid_boundary_is_cleared(
+    rounding: str | None,
+    direction: ActuationDirection,
+    previous: float,
+    candidate: float,
+    held: float,
+    released: float,
+) -> None:
+    intent = replace(
+        _intent(value=candidate, direction=direction),
+        continuous_bounded_room_c=held,
+        step_room_c=0.5,
+        rounding_mode=rounding,
+    )
+    for continuous in (held, (held + released) / 2, held):
+        assert (
+            anti_chatter_reason(
+                replace(intent, continuous_bounded_room_c=continuous),
+                acknowledged=_ack(previous),
+                last_dispatch_at=None,
+                now=NOW,
+            )
+            == "quantization_hysteresis"
+        )
+    assert (
+        anti_chatter_reason(
+            replace(intent, continuous_bounded_room_c=released),
+            acknowledged=_ack(previous),
+            last_dispatch_at=None,
+            now=NOW,
+        )
+        is None
+    )
+
+
+def test_sophie_release_dispatches_then_damps_tenth_degree_chatter() -> None:
+    service, persistence, current = FakeService(), FakePersistence(), [_preflight()]
+    broker = _broker(service, persistence, current)
+
+    async def scenario() -> None:
+        def candidate(value: float, continuous: float, seconds: int) -> NormalizedIntent:
+            now = NOW + timedelta(seconds=seconds)
+            return replace(
+                _intent(value=value),
+                continuous_bounded_room_c=continuous,
+                step_ha=0.1,
+                step_room_c=0.1,
+                meaningful_delta_ha=0.1,
+                feedback_resolution_ha=0.01,
+                rounding_mode="mathematical",
+                created_at=now,
+                expires_at=now + timedelta(minutes=2),
+            )
+
+        await broker.async_submit(candidate(18.4, 18.4, 0), now=NOW)
+        await broker.async_feedback(_feedback(18.4), now=NOW + timedelta(seconds=1))
+        desired = candidate(16.5, 16.493115043442693, 65)
+        assert broker.retained_target(desired, now=desired.created_at) is None
+        outcome = await broker.async_submit(desired, now=desired.created_at)
+        assert outcome.dispatch_status is DispatchStatus.DISPATCHED
+        await broker.async_feedback(_feedback(16.5), now=NOW + timedelta(seconds=66))
+        for seconds, raw in ((130, 16.449), (195, 16.44), (260, 16.449)):
+            nearby = candidate(16.4, raw, seconds)
+            assert broker.retained_target(nearby, now=nearby.created_at) is not None
+            assert (
+                await broker.async_submit(nearby, now=nearby.created_at)
+            ).reason == "quantization_hysteresis"
+        released = candidate(16.4, 16.35, 325)
+        assert broker.retained_target(released, now=released.created_at) is None
+        assert (
+            await broker.async_submit(released, now=released.created_at)
+        ).dispatch_status is DispatchStatus.DISPATCHED
+        assert [payload["temperature"] for payload, _ in service.calls] == [18.4, 16.5, 16.4]
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("endpoint", ["low", "high", "both"])
+def test_large_range_release_uses_each_previously_acknowledged_endpoint(endpoint: str) -> None:
+    acknowledged = AcknowledgedTarget(
+        TargetFingerprint(TargetShape.RANGE, low_ha=20.0, high_ha=24.0),
+        None,
+        20.0,
+        24.0,
+        NOW,
+    )
+    low, high = (
+        (18.1 if endpoint in {"low", "both"} else 20.0),
+        (25.9 if endpoint in {"high", "both"} else 24.0),
+    )
+    intent = replace(
+        _intent(shape=TargetShape.RANGE, direction=ActuationDirection.RANGED),
+        target_temp_low_ha=low,
+        target_temp_high_ha=high,
+        normalized_low_room_c=low,
+        normalized_high_room_c=high,
+        continuous_bounded_low_room_c=low - 0.007,
+        continuous_bounded_high_room_c=high + 0.007,
+        step_room_c=0.1,
+        rounding_mode="mathematical",
+    )
+    assert (
+        anti_chatter_reason(intent, acknowledged=acknowledged, last_dispatch_at=None, now=NOW)
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("direction", "candidate", "continuous", "blocked"),
+    [
+        (ActuationDirection.HEATING_ONLY, 18.2, 18.25 - 1e-9, False),
+        (ActuationDirection.HEATING_ONLY, 18.3, 18.25, False),
+        (ActuationDirection.HEATING_ONLY, 18.3, 18.25 + 1e-9, True),
+        (ActuationDirection.COOLING_ONLY, 18.5, 18.55 - 1e-9, True),
+        (ActuationDirection.COOLING_ONLY, 18.6, 18.55, False),
+        (ActuationDirection.COOLING_ONLY, 18.6, 18.55 + 1e-9, False),
+    ],
+)
+def test_tenth_degree_release_boundary_is_inclusive_despite_float_roundoff(
+    direction: ActuationDirection, candidate: float, continuous: float, blocked: bool
+) -> None:
+    intent = replace(
+        _intent(value=candidate, direction=direction),
+        continuous_bounded_room_c=continuous,
+        step_room_c=0.1,
+        meaningful_delta_ha=0.1,
+        rounding_mode="mathematical",
+    )
+    reason = anti_chatter_reason(intent, acknowledged=_ack(18.4), last_dispatch_at=None, now=NOW)
+    assert reason == ("quantization_hysteresis" if blocked else None)
+
+
+@pytest.mark.parametrize("held_endpoint", ["low", "high"])
+def test_range_pair_stays_atomic_while_one_endpoint_is_still_inside_hysteresis(
+    held_endpoint: str,
+) -> None:
+    acknowledged = AcknowledgedTarget(
+        TargetFingerprint(TargetShape.RANGE, low_ha=20.0, high_ha=24.0),
+        None,
+        20.0,
+        24.0,
+        NOW,
+    )
+    low, high = (19.9, 25.9) if held_endpoint == "low" else (18.1, 24.1)
+    intent = replace(
+        _intent(shape=TargetShape.RANGE, direction=ActuationDirection.RANGED),
+        target_temp_low_ha=low,
+        target_temp_high_ha=high,
+        normalized_low_room_c=low,
+        normalized_high_room_c=high,
+        continuous_bounded_low_room_c=low - 0.007,
+        continuous_bounded_high_room_c=high + 0.007,
+        step_room_c=0.1,
+        rounding_mode="mathematical",
+    )
+    assert (
+        anti_chatter_reason(intent, acknowledged=acknowledged, last_dispatch_at=None, now=NOW)
+        == "quantization_hysteresis"
     )
 
 

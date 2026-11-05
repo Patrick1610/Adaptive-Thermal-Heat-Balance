@@ -173,11 +173,11 @@ def test_cooling_and_atomic_range_release_hysteresis() -> None:
     cooling = replace(
         _intent(value=20.5),
         direction=ActuationDirection.COOLING_ONLY,
-        continuous_bounded_room_c=20.55,
+        continuous_bounded_room_c=20.05,
     )
     assert _release_hysteresis_blocks(cooling, scalar_ack)
     assert not _release_hysteresis_blocks(
-        replace(cooling, continuous_bounded_room_c=20.6), scalar_ack
+        replace(cooling, continuous_bounded_room_c=20.1), scalar_ack
     )
 
     range_ack = AcknowledgedTarget(
@@ -189,14 +189,14 @@ def test_cooling_and_atomic_range_release_hysteresis() -> None:
     )
     ranged = replace(
         _intent(shape=TargetShape.RANGE),
-        continuous_bounded_low_room_c=18.95,
-        continuous_bounded_high_room_c=23.05,
+        continuous_bounded_low_room_c=19.45,
+        continuous_bounded_high_room_c=22.55,
     )
     assert _release_hysteresis_blocks(ranged, range_ack)
     released = replace(
         ranged,
-        continuous_bounded_low_room_c=18.9,
-        continuous_bounded_high_room_c=23.1,
+        continuous_bounded_low_room_c=19.4,
+        continuous_bounded_high_room_c=22.6,
     )
     assert not _release_hysteresis_blocks(released, range_ack)
     incomplete = replace(ranged, normalized_low_room_c=None)
